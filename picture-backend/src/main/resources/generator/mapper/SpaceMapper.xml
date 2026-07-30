@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="generator.mapper.SpaceMapper">
+
+    <resultMap id="BaseResultMap" type="com.example.picturebackend.domain.po.Space">
+            <id property="id" column="id" />
+            <result property="spacename" column="spaceName" />
+            <result property="spacelevel" column="spaceLevel" />
+            <result property="maxsize" column="maxSize" />
+            <result property="usedsize" column="usedSize" />
+            <result property="maxcount" column="maxCount" />
+            <result property="usedcount" column="usedCount" />
+            <result property="userid" column="userId" />
+            <result property="createtime" column="createTime" />
+            <result property="updatetime" column="updateTime" />
+            <result property="isDelete" column="isDelete" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,spaceName,spaceLevel,maxSize,usedSize,maxCount,
+        usedCount,userId,createTime,updateTime,isDelete
+    </sql>
+</mapper>

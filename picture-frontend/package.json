@@ -1,0 +1,33 @@
+{
+  "name": "picture_frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:typecheck": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "openapi": "node openapi.config.js"
+  },
+  "dependencies": {
+    "ant-design-vue": "^4.2.6",
+    "antd": "^6.3.5",
+    "axios": "^1.15.0",
+    "dayjs": "^1.11.20",
+    "pinia": "^3.0.4",
+    "router": "^2.2.0",
+    "vue": "^3.5.32",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.2",
+    "@umijs/openapi": "^1.14.1",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "@vue/tsconfig": "^0.9.1",
+    "tslib": "^2.8.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.4",
+    "vue-tsc": "^3.2.6"
+  }
+}

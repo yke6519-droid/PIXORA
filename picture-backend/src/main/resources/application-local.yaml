@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: picture-backend
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/pictureSystem}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    database: ${REDIS_DATABASE:10}
+    password: ${REDIS_PASSWORD:}
+  session:
+    store-type: redis
+    timeout: 7200
+
+server:
+  port: ${SERVER_PORT:8123}
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: false
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: isDelect
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      update-strategy: not_null
+
+knife4j:
+  enable: true
+  openapi:
+    title: PIXORA API
+    description: PIXORA 智能云图库
+    concat: PIXORA
+    url: https://docs.xiaominfo.com
+    version: v2.0
+    license: Apache 2.0
+    group:
+      default:
+        api-rule: package
+        api-rule-resources:
+          - com.example.picturebackend.Controller
+
+cos:
+  client:
+    host: ${COS_HOST:}
+    secretId: ${COS_SECRET_ID:}
+    secretKey: ${COS_SECRET_KEY:}
+    region: ${COS_REGION:}
+    bucket: ${COS_BUCKET:}

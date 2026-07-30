@@ -1,0 +1,30 @@
+# IDE 与系统文件
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Java 构建产物与运行时文件
+**/target/
+**/.uploads/
+**/avatarSave/
+**/src/main/resources/static/
+
+# Node.js 构建产物
+**/node_modules/
+**/dist/
+**/dist-ssr/
+
+# 日志
+*.log
+logs/
+
+# 本地环境变量和敏感配置
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
