@@ -18,8 +18,8 @@ import com.example.picturebackend.domain.vo.SpacePageVO;
 import com.example.picturebackend.domain.vo.SpaceVO;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
-import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/space")

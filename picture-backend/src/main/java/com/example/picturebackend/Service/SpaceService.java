@@ -1,7 +1,7 @@
 package com.example.picturebackend.Service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.example.picturebackend.domain.po.Space;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.space.AlterLevelRequest;

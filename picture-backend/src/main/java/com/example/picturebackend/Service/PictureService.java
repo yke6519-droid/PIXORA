@@ -3,7 +3,7 @@ package com.example.picturebackend.Service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.example.picturebackend.domain.dto.file.UploadPictureResult;
 import com.example.picturebackend.domain.po.Picture;
 import com.example.picturebackend.domain.po.User;
@@ -12,7 +12,7 @@ import com.example.picturebackend.domain.vo.PicturePageVO;
 import com.example.picturebackend.domain.vo.PictureVO;
 import org.springframework.web.bind.annotation.RequestBody;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 
 /**
