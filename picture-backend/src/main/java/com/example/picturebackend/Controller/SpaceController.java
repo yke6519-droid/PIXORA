@@ -18,7 +18,6 @@ import com.example.picturebackend.domain.vo.SpacePageVO;
 import com.example.picturebackend.domain.vo.SpaceVO;
 
 import org.springframework.transaction.annotation.Transactional;
-
 import org.springframework.web.bind.annotation.*;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
@@ -89,7 +88,7 @@ public class SpaceController {
         User loginUser = userService.getCurrentUser(request);
 
         ThrowExceptionUtils.throwIF(!loginUser.getSpaceId().equals(spaceId)
-        && loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE) == false
+        && loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE) == false
         , ErrorCode.PARAMS_ERROR, "无权删除此空间");
 
         Boolean res = spaceService.deleteById(spaceId,loginUser);
@@ -110,7 +109,7 @@ public class SpaceController {
         User loginUser = userService.getCurrentUser(request);
 
         ThrowExceptionUtils.throwIF(!loginUser.getSpaceId().equals(spaceUpdateRequest.getSpaceId())
-        && loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE) == false
+        && loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE) == false
         , ErrorCode.PARAMS_ERROR, "无权修改此空间");
 
         Boolean res = spaceService.updateById(spaceUpdateRequest,loginUser);
@@ -129,9 +128,14 @@ public class SpaceController {
     @PutMapping("/alterLevelById")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> alterLevelById(@RequestBody AlterLevelRequest alterLevelRequest, HttpServletRequest request){
+        // 参数判空校验
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(alterLevelRequest),ErrorCode.PARAMS_ERROR);
+        // 获取当前登录用户
         User loginUser = userService.getCurrentUser(request);
+        // 调用service层方法修改空间等级
         boolean b = spaceService.alterLevelById(alterLevelRequest, loginUser);
+        
+        // 返回结果 todo 这里可以考虑返回修改后的空间信息，而不是仅仅返回一个boolean值
         return ResponseUtils.success(b);
     }
 }

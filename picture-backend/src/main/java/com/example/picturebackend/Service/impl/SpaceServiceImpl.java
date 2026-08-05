@@ -26,6 +26,9 @@ import com.example.picturebackend.domain.request.space.SpaceQueryRequest;
 import com.example.picturebackend.domain.request.space.SpaceUpdateRequest;
 import com.example.picturebackend.domain.vo.SpacePageVO;
 import com.example.picturebackend.domain.vo.SpaceVO;
+import com.example.picturebackend.domain.vo.space.SpaceLevel;
+
+import org.joda.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,12 +48,6 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
     private PictureMapper pictureMapper;
     @Resource
     private UserService userService;
-
-    /**
-     * todo: 前端进入当我的空间界面后，
-     * todo：如果当前用户已经有空间，则直接查询当前空间中的图片，返回给前端展示
-     * todo：若没有空间，则展示当前用户并没有创建空间，并提供一个按钮引导用户创建空间
-     */
 
     /**
      * 创建空间
@@ -83,6 +80,58 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         return space;
     }
 
+    // todo 后续可以考虑根据用户等级，来决定是否允许创建多个私人空间
+    // @Override
+    // @Transactional
+    // public Space createSpaceByUserLevel(CreateSpaceRequest createSpaceRequest, User loginUser){
+
+    //     // 判断DB中是否已经有改用户的私人空间
+    //     // 1. 校验登录用户的UserLevel
+    //     final String userLevel = loginUser.getUserLevel();
+
+    //     // 1.1 若为普通用户，则只能创建一个私人空间
+    //     if (userLevel.equals(UserConstant.DEFAULT_ROLE)) {
+
+    //         // 若超过限制，则抛出异常，提示用户无法创建更多
+    //         if (this.query().eq("userId", loginUser.getId()).exists()) {
+    //             ThrowExceptionUtils.throwIF(true, ErrorCode.SYSTEM_ERROR, "当前用户已拥有私人空间");
+    //         }
+    //     }
+
+    //     // 1.2 若为vip或是管理员，则可以创建三个私人空间
+    //     else if (userLevel.equals(UserConstant.VIP_ROLE) || userLevel.equals(UserConstant.ADMIN_ROLE)) {
+
+    //         final long vipSpaceCount = this.query().eq("userId", loginUser.getId()).count();
+    //         // 若超过限制，则抛出异常，提示用户无法创建更多
+    //         if (vipSpaceCount >= 3) {
+    //             ThrowExceptionUtils.throwIF(true, ErrorCode.SYSTEM_ERROR, "当前用户已拥有三个私人空间，无法创建更多");
+    //         }
+    //     }
+
+    //     // 参数校验
+    //     String spaceName = createSpaceRequest.getSpaceName();
+    //     ThrowExceptionUtils.throwIF(StrUtil.isBlank(spaceName), ErrorCode.PARAMS_ERROR,"空间名为空");
+
+    //     // 填充space
+    //     // todo 后续可以考虑区分vip和普通用户的空间等级，来决定默认空间的最大容量和最大图片数量
+
+    //     Space space = new Space();
+    //     space.setSpaceName(spaceName);
+    //     space.setSpaceLevel(0);
+    //     space.setMaxSize(SpaceConstant.NORMAL_MAX_SIZE);
+    //     space.setMaxCount(SpaceConstant.NORMAL_MAX_Count);
+    //     space.setUserId(loginUser.getId());
+    //     space.setCreateTime(DateTime.now());
+    //     space.setUpdateTime(DateTime.now());
+
+    //     // 存入DB
+    //     this.save(space);
+    //     // 同步用户的spaceId
+    //     loginUser.setSpaceId(space.getId());
+    //     userService.updateById(loginUser);
+    //     return space;
+    // }
+
     /**
      * 根据id删除空间
      * 加上事物回归
@@ -97,7 +146,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(space),ErrorCode.PARAMS_ERROR,"目标空间不存在");
         ThrowExceptionUtils.throwIF(
                 !Objects.equals(loginUser.getId(), space.getUserId())
-                        && !loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE),
+                        && !loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE),
                 ErrorCode.NO_AUTH_ERROR
         );
 
@@ -138,7 +187,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         
         ThrowExceptionUtils.throwIF(
                 !Objects.equals(loginUser.getId(), space.getUserId())
-                        && !loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE),
+                        && !loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE),
                 ErrorCode.NO_AUTH_ERROR
         );
 
@@ -149,17 +198,37 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         return this.updateById(space);
     }
 
+    /**
+     * 修改空间等级
+     * @param alterLevelRequest
+     * @param loginUser
+     * @return
+     */
     @Override
     public boolean alterLevelById(AlterLevelRequest alterLevelRequest, User loginUser) {
-        Long spaceId = alterLevelRequest.getSpaceId();
-        Integer alterLevel = alterLevelRequest.getAlterLevel();
+        // 拿到请求体中的参数
+        final Long spaceId = alterLevelRequest.getSpaceId();
+        final Integer alterLevel = alterLevelRequest.getAlterLevel();
+        // 参数判空校验
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceId) || ObjectUtil.isNull(alterLevel)
                 ,ErrorCode.PARAMS_ERROR);
+        // 判断待等级是否合法
         ThrowExceptionUtils.throwIF(alterLevel<0 || alterLevel>2,ErrorCode.PARAMS_ERROR,"等级设置非法");
+        // 拿到对应待修改space对象
         Space space = this.getById(spaceId);
+        // 判断待修改空间是否存在
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(space),ErrorCode.PARAMS_ERROR,"目标空间不存在");
+        // 更新space等级、更新时间 与 最大容量
+        SpaceLevel spaceLevel = SpaceConstant.getSizeAndCountByLevel(alterLevel);
+        
         space.setSpaceLevel(alterLevel);
-        return this.updateById(space);
+        space.setUpdateTime(DateTime.now());
+        space.setMaxSize(spaceLevel.getMaxSize());
+        space.setMaxCount(spaceLevel.getMaxCount());
+
+        boolean result = this.updateById(space);
+
+        return result;
     }
 
     @Override
@@ -168,7 +237,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(space),
                 ErrorCode.PARAMS_ERROR,"目标空间不存在");
         ThrowExceptionUtils.throwIF(!space.getUserId().equals(loginUser.getId()) &&
-                !loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE),
+                !loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE),
                 ErrorCode.NO_AUTH_ERROR);
         SpaceVO spaceVO = new SpaceVO();
         spaceVO = spaceVO.Space2SpaceVO(space);
