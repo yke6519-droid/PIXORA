@@ -20,7 +20,11 @@ import com.example.picturebackend.domain.vo.PictureVO;
 import com.example.picturebackend.manager.MultiCacheManager;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+
+import ch.qos.logback.core.joran.util.beans.BeanUtil;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -30,6 +34,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -55,7 +60,6 @@ public class PictureController {
 
     /**
      * 上传图片
-     * 自动过审 仅管理员可用
      * @param file 前端传递的文件（支持MultipartFile或String类型的URL）
      * @param request
      * @return
@@ -72,8 +76,8 @@ public class PictureController {
             //todo 这里前端放置一个单选器：公共图库上传0L ， 私人图库：从loginUser中拿到spaceId传进来
             @RequestParam(value = "spaceId", required = false) Long spaceId,
             HttpServletRequest request) {
+
         User currentUser = userService.getCurrentUser(request);
-        System.out.println("当前登录用户id为：" + currentUser.getId());
 
         // 确定输入源：优先使用文件，其次使用URL
         Object inputSource = null;
@@ -84,10 +88,12 @@ public class PictureController {
         }
         // 判断是新增还是更新
         boolean isUpdate = id != null && id > 0;
+
         // 新增时必须传文件或URL；更新时可以不传（只改字段）
         if (!isUpdate && inputSource == null) {
             ThrowExceptionUtils.throwIF(true, ErrorCode.PARAMS_ERROR, "请选择要上传的图片文件或输入图片URL");
         }
+
         // 构建请求对象
         PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
         pictureUploadRequest.setId(id);
@@ -96,9 +102,8 @@ public class PictureController {
         pictureUploadRequest.setTags(tags);
         pictureUploadRequest.setIntroduction(introduction);
         pictureUploadRequest.setSpaceId(spaceId);
-        /**
-         * 上传图片 并自动通过审核
-         */
+        
+        // 上传图片
         PictureVO pictureVO = pictureService.uploadPicture2DB(inputSource, pictureUploadRequest, currentUser);
         return ResponseUtils.success(pictureVO);
     }
@@ -232,11 +237,15 @@ public class PictureController {
      */
     @PostMapping("/adminFetchPictureBatch")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<String> adminFetchPictureBatch(@RequestBody PictureUploadByBatchRequest pictureUploadByBatchRequest,HttpServletRequest request){
+    public BaseResponse<List<Picture>> adminFetchPictureBatch(@RequestBody PictureUploadByBatchRequest pictureUploadByBatchRequest,HttpServletRequest request){
         User currentUser = userService.getCurrentUser(request);
         ThrowExceptionUtils.throwIF(currentUser==null,ErrorCode.NOT_LOGIN_ERROR);
-        Integer batchSize = pictureService.UploadPictureByBatch(pictureUploadByBatchRequest, currentUser);
-        return ResponseUtils.success("成功抓取的图片数量为："+batchSize);
+        
+        List<Picture> pictures = pictureService.UploadPictureByBatch(pictureUploadByBatchRequest, currentUser);
+
+        // int batchSize = pictureVOS.size();
+
+        return ResponseUtils.success(pictures);
     }
 
     /**
