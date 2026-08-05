@@ -125,5 +125,5 @@ public interface PictureService extends IService<Picture> {
      * @param loginUser
      * @return
      */
-    Integer UploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser);
+    List<Picture> UploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser);
 }
