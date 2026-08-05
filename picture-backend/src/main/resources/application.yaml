@@ -19,9 +19,10 @@ spring:
     timeout: 2h
   servlet:
     multipart:
-      max-request-size: 100MB
+      # 单文件限制与业务校验保持一致；请求体额外预留 Multipart 边界开销。
+      max-request-size: 6MB
       enabled: true
-      max-file-size: 100MB
+      max-file-size: 5MB
 
 server:
   port: ${SERVER_PORT:8123}
@@ -33,7 +34,7 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: auto
-      logic-delete-field: isDelect
+      logic-delete-field: isdelete
       logic-delete-value: 1
       logic-not-delete-value: 0
       update-strategy: not_null
