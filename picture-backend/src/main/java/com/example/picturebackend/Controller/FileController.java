@@ -17,11 +17,16 @@ import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import cn.hutool.core.io.FileUtil;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.File;
+import com.example.picturebackend.constant.PictureConstant;
 import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
+import java.util.Arrays;
 
 @Slf4j
 @RestController
@@ -48,11 +53,40 @@ public class FileController {
     @PostMapping("/avatarUpload")
     // @AuthCheck(mustRole = "admin")
     public BaseResponse<String> avatarUpload(@RequestParam("avatar")MultipartFile file, HttpServletRequest request) throws IOException {
+        // 判空处理
+        ThrowExceptionUtils.throwIF(
+                file == null || file.isEmpty(),
+                ErrorCode.PARAMS_ERROR
+        );
+
+        ThrowExceptionUtils.throwIF(
+            file.getOriginalFilename() == null || file.getOriginalFilename().isEmpty(),
+            ErrorCode.PARAMS_ERROR,
+            "文件名不能为空"
+        );
+
         //1. 获取原始文件名
         String originalFileName = file.getOriginalFilename();
 
+        // 判断格式是否合法
+        String fileSuffix = FileUtil.getSuffix(originalFileName).toLowerCase(Locale.ROOT);
+        final List<String> ALLOW_FORMAT_LIST = Arrays.asList("jpeg", "png", "jpg", "webp");
+        ThrowExceptionUtils.throwIF(
+                !ALLOW_FORMAT_LIST.contains(fileSuffix),
+                ErrorCode.PARAMS_ERROR,
+                "文件格式错误！"
+        );
+
+        // 判定文件大小是否超过5MB
+        ThrowExceptionUtils.throwIF(
+            file.getSize() > PictureConstant.MAX_PICTURE_SIZE_BYTES,
+            ErrorCode.PARAMS_ERROR,
+            "头像大小不得超过超过5MB"
+        );
+
         //2. 生成唯一文件名，放在在文件夹中重复 利用当前用户id作为分别点
         User user = userService.getCurrentUser(request);
+
         String newFileName= user.getId()+"-"+originalFileName;
 
         //3. 如果目录不存在，则创建目录
@@ -68,6 +102,7 @@ public class FileController {
         String url = "http://localhost" +
                 ":" + environment.getProperty("server.port") + //用environment动态获取服务器的端口号
                 "/files/"+newFileName;
+                
         return ResponseUtils.success(url);
     }
 

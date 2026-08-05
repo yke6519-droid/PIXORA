@@ -9,7 +9,9 @@ import cn.hutool.core.util.RandomUtil;
 import com.example.picturebackend.Config.CosClientConfig;
 import com.example.picturebackend.Exception.BusinessException;
 import com.example.picturebackend.Exception.ErrorCode;
+import com.example.picturebackend.Exception.ThrowExceptionUtils;
 
+import com.example.picturebackend.constant.PictureConstant;
 import com.example.picturebackend.domain.dto.file.UploadPictureResult;
 import com.example.picturebackend.manager.CosManager;
 import com.qcloud.cos.COSClient;
@@ -25,6 +27,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 业务层面的
@@ -51,18 +54,33 @@ public abstract class PictureUploadTemplate {
     public UploadPictureResult uploadPicture(Object inputSource, String uploadPrefix) {
         // 1. 校验图片
         vailPic(inputSource);
+        
         // 2. 图片上传地址
         String uuid = RandomUtil.randomString(16);
         String originalFilename = getOriginalFilename(inputSource);
+        String fileSuffix = FileUtil.getSuffix(originalFilename).toLowerCase(Locale.ROOT);
+
         // 自己拼接文件上传路径，而不是让用户自己上传（可能会导致url出异常）
-        String fileName = String.format("%s_%s.%s", DateUtil.formatDate(new Date()), uuid, FileUtil.getSuffix(originalFilename));
+        String fileName = String.format("%s_%s.%s", DateUtil.formatDate(new Date()), uuid, fileSuffix);
         String uploadPath = String.format("/%s/%s", uploadPrefix, fileName);
         File file = null;
         try {
-            // 3.1 创建临时文件，获取图片到服务器
-            file = File.createTempFile(uploadPath, null);
+            /*
+             * 临时文件名不能包含 COS 路径分隔符。
+             * COS 对象路径只用于上传，服务器临时文件使用安全的固定前缀。
+             */
+            String tempSuffix = fileSuffix.isBlank() ? ".tmp" : "." + fileSuffix;
+            file = File.createTempFile("pixora-upload-", tempSuffix);
             // 3.2 处理文件来源
             processFile(inputSource,file);
+            
+            // URL 来源可能没有 Content-Length，下载完成后再做一次硬性大小校验。
+            ThrowExceptionUtils.throwIF(
+                    FileUtil.size(file) > PictureConstant.MAX_PICTURE_SIZE_BYTES,
+                    ErrorCode.PARAMS_ERROR,
+                    "图片大小不能超过5MB"
+            );
+
             // 4. 上传对象存储，并获取上传对象结果
             PutObjectResult putObjectResult = cosManager.putPictureObject(uploadPath, file);
             // 5. 获取图片信息对象
