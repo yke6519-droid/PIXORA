@@ -5,6 +5,7 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.example.picturebackend.Exception.ErrorCode;
@@ -94,13 +95,25 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
     public Boolean deleteById(Long spaceId, User loginUser) {
         Space space = this.getById(spaceId);
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(space),ErrorCode.PARAMS_ERROR,"目标空间不存在");
-        ThrowExceptionUtils.throwIF(!Objects.equals(loginUser.getId(), space.getUserId())
+        ThrowExceptionUtils.throwIF(
+                !Objects.equals(loginUser.getId(), space.getUserId())
                         && !loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE),
-                ErrorCode.NO_AUTH_ERROR);
+                ErrorCode.NO_AUTH_ERROR
+        );
+
         //1. 先删除该空间中的图片
         QueryWrapper<Picture> queryWrapper = new QueryWrapper<Picture>().eq("spaceId",spaceId);
         pictureMapper.delete(queryWrapper);
-        //2. 再删除该空间
+
+        //2. 显式 SET NULL，避免 MyBatis-Plus 默认的非空字段更新策略跳过 spaceId。
+        boolean userUpdated = userService.update(
+                Wrappers.<User>update()
+                        .eq("id", space.getUserId())
+                        .set("spaceId", null)
+        );
+        ThrowExceptionUtils.throwIF(!userUpdated, ErrorCode.OPERATION_ERROR, "用户空间状态更新失败");
+
+        //3. 再删除该空间
         return this.removeById(spaceId);
     }
 
@@ -113,16 +126,26 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
     @Override
     public Boolean updateById(SpaceUpdateRequest spaceUpdateRequest, User loginUser) {
         Long spaceId = spaceUpdateRequest.getSpaceId();
+
         String updatedName = spaceUpdateRequest.getUpdatedName();
+
+        // 空间id判空
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceId) || StrUtil.isBlank(updatedName),
                 ErrorCode.PARAMS_ERROR);
+
         Space space = this.getById(spaceId);
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(space),ErrorCode.PARAMS_ERROR,"目标空间不存在");
-        ThrowExceptionUtils.throwIF(!Objects.equals(loginUser.getId(), space.getUserId())
-                        || !loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE),
-                ErrorCode.NO_AUTH_ERROR);
+        
+        ThrowExceptionUtils.throwIF(
+                !Objects.equals(loginUser.getId(), space.getUserId())
+                        && !loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE),
+                ErrorCode.NO_AUTH_ERROR
+        );
+
         space.setSpaceName(updatedName);
+
         space.setUpdateTime(DateTime.now());
+
         return this.updateById(space);
     }
 

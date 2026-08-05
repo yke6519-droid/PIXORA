@@ -16,7 +16,9 @@ import com.example.picturebackend.domain.request.space.SpaceQueryRequest;
 import com.example.picturebackend.domain.request.space.SpaceUpdateRequest;
 import com.example.picturebackend.domain.vo.SpacePageVO;
 import com.example.picturebackend.domain.vo.SpaceVO;
+
 import org.springframework.transaction.annotation.Transactional;
+
 import org.springframework.web.bind.annotation.*;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
@@ -83,7 +85,13 @@ public class SpaceController {
     @DeleteMapping("/deleteById")
     public BaseResponse<Boolean> deleteById(Long spaceId, HttpServletRequest request){
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceId),ErrorCode.PARAMS_ERROR,"空间id为空");
+
         User loginUser = userService.getCurrentUser(request);
+
+        ThrowExceptionUtils.throwIF(!loginUser.getSpaceId().equals(spaceId)
+        && loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE) == false
+        , ErrorCode.PARAMS_ERROR, "无权删除此空间");
+
         Boolean res = spaceService.deleteById(spaceId,loginUser);
         return ResponseUtils.success(res);
     }
@@ -97,9 +105,16 @@ public class SpaceController {
      */
     @PutMapping("/updateById")
     public BaseResponse<Boolean> updateById(@RequestBody SpaceUpdateRequest spaceUpdateRequest, HttpServletRequest request){
+
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceUpdateRequest),ErrorCode.PARAMS_ERROR,"空间id为空");
         User loginUser = userService.getCurrentUser(request);
+
+        ThrowExceptionUtils.throwIF(!loginUser.getSpaceId().equals(spaceUpdateRequest.getSpaceId())
+        && loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE) == false
+        , ErrorCode.PARAMS_ERROR, "无权修改此空间");
+
         Boolean res = spaceService.updateById(spaceUpdateRequest,loginUser);
+
         return ResponseUtils.success(res);
     }
 
