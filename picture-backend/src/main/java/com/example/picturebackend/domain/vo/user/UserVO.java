@@ -1,19 +1,17 @@
-package com.example.picturebackend.domain.po;
-
-
-import com.baomidou.mybatisplus.annotation.*;
+package com.example.picturebackend.domain.vo.user;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+
 import lombok.Data;
 
-/**
- *
- * @TableName user
- */
-@TableName(value ="user")
 @Data
-public class User implements Serializable {
+public class UserVO implements Serializable{
+    private static final long serialVersionUID = 3191241716373120793L;
     /**
      * id
      */
@@ -39,11 +37,6 @@ public class User implements Serializable {
      * 性别
      */
     private Integer gender;
-
-    /**
-     * 用户密码
-     */
-    private String userpassword;
 
     /**
      * 电话号码
@@ -86,22 +79,4 @@ public class User implements Serializable {
      */
     @TableField("userStatus")
     private Integer userStatus;
-
-    public Integer getUserStatus() {
-        return userStatus;
-    }
-
-    public void setUserStatus(Integer userStatus) {
-        this.userStatus = userStatus;
-    }
-
-    /**
-     * 是否删除
-     */
-    @TableLogic
-    @TableField("isDelete")
-    private Integer isdelete;
-
-    @TableField(exist = false)
-    private static final long serialVersionUID = 3191241716373120793L;
 }

@@ -1,7 +1,9 @@
 package com.example.picturebackend.Controller;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.BeanUtils;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.Service.PictureService;
@@ -14,17 +16,16 @@ import com.example.picturebackend.domain.po.PictureTagCategory;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.BaseResponse;
 import com.example.picturebackend.domain.request.picture.*;
-import com.example.picturebackend.domain.vo.PicturePageVO;
-import com.example.picturebackend.domain.vo.PictureVO;
-
+import com.example.picturebackend.domain.vo.picture.PictureListVO;
+import com.example.picturebackend.domain.vo.picture.PicturePageVO;
+import com.example.picturebackend.domain.vo.picture.PictureVO;
+import com.example.picturebackend.domain.vo.user.UserVO;
 import com.example.picturebackend.manager.MultiCacheManager;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
-import ch.qos.logback.core.joran.util.beans.BeanUtil;
-import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.beans.BeanUtils;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,7 +35,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
+
 
 @Slf4j
 @RestController
@@ -73,7 +74,6 @@ public class PictureController {
             @RequestParam(value = "category", required = false) String category,
             @RequestParam(value = "tags", required = false) List<String> tags,
             @RequestParam(value = "introduction", required = false) String introduction,
-            //todo 这里前端放置一个单选器：公共图库上传0L ， 私人图库：从loginUser中拿到spaceId传进来
             @RequestParam(value = "spaceId", required = false) Long spaceId,
             HttpServletRequest request) {
 
@@ -141,9 +141,15 @@ public class PictureController {
             @RequestBody PictureQueryRequest pictureQueryRequest,
             HttpServletRequest request) {
         ThrowExceptionUtils.throwIF(pictureQueryRequest == null, ErrorCode.PARAMS_ERROR);
-        User currentUser = (User)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
+        UserVO currentUser = (UserVO)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
+
+        User user= new User();
+        BeanUtil.copyProperties(currentUser, user);
+
         PicturePageVO picturePageVO = new PicturePageVO();
-        picturePageVO = pictureService.queryPicturePage(pictureQueryRequest,currentUser);
+
+        picturePageVO = pictureService.queryPicturePage(pictureQueryRequest,user);
+
         return ResponseUtils.success(picturePageVO);
     }
 
@@ -151,8 +157,12 @@ public class PictureController {
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<IPage<Picture>> queryAll(@RequestBody PictureQueryRequest pictureQueryRequest,
                                                  HttpServletRequest request) {
-        User currentUser = (User) request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
-        return ResponseUtils.success(pictureService.queryAll(pictureQueryRequest, currentUser));
+
+        UserVO currentUser = (UserVO) request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
+        User user= new User();
+        BeanUtil.copyProperties(currentUser, user);
+
+        return ResponseUtils.success(pictureService.queryAll(pictureQueryRequest, user));
     }
 
     /**
@@ -166,11 +176,19 @@ public class PictureController {
     public BaseResponse<PicturePageVO> queryPicturePageCache(
             @RequestBody PictureQueryRequest pictureQueryRequest,
             HttpServletRequest request) {
+                
+        // 参数校验
         ThrowExceptionUtils.throwIF(pictureQueryRequest == null, ErrorCode.PARAMS_ERROR);
-        User currentUser = (User)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
+
+        UserVO currentUser = (UserVO)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
+
+        User user= new User();
+        BeanUtil.copyProperties(currentUser, user);
+
         // 将多级缓存封装到一个工具类中，传入查询函数避免循环依赖
         PicturePageVO picturePageVO = multiCacheManager.getPicturePage(
-                pictureQueryRequest, currentUser, pictureService::queryPicturePage);
+                pictureQueryRequest, user, pictureService::queryPicturePage);
+
         return ResponseUtils.success(picturePageVO);
     }
 
@@ -181,8 +199,11 @@ public class PictureController {
     @GetMapping("/getPictureById")
     public BaseResponse<PictureVO> getPictureById(Long id,HttpServletRequest request) {
         ThrowExceptionUtils.throwIF(id == null || id <= 0, ErrorCode.PARAMS_ERROR);
-        User currentUser = (User)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
-        PictureVO pictureVO = pictureService.getPictureById(id,currentUser);
+        UserVO currentUser = (UserVO)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
+        User user= new User();
+        BeanUtil.copyProperties(currentUser, user);
+
+        PictureVO pictureVO = pictureService.getPictureById(id,user);
         return ResponseUtils.success(pictureVO);
     }
 
@@ -234,18 +255,17 @@ public class PictureController {
      * @param pictureUploadByBatchRequest
      * @param request
      * @return
+     * todo 这里最好加上一个事务处理，防止最终上传失败，导致部分图片上传成功，部分失败
      */
     @PostMapping("/adminFetchPictureBatch")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<List<Picture>> adminFetchPictureBatch(@RequestBody PictureUploadByBatchRequest pictureUploadByBatchRequest,HttpServletRequest request){
+    public BaseResponse<PictureListVO> adminFetchPictureBatch(@RequestBody PictureUploadByBatchRequest pictureUploadByBatchRequest,HttpServletRequest request){
         User currentUser = userService.getCurrentUser(request);
         ThrowExceptionUtils.throwIF(currentUser==null,ErrorCode.NOT_LOGIN_ERROR);
         
-        List<Picture> pictures = pictureService.UploadPictureByBatch(pictureUploadByBatchRequest, currentUser);
+        PictureListVO pictureListVO = pictureService.UploadPictureByBatch(pictureUploadByBatchRequest, currentUser);
 
-        // int batchSize = pictureVOS.size();
-
-        return ResponseUtils.success(pictures);
+        return ResponseUtils.success(pictureListVO);
     }
 
     /**

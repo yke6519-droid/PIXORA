@@ -1,4 +1,4 @@
-package com.example.picturebackend.domain.vo;
+package com.example.picturebackend.domain.vo.picture;
 
 import lombok.Data;
 

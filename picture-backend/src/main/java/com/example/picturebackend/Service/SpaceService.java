@@ -8,8 +8,8 @@ import com.example.picturebackend.domain.request.space.AlterLevelRequest;
 import com.example.picturebackend.domain.request.space.CreateSpaceRequest;
 import com.example.picturebackend.domain.request.space.SpaceQueryRequest;
 import com.example.picturebackend.domain.request.space.SpaceUpdateRequest;
-import com.example.picturebackend.domain.vo.SpacePageVO;
-import com.example.picturebackend.domain.vo.SpaceVO;
+import com.example.picturebackend.domain.vo.space.SpacePageVO;
+import com.example.picturebackend.domain.vo.space.SpaceVO;
 
 /**
 * @author chen

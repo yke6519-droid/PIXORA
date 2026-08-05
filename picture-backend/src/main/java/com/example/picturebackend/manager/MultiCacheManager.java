@@ -6,7 +6,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.picture.PictureQueryRequest;
-import com.example.picturebackend.domain.vo.PicturePageVO;
+import com.example.picturebackend.domain.vo.picture.PicturePageVO;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;

@@ -15,7 +15,8 @@ import com.example.picturebackend.domain.MyEnums.UserLevel;
 import com.example.picturebackend.domain.MyEnums.UserStatus;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.user.*;
-import io.netty.util.internal.StringUtil;
+import com.example.picturebackend.domain.vo.user.UserVO;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -88,17 +89,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public String userLogin(UserLoginRequest userLoginRequest, HttpServletRequest request) {
+
         QueryWrapper<User> queryWrapper = new QueryWrapper<User>()
                 .eq("userAccount",userLoginRequest.getUseraccount())
                 .select("userPassword");
+
         // userPasswordOnly : 从数据库中查出来的密码
+
         User userPasswordOnly = this.getOne(queryWrapper);
+
         ThrowExceptionUtils.throwIF(
                 userPasswordOnly==null,
                 ErrorCode.PARAMS_ERROR,
                 "当前用户不存在"
         );
+
         String userPassword = userPasswordOnly.getUserpassword();
+
         //2. 登录校验
         ThrowExceptionUtils.throwIF(
                 !userPassword.equals(
@@ -107,17 +114,26 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 ),
                 ErrorCode.PARAMS_ERROR,
                 "登录密码错误");
-        //3. 将脱敏后的用户信息存入Session
+        
+        
         QueryWrapper<User> queryUserWrapper = new QueryWrapper<User>()
                 .eq("userAccount",userLoginRequest.getUseraccount());
+
         User user = this.getOne(queryUserWrapper);
+        System.out.println("----------------------------user = " + user);
+
+        // 判断当前用户是否被封禁
         ThrowExceptionUtils.throwIF(
                 user != null && UserStatus.BANNED.getValue().equals(user.getUserStatus()),
                 ErrorCode.FORBIDDEN_ERROR,
                 "账号已被封禁"
         );
-        User saftyUser = this.getSaftyUser(user);
+
+        //3. 将脱敏后的用户信息存入Session
+        UserVO saftyUser = this.getSaftyUser(user);
+        System.out.println("----------------------------saftyUser = " + saftyUser);
         request.getSession().setAttribute(UserConstant.CURRENT_USER_SESSION_KEY,saftyUser);
+
         return "登录成功";
     }
 
@@ -129,18 +145,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public User getCurrentUser(HttpServletRequest request) {
         //1. 从Session中获取到当前用户信息
-        User currentUser = (User)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
-        System.out.println(currentUser);
+        UserVO currentUser = (UserVO)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
+        System.out.println("----------------------------currentUser = " + currentUser);
+
         ThrowExceptionUtils.throwIF(
                 currentUser == null,
                 ErrorCode.NOT_LOGIN_ERROR
         );
         User latestUser = this.getById(currentUser.getId());
+
         ThrowExceptionUtils.throwIF(
                 latestUser != null && UserStatus.BANNED.getValue().equals(latestUser.getUserStatus()),
                 ErrorCode.FORBIDDEN_ERROR,
                 "账号已被封禁"
         );
+
         return latestUser;
     }
 
@@ -198,17 +217,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public IPage<User> queryPageByCondition(QueryPageRequest queryPageRequest) {
+
         QueryWrapper<User> queryWrapper = this.getQueryWrapper(queryPageRequest);
+
         return this.page(new Page<User>(queryPageRequest.getCurrent(), queryPageRequest.getSize()), queryWrapper);
     }
 
     @Override
     public QueryWrapper<User> getQueryWrapper(QueryPageRequest queryPageRequest) {
+
         ThrowExceptionUtils.throwIF(
                 queryPageRequest == null,
                 ErrorCode.NOT_LOGIN_ERROR,
                 "请求体为空"
         );
+
         // 对请求体使用插件allget()获取到所有的对应字段
         String sortField = queryPageRequest.getSortField();
         String sortOrder = queryPageRequest.getSortOrder();
@@ -219,6 +242,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String userLevel = queryPageRequest.getUserLevel();
         Integer accountStatus = queryPageRequest.getAccountStatus();
         Integer gender = queryPageRequest.getGender();
+
         // 根据查询逻辑，是否合法为依据，创建queryWrapper
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq(ObjectUtil.isNotNull(id), "id", id);
@@ -229,13 +253,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         queryWrapper.like(StrUtil.isNotBlank(profile), "profile", profile);
         queryWrapper.orderBy(StrUtil.isNotEmpty(sortField), sortOrder.equals("ascend"), sortField);
         queryWrapper.eq(ObjectUtil.isNotNull(gender),"gender", gender);
+        
         return queryWrapper;
     }
 
     @Override
-    public User getSaftyUser(User user) {
+    public UserVO getSaftyUser(User user) {
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(user),ErrorCode.PARAMS_ERROR,"传入用户为空");
-        User saftyUser = new User();
+
+        UserVO saftyUser = new UserVO();
+
         saftyUser.setId(user.getId());
         saftyUser.setUsername(user.getUsername());
         saftyUser.setUseraccount(user.getUseraccount());
@@ -247,7 +274,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         saftyUser.setCreatetime(user.getCreatetime());
         saftyUser.setUserLevel(user.getUserLevel());
         saftyUser.setUserStatus(user.getUserStatus());
-        // todo 前端上传图片时，可以根据用户登录态选择是否展示单选择器
+        
         saftyUser.setSpaceId(user.getSpaceId());
         return saftyUser;
     }

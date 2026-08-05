@@ -12,7 +12,9 @@ import com.example.picturebackend.domain.MyEnums.UserStatus;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.BaseResponse;
 import com.example.picturebackend.domain.request.user.*;
-import com.example.picturebackend.domain.vo.UserPagesVO;
+import com.example.picturebackend.domain.vo.user.UserPagesVO;
+import com.example.picturebackend.domain.vo.user.UserVO;
+
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 import jakarta.annotation.Resource;
@@ -84,12 +86,15 @@ public class UserController {
      * @return
      */
     @GetMapping("/getCurrentUser")
-    public BaseResponse<User> getCurrentUser(HttpServletRequest request){
+    public BaseResponse<UserVO> getCurrentUser(HttpServletRequest request){
+
+        // 内部已做脱敏
         User currentUser = userService.getCurrentUser(request);
-        User saftyUser = userService.getSaftyUser(currentUser);
+        UserVO latestUser = userService.getSaftyUser(currentUser);
+
         // 每次get完都要把最新的user存进去
-        request.setAttribute(UserConstant.CURRENT_USER_SESSION_KEY,saftyUser);
-        return ResponseUtils.success(saftyUser);
+        request.setAttribute(UserConstant.CURRENT_USER_SESSION_KEY,latestUser);
+        return ResponseUtils.success(latestUser);
     }
 
     /**
@@ -99,8 +104,12 @@ public class UserController {
      */
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @GetMapping("/queryUsers")
-    public BaseResponse<List<User>> getAllUsers(){
-        List<User> UserList = userService.list();
+    public BaseResponse<List<UserVO>> getAllUsers(){
+        // 查询所有用户信息，并进行脱敏处理
+        List<UserVO> UserList = userService.list().stream().map(user->{
+                return userService.getSaftyUser(user);
+        }).collect(java.util.stream.Collectors.toList());
+
         return ResponseUtils.success(UserList);
     }
 
@@ -118,9 +127,16 @@ public class UserController {
                 ErrorCode.PARAMS_ERROR
         );
         IPage<User> iPage = userService.queryPageByCondition(queryPageRequest);
+        
+        // 将查询到的User对象列表转换为UserVO对象列表 
+        List<UserVO> userVOList = iPage.getRecords().stream().map(user->{
+                return userService.getSaftyUser(user);
+        }).collect(java.util.stream.Collectors.toList());
+
         UserPagesVO userPagesVO = new UserPagesVO();
-        userPagesVO.setUserList(iPage.getRecords());
+        userPagesVO.setUserList(userVOList);
         userPagesVO.setTotalSize(iPage.getTotal());
+
         return ResponseUtils.success(userPagesVO);
     }
 
@@ -130,20 +146,23 @@ public class UserController {
      * @return User
      */
     @GetMapping("/queryUserById")
-    public BaseResponse<User> getUserById(QueryUserRequest queryUserRequest){
+    public BaseResponse<UserVO> getUserById(QueryUserRequest queryUserRequest){
+        // 判空处理
         ThrowExceptionUtils.throwIF(
                 queryUserRequest==null || queryUserRequest.getId() == null,
                 ErrorCode.PARAMS_ERROR,
                 "用户ID不能为空"
         );
-        User user = userService.getById(queryUserRequest.getId());
+        UserVO userVO = userService.getSaftyUser(userService.getById(queryUserRequest.getId()));
+
+        // 如果用户不存在，抛出异常
         ThrowExceptionUtils.throwIF(
-                user == null,
+                userVO == null,
                 ErrorCode.NOT_FOUND_ERROR,
                 "用户不存在"
         );
-        User saftyUser = userService.getSaftyUser(user);
-        return ResponseUtils.success(saftyUser);
+
+        return ResponseUtils.success(userVO);
     }
 
     /**
@@ -231,6 +250,7 @@ public class UserController {
                 ErrorCode.PARAMS_ERROR,
                 "更新信息全为空！"
         );
+
         boolean b = userService.updateSelf(currentUser.getId(),request,updateSelfRequest);
         return ResponseUtils.success(b);
     }

@@ -23,8 +23,10 @@ import com.example.picturebackend.domain.po.Picture;
 import com.example.picturebackend.domain.po.Space;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.picture.*;
-import com.example.picturebackend.domain.vo.PicturePageVO;
-import com.example.picturebackend.domain.vo.PictureVO;
+import com.example.picturebackend.domain.vo.picture.PictureListVO;
+import com.example.picturebackend.domain.vo.picture.PicturePageVO;
+import com.example.picturebackend.domain.vo.picture.PictureVO;
+import com.example.picturebackend.domain.vo.user.UserVO;
 import com.example.picturebackend.manager.MultiCacheManager;
 import com.example.picturebackend.manager.upload.FilePictureUpload;
 import com.example.picturebackend.manager.upload.PictureUploadTemplate;
@@ -84,7 +86,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
         //2. 校验传入loginUser是否是该space的持有者 或 当前登录用户是否是管理员
         ThrowExceptionUtils.throwIF(!userId.equals(loginUser.getId()) &&
-                        !loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE),
+                        !loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE),
                 ErrorCode.NO_AUTH_ERROR);
         return true;
     }
@@ -203,7 +205,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         picture.setUserid(oldPicture == null ? loginUser.getId() : oldPicture.getUserid());
 
         // 管理员自动过审
-        if (loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE)) {
+        if (loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE)) {
             // 填充审核信息 - 管理员自动过审 - 管理员修改后也不需要进入待审核
             picture.setPictureCheck(PictureConstant.CHECK_PASS);
             picture.setCheckAdminId(loginUser.getId());
@@ -356,7 +358,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Override
     public IPage<Picture> queryAll(PictureQueryRequest pictureQueryRequest, User adminUser) {
         // 仅管理员可用的后门
-        ThrowExceptionUtils.throwIF(!adminUser.getUserstatus().equals(UserConstant.ADMIN_ROLE),
+        ThrowExceptionUtils.throwIF(!adminUser.getUserLevel().equals(UserConstant.ADMIN_ROLE),
                 ErrorCode.NO_AUTH_ERROR);
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(pictureQueryRequest), ErrorCode.PARAMS_ERROR);
         Long id = pictureQueryRequest.getId();
@@ -406,42 +408,61 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
      */
     @Override
     public PicturePageVO queryPicturePage(PictureQueryRequest pictureQueryRequest, User currentUser) {
-        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(pictureQueryRequest),
-                ErrorCode.PARAMS_ERROR,"请求体为空");
-        Long spaceId = pictureQueryRequest.getSpaceId();
-        if (spaceId != null && spaceId > 0L) { // 若请求体中传入的空间id
+
+        ThrowExceptionUtils.throwIF(
+            ObjectUtil.isNull(pictureQueryRequest),
+                ErrorCode.PARAMS_ERROR,
+                "请求体为空");
+        final Long spaceId = pictureQueryRequest.getSpaceId();
+        System.out.println("----------------------------pictureQueryRequest = " + pictureQueryRequest.getSpaceId());
+
+        // 不为空表示，现在在访问私人空间的图片列表，因此需要不为为负
+        if (ObjectUtil.isNotNull(spaceId)) {
+            ThrowExceptionUtils.throwIF(
+            spaceId < 0L,
+            ErrorCode.PARAMS_ERROR,
+            "空间ID不合法");
+        }
+
+        if (spaceId != null && spaceId != 0L) { // 若请求体中传入的空间id
             // 校验当前登录用户是否是空间持有人
             Space space = spaceService.getById(spaceId);
             ThrowExceptionUtils.throwIF(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
+
             ThrowExceptionUtils.throwIF(currentUser == null, ErrorCode.NOT_LOGIN_ERROR);
+
             ThrowExceptionUtils.throwIF(!space.getUserId().equals(currentUser.getId()),
                     ErrorCode.NO_AUTH_ERROR, "无法查看他人空间中的内容");
         }
+
         long current = pictureQueryRequest.getCurrent();
         long size = pictureQueryRequest.getPageSize();
+
         // 限制普通用户和未登录用户的分页上限
-        if (ObjectUtil.isNull(currentUser) || !currentUser.getUserstatus().equals(UserConstant.ADMIN_ROLE)){
+        if (ObjectUtil.isNull(currentUser) || 
+            !currentUser.getUserLevel().equals(UserConstant.ADMIN_ROLE)){
             if (size > 10){
                 size = 10;
             }
         }
+
         // 构建查询条件
         QueryWrapper<Picture> queryWrapper = getQueryWrapper(pictureQueryRequest);
+
         // 分页查询
         Page<Picture> picturePage = this.page(new Page<>(current, size), queryWrapper);
+
         // 转换为VO列表
         List<PictureVO> pictureVOList = picturePage.getRecords().stream()
                 .map(picture -> {
                     PictureVO pictureVO = getPictureVO(picture);
                     User createdUser = userService.getById(picture.getUserid());
-                    // 若为普通用户 则对创建人信息进行脱敏处理
-                    if (ObjectUtil.isNull(currentUser) || !currentUser.getUserstatus().equals(UserConstant.ADMIN_ROLE)){
-                        createdUser = userService.getSaftyUser(createdUser);
-                    }
-                    pictureVO.setCreatedUser(createdUser);
+                    UserVO createdUserVO = userService.getSaftyUser(createdUser);
+                    pictureVO.setCreatedUser(createdUserVO);
                     return pictureVO;
                 })
                 .collect(Collectors.toList());
+
         // 封装返回
         PicturePageVO picturePageVO = new PicturePageVO();
         picturePageVO.setPictureList(pictureVOList);
@@ -457,6 +478,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         ThrowExceptionUtils.throwIF(id == null || id <= 0, ErrorCode.PARAMS_ERROR);
         Picture picture = this.getById(id);
         ThrowExceptionUtils.throwIF(picture == null, ErrorCode.NOT_FOUND_ERROR, "图片不存在");
+
         // 判断图片是否在私人空间内
         if (picture.getSpaceId() != 0L) {
             Space space = spaceService.getById(picture.getSpaceId());
@@ -464,12 +486,12 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             this.SpaceCheck(space.getUserId(), currentUser);
         }
         PictureVO pictureVO = getPictureVO(picture);
+
         // 不脱敏，直接设置完整的创建用户信息
         User createdUser = userService.getById(picture.getUserid());
-        if (ObjectUtil.isNull(currentUser) || !currentUser.getUserstatus().equals(UserConstant.ADMIN_ROLE)){
-            createdUser = userService.getSaftyUser(createdUser);
-        }
-        pictureVO.setCreatedUser(createdUser);
+        UserVO createdUserVO = userService.getSaftyUser(createdUser);
+        pictureVO.setCreatedUser(createdUserVO);
+
         return pictureVO;
     }
 
@@ -484,7 +506,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Picture picture = this.getById(pictureUpdateRequest.getId());
         ThrowExceptionUtils.throwIF(picture == null, ErrorCode.NOT_FOUND_ERROR, "图片不存在");
         // 校验是否为图片所属用户
-        ThrowExceptionUtils.throwIF(!picture.getUserid().equals(loginUser.getId()) && !loginUser.getUserstatus().equals("admin"),
+        ThrowExceptionUtils.throwIF(!picture.getUserid().equals(loginUser.getId()) && !loginUser.getUserLevel().equals("admin"),
                 ErrorCode.NO_AUTH_ERROR, "无权限修改此图片");
         Picture updatePicture = new Picture();
         BeanUtils.copyProperties(pictureUpdateRequest, updatePicture);
@@ -506,14 +528,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Override
     public PictureVO getPictureVO(Picture picture) {
         PictureVO pictureVO = PictureVO.obj2VO(picture);
-        User crateUser = new User();
-        /**
-         * 封装脱敏后的创建用户信息
-         */
-        if (ObjectUtil.isNotNull(picture.getUserid()) && ObjectUtil.isNotEmpty(picture.getUserid())){
-            crateUser = userService.getSaftyUser(userService.getById(picture.getUserid()));
-        }
-        pictureVO.setCreatedUser(crateUser);
+        // 拿到脱敏后的创建者信息
+        UserVO crateUserVO = userService.getSaftyUser(userService.getById(picture.getUserid()));
+        // 封装
+        pictureVO.setCreatedUser(crateUserVO);
+
         // 将tags从JSON字符串转为List<String>
         if (StrUtil.isNotBlank(picture.getTags())) {
             try {
@@ -537,8 +556,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
      */
     @Override
     public Page<PictureVO> getPictureVOPage(Page<Picture> picturePage, HttpServletRequest request) {
+        // 拿到分页数据
         List<Picture> pictures = picturePage.getRecords();
+
+        // 封装分页对象
         Page<PictureVO> pictureVOPage = new Page<>(picturePage.getCurrent(), picturePage.getPages(),picturePage.getTotal());
+
+        // 若为空则直接返回空分页对象
         if (CollUtil.isEmpty(pictures)){
             return pictureVOPage;
         }
@@ -547,8 +571,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         List<PictureVO> pictureVOS = pictures.stream().map(picture -> {
             return PictureVO.obj2VO(picture);
         }).collect(Collectors.toList());
+
         // 将图片中的userid都取出来
         Set<Long> userIdSet = pictures.stream().map(Picture::getUserid).collect(Collectors.toSet());
+
         Map<Long,List<User>> userIdUserListMap = userService.listByIds(userIdSet).stream()
                 .collect(Collectors.groupingBy(User::getId));
 
@@ -558,7 +584,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             if(userIdUserListMap.containsKey(userId)) {
                 user = userIdUserListMap.get(userId).get(0);
             }
-            pictureVO.setCreatedUser(user);
+
+            pictureVO.setCreatedUser(userService.getSaftyUser(user));
         });
         pictureVOPage.setRecords(pictureVOS);
         return pictureVOPage;
@@ -700,7 +727,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
      * @return
      */
     @Override
-    public List<Picture> UploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser) {
+    @Transactional
+    public PictureListVO UploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser) {
         //1. 校验参数
         ThrowExceptionUtils.throwIF(loginUser == null,
                 ErrorCode.NOT_LOGIN_ERROR);
@@ -763,6 +791,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
 
         List<PictureVO> pictureVOList = new ArrayList<>();
+
+        // 循环处理并上传图片
         for (String inputSource : imgUrlList) {
             // 用关键词当做图片名称，防止图片名称为乱码 加上uuid 防止重名
             String uuid = UUID.randomUUID().toString().replace("-", "").substring(0, 4);// 长度：8
@@ -793,20 +823,17 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 log.error("图片上传失败",e);
             }
         }
-
-        List<Picture> pictures = pictureVOList.stream().map(
-            vo -> {
-                Picture picture = new Picture();
-                BeanUtils.copyProperties(vo, picture);
-                return picture;
-            }
-        ).collect(Collectors.toList());
+        
+        PictureListVO pictureListVO = new PictureListVO();
+        pictureListVO.setPictureList(pictureVOList);
+        pictureListVO.setTargetCount(imgUrlList.size());
+        pictureListVO.setSuccessCount(number);
 
         // 批量上传完成后，清除缓存保证数据一致性
         if (number > 0) {
             multiCacheManager.invalidatePicturePageCache();
         }
-        return pictures;
+        return pictureListVO;
     }
 
     /**
@@ -881,9 +908,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
      */
     private static void AuthCheck(User loginUser, Picture picture) {
         ThrowExceptionUtils.throwIF(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
-        System.out.println("当前用户角色为："+loginUser.getUserstatus());
+        System.out.println("当前用户角色为："+loginUser.getUserLevel());
         ThrowExceptionUtils.throwIF(
-                !loginUser.getUserstatus().equals(UserConstant.ADMIN_ROLE) && !loginUser.getId().equals(picture.getUserid()),
+                !loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE) && !loginUser.getId().equals(picture.getUserid()),
                 ErrorCode.NO_AUTH_ERROR
         );
     }

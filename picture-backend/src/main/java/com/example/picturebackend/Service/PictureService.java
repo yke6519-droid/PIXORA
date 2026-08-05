@@ -8,8 +8,10 @@ import com.example.picturebackend.domain.dto.file.UploadPictureResult;
 import com.example.picturebackend.domain.po.Picture;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.picture.*;
-import com.example.picturebackend.domain.vo.PicturePageVO;
-import com.example.picturebackend.domain.vo.PictureVO;
+import com.example.picturebackend.domain.vo.picture.PictureListVO;
+import com.example.picturebackend.domain.vo.picture.PicturePageVO;
+import com.example.picturebackend.domain.vo.picture.PictureVO;
+
 import org.springframework.web.bind.annotation.RequestBody;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -125,5 +127,5 @@ public interface PictureService extends IService<Picture> {
      * @param loginUser
      * @return
      */
-    List<Picture> UploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser);
+    PictureListVO UploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser);
 }

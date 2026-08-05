@@ -12,7 +12,7 @@ import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.Mapper.PictureMapper;
 import com.example.picturebackend.Mapper.SpaceMapper;
-import com.example.picturebackend.Service.PictureService;
+
 import com.example.picturebackend.Service.SpaceService;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.constant.SpaceConstant;
@@ -24,9 +24,9 @@ import com.example.picturebackend.domain.request.space.AlterLevelRequest;
 import com.example.picturebackend.domain.request.space.CreateSpaceRequest;
 import com.example.picturebackend.domain.request.space.SpaceQueryRequest;
 import com.example.picturebackend.domain.request.space.SpaceUpdateRequest;
-import com.example.picturebackend.domain.vo.SpacePageVO;
-import com.example.picturebackend.domain.vo.SpaceVO;
 import com.example.picturebackend.domain.vo.space.SpaceLevel;
+import com.example.picturebackend.domain.vo.space.SpacePageVO;
+import com.example.picturebackend.domain.vo.space.SpaceVO;
 
 import org.joda.time.LocalDateTime;
 import org.springframework.stereotype.Service;
