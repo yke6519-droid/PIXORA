@@ -1,7 +1,7 @@
 <template>
     <div id="userInfoShower">
         <!-- 管理员可见 -->
-        <template  v-if="LoginUserStore.loginUser?.userstatus === 'admin'">
+        <template  v-if="LoginUserStore.loginUser?.userLevel === 'admin'">
             <!-- 搜索表单 -->
             <a-form
                 class="searchForm"
@@ -39,7 +39,7 @@
                 
                 <a-form-item label="角色">
                     <a-select
-                        v-model:value="searchParams.userstatus"
+                        v-model:value="searchParams.userLevel"
                         placeholder="选择角色"
                         allow-clear
                         style="width: 140px"
@@ -107,10 +107,10 @@
                         {{ dayjs(record.createtime).format('YYYY-MM-DD HH:mm:ss') }}
                         </div>
                     </template>
-                    <template v-if="column.key === 'userstatus'">
-                        <a-tag v-if="record.userstatus==='admin'" color="green">管理员</a-tag>
-                        <a-tag v-if="record.userstatus==='user'" color="blue">普通用户</a-tag>
-                        <a-tag v-if="record.userstatus==='vip'" color="gold">VIP会员</a-tag>
+                    <template v-if="column.key === 'userLevel'">
+                        <a-tag v-if="record.userLevel==='admin'" color="green">管理员</a-tag>
+                        <a-tag v-if="record.userLevel==='user'" color="blue">普通用户</a-tag>
+                        <a-tag v-if="record.userLevel==='vip'" color="gold">VIP会员</a-tag>
                     </template>
                     <template v-if="column.key === 'gender'">
                         <div v-if="record.gender===0">
@@ -139,7 +139,7 @@
                             danger 
                             size="small" 
                             @click="doDelete(record.id)" 
-                            :disabled="LoginUserStore.loginUser.id === record.id || record.userstatus==='admin'"
+                            :disabled="LoginUserStore.loginUser.id === record.id || record.userLevel==='admin'"
                         >
                             <DeleteOutlined /> 删除
                         </a-button>
@@ -225,7 +225,7 @@ const showModal = (userInfo: API.UserVO) => {
 /**
  * 保存用户信息
  */
-const handleSave = async (formData: API.UserUpdateRequest) => {
+const handleSave = async (formData: API.UpdateUserRequest) => {
   const res = await updateUserUsingPost({
     id: formData.id,
     avatarurl: formData.avatarurl,
@@ -234,7 +234,7 @@ const handleSave = async (formData: API.UserUpdateRequest) => {
     phone: formData.phone,
     profile: formData.profile,
     username: formData.username,
-    userStatus: currentEditUser.value?.userstatus
+    userLevel: currentEditUser.value?.userLevel
   })
 
   if (res.data.code === 200) {
@@ -278,8 +278,8 @@ const columns = [
   },
   {
     title: '用户角色',
-    dataIndex: 'userstatus',
-    key: 'userstatus',
+    dataIndex: 'userLevel',
+    key: 'userLevel',
     width: 100,
   },
   {
@@ -357,7 +357,7 @@ const searchParams = ref({
     username: '',
     useraccount: '',
     gender: undefined as number | undefined,
-    userstatus: undefined as string | undefined
+    userLevel: undefined as string | undefined
 })
 
 /**
@@ -368,7 +368,7 @@ const resetSearch = () => {
         username: '',
         useraccount: '',
         gender: undefined,
-        userstatus: undefined
+        userLevel: undefined
     }
     currentPage.value = 1;
     queryPages();
@@ -383,7 +383,7 @@ const queryPages=async()=>{
         size: pageSize,
         queryUserAccount: searchParams.value.useraccount || undefined,
         queryUsername: searchParams.value.username || undefined,
-        userStatus: searchParams.value.userstatus || undefined,
+        userLevel: searchParams.value.userLevel || undefined,
         // @ts-ignore
         gender: searchParams.value.gender
     })

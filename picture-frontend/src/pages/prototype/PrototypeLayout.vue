@@ -1,101 +1,102 @@
 <template>
-  <div class="prototype-app">
-    <aside class="prototype-sidebar">
+  <a-layout class="prototype-app">
+    <a-layout-sider
+      class="prototype-sidebar"
+      :width="246"
+      :collapsed-width="0"
+      :trigger="null"
+    >
       <RouterLink to="/prototype" class="prototype-brand">
-        <span class="brand-mark">C</span>
+        <span class="brand-mark">P</span>
         <span>
-          <strong>CLOUD / PIC</strong>
-          <small>静态功能原型</small>
+          <strong>PIXORA</strong>
         </span>
       </RouterLink>
 
-      <nav class="prototype-nav" aria-label="原型页面导航">
+      <nav class="prototype-nav" aria-label="主导航">
         <div class="nav-group">
           <span class="nav-group-title">浏览与创作</span>
           <RouterLink to="/prototype/gallery" class="prototype-nav-item">
-            <span>公共图库</span><em>01</em>
+            <span>公共图库</span>
           </RouterLink>
-          <RouterLink to="/prototype/gallery/detail/101" class="prototype-nav-item">
-            <span>图片详情</span><em>02</em>
+          <RouterLink to="/prototype/gallery/detail/2082749059889754114" class="prototype-nav-item">
+            <span>图片详情</span>
           </RouterLink>
           <RouterLink to="/prototype/gallery/upload" class="prototype-nav-item">
-            <span>上传图片</span><em>03</em>
+            <span>上传图片</span>
           </RouterLink>
           <RouterLink to="/prototype/gallery/manage" class="prototype-nav-item">
-            <span>图片管理</span><em>04</em>
+            <span>图片管理</span>
           </RouterLink>
         </div>
 
         <div class="nav-group">
           <span class="nav-group-title">账户与空间</span>
           <RouterLink to="/prototype/user/login" class="prototype-nav-item">
-            <span>登录 / 注册</span><em>05</em>
+            <span>登录 / 注册</span>
           </RouterLink>
           <RouterLink to="/prototype/user/center" class="prototype-nav-item">
-            <span>用户中心</span><em>06</em>
+            <span>用户中心</span>
           </RouterLink>
           <RouterLink to="/prototype/space" class="prototype-nav-item">
-            <span>个人空间</span><em>07</em>
+            <span>个人空间</span>
           </RouterLink>
         </div>
 
         <div class="nav-group">
           <span class="nav-group-title">管理后台</span>
           <RouterLink to="/prototype/admin/users" class="prototype-nav-item">
-            <span>用户管理</span><em>08</em>
+            <span>用户管理</span>
           </RouterLink>
           <RouterLink to="/prototype/admin/pictures/review" class="prototype-nav-item">
-            <span>图片审核</span><em>09</em>
+            <span>图片审核</span>
           </RouterLink>
           <RouterLink to="/prototype/admin/pictures/import" class="prototype-nav-item">
-            <span>批量抓图</span><em>10</em>
+            <span>批量抓图</span>
           </RouterLink>
           <RouterLink to="/prototype/admin/spaces" class="prototype-nav-item">
-            <span>空间运营</span><em>11</em>
+            <span>空间运营</span>
           </RouterLink>
         </div>
       </nav>
 
-      <div class="prototype-sidebar-foot">
-        <div class="status-light"><i></i> 静态数据预览</div>
-        <span>接口接入时保留字段映射</span>
-      </div>
-    </aside>
+    </a-layout-sider>
 
-    <main class="prototype-main">
-      <header class="prototype-topbar">
+    <a-layout class="prototype-main">
+      <a-layout-header class="prototype-topbar">
         <div class="topbar-route">
           <span class="topbar-slash">/</span>
           <span>{{ routeLabel }}</span>
         </div>
-        <div class="topbar-actions">
-          <a-tag color="green">Prototype</a-tag>
-          <a-button type="text" class="topbar-exit" @click="router.push('/prototype')">回到总览</a-button>
-        </div>
-      </header>
+      </a-layout-header>
 
-      <div class="prototype-page" :class="{ 'prototype-page-fixed': isFixedPage }">
+      <a-layout-content class="prototype-page" :class="prototypePageClasses">
         <RouterView />
-      </div>
-    </main>
-  </div>
+      </a-layout-content>
+    </a-layout>
+  </a-layout>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const router = useRouter()
 
 const isFixedPage = computed(() =>
   route.path.includes('/prototype/gallery/detail/') ||
-  route.path === '/prototype/gallery/upload' ||
   route.path === '/prototype/user/login' ||
   route.path === '/prototype/user/register' ||
   route.path === '/prototype/user/center' ||
   route.path === '/prototype/admin/pictures/import'
 )
+
+// 只有图片详情需要严格锁定在一屏内；其他紧凑页允许在矮视口中自然增长，避免底部操作被裁切。
+const prototypePageClasses = computed(() => ({
+  'prototype-page-fixed': isFixedPage.value,
+  'prototype-page-detail': route.path.includes('/prototype/gallery/detail/'),
+  'prototype-page-upload': route.path === '/prototype/gallery/upload',
+}))
 
 const routeLabel = computed(() => {
   const path = route.path

@@ -129,7 +129,7 @@ import { avatarUploadUsingPost } from '../api/fileController'
 interface Props {
   open: boolean
   title?: string
-  userData?: API.User
+  userData?: API.UserVO | null
   isAdmin?: boolean
 }
 
@@ -142,7 +142,7 @@ const props = withDefaults(defineProps<Props>(), {
 // 定义 Emits
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  save: [data: API.UpdateSelfRequest | API.UserUpdateRequest]
+  save: [data: API.UpdateSelfRequest | API.UpdateUserRequest]
   cancel: []
 }>()
 
@@ -164,7 +164,10 @@ const saving = ref(false)
 const uploading = ref(false)
 
 // 编辑表单
-const editForm = ref<API.UpdateSelfRequest>({
+// 表单同时服务个人编辑和管理员编辑，保留管理员更新所需的用户 id。
+type UserEditForm = API.UpdateSelfRequest & Pick<API.UpdateUserRequest, 'id'>
+
+const editForm = ref<UserEditForm>({
   id: undefined,
   username: '',
   avatarurl: '',

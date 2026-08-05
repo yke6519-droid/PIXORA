@@ -23,8 +23,8 @@
               </template>
             </a-avatar>
             <div class="user-role-badge">
-              <a-tag :color="getRoleColor(loginUserStore.loginUser.userstatus)">
-                {{ getRoleText(loginUserStore.loginUser.userstatus) }}
+              <a-tag :color="getRoleColor(loginUserStore.loginUser.userLevel)">
+                {{ getRoleText(loginUserStore.loginUser.userLevel) }}
               </a-tag>
             </div>
           </div>
@@ -46,8 +46,8 @@
 
             <!-- 基本信息标签 -->
             <div class="info-tags">
-              <a-tag v-if="loginUserStore.loginUser.gender === 0" color="blue"> <ManOutlined /> 男士 </a-tag>
-              <a-tag v-else-if="loginUserStore.loginUser.gender === 1" color="pink"> <WomanOutlined /> 女士 </a-tag>
+              <a-tag v-if="loginUserStore.loginUser.gender === 0" color="blue"> <ManOutlined /> 男 </a-tag>
+              <a-tag v-else-if="loginUserStore.loginUser.gender === 1" color="pink"> <WomanOutlined /> 女 </a-tag>
               <a-tag v-if="loginUserStore.loginUser.phone" color="cyan"> <PhoneOutlined /> {{ loginUserStore.loginUser.phone }} </a-tag>
               <a-tag v-if="loginUserStore.loginUser.email" color="orange"> <MailOutlined /> {{ loginUserStore.loginUser.email }} </a-tag>
             </div>

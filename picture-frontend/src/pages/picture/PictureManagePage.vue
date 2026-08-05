@@ -1,7 +1,7 @@
 <template>
   <div id="pictureManagePage">
     <!-- 非管理员查看自己的图片 -->
-    <template v-if="loginUserStore.loginUser && loginUserStore.loginUser.userstatus !== 'admin'">
+    <template v-if="loginUserStore.loginUser && loginUserStore.loginUser.userLevel !== 'admin'">
       <div class="page-header">
         <h1>我的图片管理 - {{ loginUserStore.loginUser.username }}</h1>
         <div class="header-actions">
@@ -16,7 +16,7 @@
     </template>
 
     <!-- 管理员查看所有图片 -->
-    <template v-else-if="loginUserStore.loginUser?.userstatus === 'admin'">
+    <template v-else-if="loginUserStore.loginUser?.userLevel === 'admin'">
       <div class="page-header">
         <h1>图片管理（管理员）</h1>
         <div class="header-actions">
@@ -511,7 +511,7 @@ const reuploadOriginalId = ref<number | undefined>(undefined)
 
 // 是否为管理员
 const isAdmin = computed(() => {
-  return loginUserStore.loginUser?.userstatus === 'admin'
+  return loginUserStore.loginUser?.userLevel === 'admin'
 })
 
 // 表格列定义
@@ -829,9 +829,9 @@ const beforeEditUpload = (file: File) => {
     message.error('只能上传图片文件！')
     return false
   }
-  const isLt10M = file.size / 1024 / 1024 < 10
-  if (!isLt10M) {
-    message.error('图片大小不能超过 10MB！')
+  const isWithinLimit = file.size <= 5 * 1024 * 1024
+  if (!isWithinLimit) {
+    message.error('图片大小不能超过 5MB！')
     return false
   }
   return true

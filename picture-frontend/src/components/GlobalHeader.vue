@@ -105,7 +105,7 @@ const Items = computed<MenuProps['items']>(() => {
   ];
 
   // 仅管理员显示"用户管理"
-  if (loginUserStore.loginUser?.userstatus === 'admin') {
+  if (loginUserStore.loginUser?.userLevel === 'admin') {
     baseItems.push({
       key: '/admin/management',
       label: '用户管理',
@@ -114,7 +114,7 @@ const Items = computed<MenuProps['items']>(() => {
   }
 
   // 仅管理员显示"用户管理"
-  if (loginUserStore.loginUser?.userstatus === 'admin') {
+  if (loginUserStore.loginUser?.userLevel === 'admin') {
     baseItems.push({
       key: '/picture/manage',
       label: '图片管理',
@@ -122,7 +122,7 @@ const Items = computed<MenuProps['items']>(() => {
     });
   }
   // 图片管理
-  if (loginUserStore.loginUser?.userstatus != 'admin') {
+  if (loginUserStore.loginUser?.userLevel != 'admin') {
     baseItems.push({
       key: '/picture/manage',
       label: '图片管理',

@@ -1,10 +1,11 @@
 <template>
   <div class="detail-prototype">
-    <section class="proto-page-head detail-head">
-      <div>
-        <span class="proto-eyebrow">图片详情 / getPictureById</span>
-        <h1 class="proto-title">{{ picture?.name || '图片详情' }}</h1>
-        <p class="proto-copy">详情页直接展示后端 PictureVO，包含图片地址、尺寸、分类、标签、审核状态和上传者信息。</p>
+    <section class="detail-head">
+      <div v-if="picture" class="detail-title-bar">
+        <h1 class="detail-image-title">{{ picture.name || '未命名图片' }}</h1>
+        <a-tag class="detail-title-status proto-status" :class="statusClass">
+          {{ pictureStatusText(picture.pictureCheck) }}
+        </a-tag>
       </div>
       <div class="proto-page-head-actions">
         <a-button class="proto-button ghost-button" @click="router.push('/prototype/gallery')">返回图库</a-button>
@@ -12,9 +13,16 @@
       </div>
     </section>
 
-    <div v-if="loading" class="detail-state"><a-spin size="large" tip="加载图片详情中..." /></div>
+    <div v-if="loading" class="detail-state">
+      <div class="detail-loading-shell" aria-label="正在加载图片详情">
+        <div class="detail-loading-image"></div>
+        <div class="detail-loading-info">
+          <a-skeleton active :paragraph="{ rows: 5 }" />
+        </div>
+      </div>
+    </div>
 
-    <a-result v-else-if="errorMessage" class="detail-state" status="warning" title="图片详情暂时无法打开" :sub-title="errorMessage">
+    <a-result v-else-if="errorMessage" class="detail-state detail-result" status="warning" title="图片详情暂时无法打开" :sub-title="errorMessage">
       <template #extra>
         <a-button class="proto-button acid-button" type="primary" @click="fetchPictureDetail">重新加载</a-button>
         <a-button class="proto-button ghost-button" @click="router.push('/prototype/gallery')">返回图库</a-button>
@@ -22,47 +30,78 @@
     </a-result>
 
     <section v-else-if="picture" class="detail-layout proto-section">
-      <div class="detail-visual proto-surface proto-rounded">
-        <div class="detail-image proto-image-wrap">
-          <img v-if="picture.url || picture.thumbnailUrl" :src="picture.url || picture.thumbnailUrl" :alt="picture.name || '图片详情'" />
-          <div v-else class="detail-image-empty">暂无图片地址</div>
-        </div>
-        <div class="detail-image-caption">
-          <span>{{ picture.picwidth || '-' }} × {{ picture.picheight || '-' }} px</span>
-          <span>{{ picture.picformat?.toUpperCase() || '-' }} / {{ formatPictureSize(picture.picsize) }}</span>
+      <div class="detail-main-visual">
+        <div class="detail-visual proto-surface proto-rounded">
+          <div class="detail-image proto-image-wrap">
+            <a-image
+              v-if="picture.url || picture.thumbnailUrl"
+              class="detail-image-preview"
+              :src="picture.url || picture.thumbnailUrl"
+              :alt="picture.name || '图片详情'"
+              :preview="true"
+            />
+            <div v-else class="detail-image-empty">暂无图片地址</div>
+          </div>
+          <div class="detail-image-caption">
+            <span>{{ picture.picwidth || '-' }} × {{ picture.picheight || '-' }} px</span>
+            <span>{{ picture.picformat?.toUpperCase() || '-' }} / {{ formatPictureSize(picture.picsize) }}</span>
+          </div>
         </div>
       </div>
 
-      <div class="detail-info">
-        <div class="detail-status-line">
-          <a-tag class="proto-status" :class="statusClass">{{ pictureStatusText(picture.pictureCheck) }}</a-tag>
-          <span class="proto-mono">ID {{ picture.id }}</span>
+      <aside class="detail-info">
+        <div class="detail-introduction-block">
+          <span class="detail-section-label">图片简介</span>
+          <p class="detail-introduction">{{ picture.introduction || '暂无图片简介' }}</p>
         </div>
-        <h2>{{ picture.introduction || '暂无图片简介' }}</h2>
         <div v-if="picture.tags?.length" class="detail-tags">
           <a-tag v-for="tag in picture.tags" :key="tag" class="proto-tag acid-tag">{{ tag }}</a-tag>
         </div>
 
-        <div class="detail-meta-grid">
-          <div><span>分类</span><strong>{{ picture.category || '未分类' }}</strong></div>
-          <div><span>空间</span><strong>{{ picture.spaceId === 0 ? '公共图库' : picture.spaceId ? `空间 #${picture.spaceId}` : '未指定' }}</strong></div>
-          <div><span>比例</span><strong>{{ formatRatio(picture.picwidth, picture.picheight) }}</strong></div>
-          <div><span>上传时间</span><strong>{{ picture.createtime || '-' }}</strong></div>
-        </div>
+        <a-descriptions
+          class="detail-descriptions"
+          bordered
+          size="small"
+          layout="vertical"
+          :column="{ xxl: 2, xl: 2, lg: 2, md: 2, sm: 1, xs: 1 }"
+        >
+          <a-descriptions-item label="分类">{{ picture.category || '未分类' }}</a-descriptions-item>
+          <a-descriptions-item label="空间">{{ formatSpaceName(picture.spaceId) }}</a-descriptions-item>
+          <a-descriptions-item label="比例">{{ formatRatio(picture.picwidth, picture.picheight) }}</a-descriptions-item>
+          <a-descriptions-item label="格式 / 大小">
+            {{ picture.picformat?.toUpperCase() || '-' }} / {{ formatPictureSize(picture.picsize) }}
+          </a-descriptions-item>
+          <a-descriptions-item label="上传时间" :span="2">{{ formatDateTime(picture.createtime) }}</a-descriptions-item>
+        </a-descriptions>
 
         <div v-if="picture.createdUser" class="detail-uploader">
-          <div class="detail-uploader-avatar">
-            <img v-if="picture.createdUser.avatarurl" :src="picture.createdUser.avatarurl" :alt="picture.createdUser.username || '上传者'" />
-            <span v-else>{{ picture.createdUser.username?.charAt(0) || '?' }}</span>
+          <a-avatar
+            class="detail-uploader-avatar"
+            :src="picture.createdUser.avatarurl"
+            :size="42"
+          >
+            {{ picture.createdUser.username?.charAt(0) || '?' }}
+          </a-avatar>
+          <div class="detail-uploader-copy">
+            <span class="detail-uploader-label">上传者</span>
+            <strong>{{ picture.createdUser.username || '未知用户' }}</strong>
           </div>
-          <span><small>上传者</small><strong>{{ picture.createdUser.username || '未知用户' }}</strong></span>
         </div>
 
-        <div v-if="picture.pictureCheck === 2 && picture.checkMessage" class="detail-alert">
-          <strong>审核备注</strong>
-          <span>{{ picture.checkMessage }}</span>
+        <!-- 功能预留：后续接入接口时，保存到个人空间应创建副本，不能修改原图。 -->
+        <div class="detail-save-panel">
+          <div class="detail-save-copy">
+            <strong>保存到我的空间</strong>
+            <p>创建一份副本到你的空间，原图不受影响。</p>
+          </div>
+          <a-button class="detail-save-button" disabled>保存到我的空间</a-button>
         </div>
-      </div>
+
+        <div v-if="picture.pictureCheck === 2 && picture.checkMessage" class="detail-review-note">
+          <strong>审核备注</strong>
+          <p>{{ picture.checkMessage }}</p>
+        </div>
+      </aside>
     </section>
   </div>
 </template>
@@ -129,6 +168,20 @@ function formatRatio(width?: number, height?: number) {
   return (width / height).toFixed(2)
 }
 
+// 后端时间保留原始时刻，只统一为页面需要的 yyyy-MM-dd HH:mm:ss 格式。
+function formatDateTime(value?: string) {
+  if (!value) return '-'
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2}:\d{2})/)
+  return match ? `${match[1]} ${match[2]}` : String(value)
+}
+
+// Long 类型空间 ID 可能以字符串返回，只做字符串比较，不转换为 JavaScript Number。
+function formatSpaceName(spaceId?: number | string) {
+  if (spaceId === undefined || spaceId === null || spaceId === '') return '未指定'
+  const normalizedSpaceId = String(spaceId)
+  return normalizedSpaceId === '0' ? '公共图库' : `空间 #${normalizedSpaceId}`
+}
+
 onMounted(() => {
   void fetchPictureDetail()
 })
@@ -139,33 +192,473 @@ watch(() => route.params.id, () => {
 </script>
 
 <style scoped>
-.detail-prototype { height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.detail-head { flex: 0 0 auto; align-items: center; padding-top: 8px; }
-.detail-head .proto-title { margin: 4px 0 6px; font-size: clamp(30px, 3.4vw, 48px); }
-.detail-head .proto-copy { max-width: 520px; font-size: 11px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.detail-head :deep(.proto-button) { height: 37px; padding-inline: 13px; font-size: 12px; }
-.detail-state { flex: 1 1 auto; min-height: 0; display: grid; place-items: center; }
-.detail-layout { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr); gap: clamp(18px, 3.5vw, 48px); align-items: stretch; padding-top: 14px; overflow: hidden; }
-.detail-visual { min-height: 0; height: 100%; padding: 8px; display: flex; flex-direction: column; }
-.detail-image { min-height: 0; flex: 1 1 auto; height: auto; }
-.detail-image :deep(img) { display: block; width: 100%; height: 100%; object-fit: contain; background: var(--proto-paper-deep); }
-.detail-image-empty { height: 100%; display: grid; place-items: center; color: var(--proto-muted); font-size: 12px; }
-.detail-image-caption { display: flex; justify-content: space-between; padding: 8px 3px 0; color: var(--proto-muted); font-family: 'DM Mono', monospace; font-size: 9px; }
-.detail-info { min-height: 0; padding-top: 0; overflow: hidden; }
-.detail-status-line { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; color: var(--proto-muted); }
-.detail-info h2 { margin: 0; font-size: clamp(20px, 2.5vw, 33px); line-height: 1.08; letter-spacing: -.06em; }
-.detail-tags { margin-top: 12px; }
-.detail-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 22px 0 15px; background: var(--proto-line); border: 1px solid var(--proto-line); }
-.detail-meta-grid div { min-height: 52px; padding: 9px; display: flex; flex-direction: column; justify-content: space-between; background: rgba(255,255,255,.4); }
-.detail-meta-grid span { color: var(--proto-muted); font-size: 10px; }
-.detail-meta-grid strong { font-size: 13px; }
-.detail-uploader { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--proto-line); border-bottom: 1px solid var(--proto-line); }
-.detail-uploader-avatar { width: 38px; height: 38px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: var(--proto-acid); color: var(--proto-ink); font-weight: 800; }
-.detail-uploader-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.detail-uploader small, .detail-uploader strong { display: block; }
-.detail-uploader small { color: var(--proto-muted); font-size: 10px; }
-.detail-uploader strong { margin-top: 4px; font-size: 13px; }
-.detail-alert { margin-top: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 5px; border-left: 3px solid var(--proto-orange); background: rgba(255,137,106,.14); font-size: 11px; line-height: 1.45; }
-.detail-alert strong { font-size: 11px; }
-@media (max-width: 800px) { .detail-prototype { height: auto; overflow: visible; } .detail-state { min-height: 360px; } .detail-layout { display: grid; grid-template-columns: 1fr; flex: none; min-height: auto; overflow: visible; } .detail-visual { height: auto; } .detail-image { height: min(66vh, 520px); flex: none; } .detail-info { overflow: visible; } }
+.detail-prototype {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--proto-ink);
+  font-family: 'Manrope', 'Geist', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-kerning: normal;
+}
+
+.detail-prototype :deep(.ant-btn),
+.detail-prototype :deep(.ant-tag),
+.detail-prototype :deep(.ant-descriptions),
+.detail-prototype :deep(.ant-result),
+.detail-prototype :deep(.ant-skeleton) {
+  font-family: inherit;
+}
+
+.detail-head {
+  flex: 0 0 auto;
+  min-height: 56px;
+  padding-top: 4px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid transparent;
+}
+
+.detail-title-bar {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.detail-head .proto-page-head-actions {
+  padding-bottom: 0;
+}
+
+.detail-head :deep(.proto-button) {
+  height: 37px;
+  padding-inline: 14px;
+  font-size: .75rem;
+}
+
+.detail-state {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+.detail-loading-shell {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  /* 加载态与完成态保持相同列宽，避免内容出现时页面突然跳动。 */
+  /* 桌面加载态固定主要图片区占比，保证加载完成后布局不跳动。 */
+  grid-template-columns: minmax(0, 75%) minmax(0, 1fr);
+  gap: 22px;
+  padding-top: 12px;
+}
+
+.detail-loading-image {
+  min-height: 260px;
+  border: 1px solid var(--proto-line);
+  border-radius: 10px;
+  background: var(--proto-paper-deep);
+}
+
+.detail-loading-info {
+  padding: 14px 4px;
+}
+
+.detail-loading-info :deep(.ant-skeleton-title),
+.detail-loading-info :deep(.ant-skeleton-paragraph > li) {
+  background: rgba(17, 20, 22, .12);
+}
+
+.detail-result {
+  color: var(--proto-ink);
+}
+
+.detail-result :deep(.ant-result-title),
+.detail-result :deep(.ant-result-subtitle) {
+  color: var(--proto-ink);
+}
+
+.detail-result :deep(.ant-result-subtitle) {
+  color: var(--proto-ink-soft);
+}
+
+.detail-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  /* 桌面端让图片承担主要视觉面积，右侧信息栏保留可读的最小宽度。 */
+  /* 桌面端固定图片区为主要区域，右侧信息栏自适应剩余空间。 */
+  grid-template-columns: minmax(0, 75%) minmax(0, 1fr);
+  gap: 22px;
+  align-items: stretch;
+  padding-top: 12px;
+  padding-bottom: 10px;
+  overflow: hidden;
+}
+
+.detail-main-visual {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-image-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0 4px;
+  color: var(--proto-ink);
+  font-size: 2.1rem;
+  line-height: 1.08;
+  letter-spacing: -.04em;
+  font-weight: 800;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.detail-title-status {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+  padding: 3px 8px;
+  font-size: .6875rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  transform: translateY(4px);
+}
+
+.detail-visual {
+  min-height: 0;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  flex: 1 1 auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, .64);
+}
+
+.detail-image {
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  height: auto;
+  max-height: none;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.detail-image :deep(.ant-image),
+.detail-image :deep(.ant-image-img) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.detail-image :deep(.ant-image-img) {
+  object-fit: contain;
+  background: var(--proto-paper-deep);
+}
+
+.detail-image-empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--proto-ink-soft);
+  font-size: .875rem;
+}
+
+.detail-image-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 3px 0;
+  color: var(--proto-ink-soft);
+  font-size: .75rem;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail-info {
+  min-height: 0;
+  padding: 4px 4px 0;
+  overflow: hidden;
+}
+
+.detail-introduction-block {
+  margin-top: 0;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--proto-line);
+}
+
+.detail-section-label {
+  display: block;
+  color: var(--proto-ink-soft);
+  font-size: .75rem;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.detail-introduction {
+  max-width: none;
+  margin: 6px 0 0;
+  color: var(--proto-ink-soft);
+  font-size: .9375rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.detail-tags {
+  margin-top: 12px;
+}
+
+.detail-tags :deep(.proto-tag) {
+  margin: 0 6px 6px 0;
+  padding: 4px 8px;
+  color: var(--proto-ink);
+  font-size: .75rem;
+  line-height: 1.2;
+}
+
+.detail-descriptions {
+  margin-top: 14px;
+}
+
+.detail-descriptions :deep(.ant-descriptions-view) {
+  border-color: var(--proto-line);
+}
+
+.detail-descriptions :deep(table) {
+  table-layout: fixed;
+}
+
+.detail-descriptions :deep(.ant-descriptions-item-label),
+.detail-descriptions :deep(.ant-descriptions-item-content) {
+  padding-inline: 12px;
+  border-color: var(--proto-line);
+  color: var(--proto-ink);
+}
+
+.detail-descriptions :deep(.ant-descriptions-item-label) {
+  padding-top: 9px;
+  padding-bottom: 4px;
+  background: rgba(228, 231, 223, .72);
+  color: var(--proto-ink-soft);
+  font-size: .75rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.detail-descriptions :deep(.ant-descriptions-item-content) {
+  padding-top: 4px;
+  padding-bottom: 10px;
+  background: rgba(255, 255, 255, .4);
+  font-size: .875rem;
+  line-height: 1.3;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.detail-uploader {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 0;
+  border-top: 1px solid var(--proto-line);
+  border-bottom: 1px solid var(--proto-line);
+}
+
+.detail-uploader-avatar.ant-avatar {
+  flex: 0 0 auto;
+  background: var(--proto-acid);
+  color: var(--proto-ink);
+  font-weight: 800;
+}
+
+.detail-uploader-copy {
+  min-width: 0;
+}
+
+.detail-uploader-label,
+.detail-uploader-copy strong {
+  display: block;
+}
+
+.detail-uploader-label {
+  color: var(--proto-ink-soft);
+  font-size: .75rem;
+}
+
+.detail-uploader-copy strong {
+  margin-top: 4px;
+  color: var(--proto-ink);
+  font-size: .9375rem;
+  overflow-wrap: anywhere;
+}
+
+.detail-save-panel {
+  margin-top: 16px;
+  padding-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid var(--proto-line);
+}
+
+.detail-save-copy {
+  min-width: 0;
+}
+
+.detail-save-copy strong {
+  display: block;
+  color: var(--proto-ink);
+  font-size: .9375rem;
+}
+
+.detail-save-copy p {
+  margin: 4px 0 0;
+  color: var(--proto-ink-soft);
+  font-size: .75rem;
+  line-height: 1.45;
+}
+
+.detail-save-button.ant-btn {
+  flex: 0 0 auto;
+  color: var(--proto-ink-soft);
+  background: rgba(186, 255, 61, .46);
+  border-color: rgba(109, 151, 18, .35);
+  box-shadow: none;
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+.detail-save-button.ant-btn[disabled] {
+  color: var(--proto-ink-soft);
+  background: rgba(186, 255, 61, .46);
+  border-color: rgba(109, 151, 18, .35);
+  cursor: not-allowed;
+}
+
+.detail-review-note {
+  margin-top: 14px;
+  padding: 11px 13px;
+  border: 1px solid rgba(255, 137, 106, .55);
+  border-radius: 8px;
+  background: rgba(255, 137, 106, .16);
+  color: var(--proto-ink);
+  font-size: .8125rem;
+  line-height: 1.5;
+}
+
+.detail-review-note strong {
+  font-size: .8125rem;
+}
+
+.detail-review-note p {
+  margin: 5px 0 0;
+  color: var(--proto-ink-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-width: 980px) {
+  .detail-layout,
+  .detail-loading-shell {
+    grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr);
+    gap: 18px;
+  }
+
+  .detail-image-title {
+    font-size: 1.7rem;
+  }
+}
+
+@media (max-width: 800px) {
+  .detail-prototype {
+    height: auto;
+    overflow: visible;
+  }
+
+  .detail-head {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-top: 10px;
+    justify-content: flex-start;
+  }
+
+  .detail-title-bar {
+    width: 100%;
+  }
+
+  .detail-head .proto-page-head-actions {
+    justify-content: flex-start;
+  }
+
+  .detail-state {
+    min-height: 360px;
+  }
+
+  .detail-loading-shell {
+    height: auto;
+    min-height: 520px;
+    grid-template-columns: 1fr;
+  }
+
+  .detail-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    flex: none;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .detail-main-visual {
+    height: auto;
+  }
+
+  .detail-visual {
+    height: auto;
+    flex: none;
+  }
+
+  .detail-image {
+    height: min(66vh, 520px);
+    max-height: none;
+    flex: none;
+  }
+
+  .detail-image-title {
+    font-size: 1.5rem;
+  }
+
+  .detail-info {
+    overflow: visible;
+    padding-top: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-prototype :deep(.ant-image-img) {
+    transition: none;
+  }
+}
 </style>

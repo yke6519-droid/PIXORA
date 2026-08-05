@@ -49,7 +49,7 @@ export async function deleteUsersUsingDelete(
 
 /** getCurrentUser GET /user/getCurrentUser */
 export async function getCurrentUserUsingGet(options?: { [key: string]: any }) {
-  return request<API.BaseResponseUser_>("/user/getCurrentUser", {
+  return request<API.BaseResponseUserVO_>("/user/getCurrentUser", {
     method: "GET",
     ...(options || {}),
   });
@@ -76,7 +76,7 @@ export async function getUserByIdUsingGet(
   params: API.getUserByIdUsingGETParams,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseUser_>("/user/queryUserById", {
+  return request<API.BaseResponseUserVO_>("/user/queryUserById", {
     method: "GET",
     params: {
       ...params,
@@ -87,7 +87,7 @@ export async function getUserByIdUsingGet(
 
 /** getAllUsers GET /user/queryUsers */
 export async function getAllUsersUsingGet(options?: { [key: string]: any }) {
-  return request<API.BaseResponseListUser_>("/user/queryUsers", {
+  return request<API.BaseResponseListUserVO_>("/user/queryUsers", {
     method: "GET",
     ...(options || {}),
   });

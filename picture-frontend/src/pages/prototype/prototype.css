@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Geist:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap');
 
 :root {
   --proto-ink: #111416;
@@ -9,17 +9,25 @@
   --proto-orange: #ff896a;
   --proto-blue: #a7c9ff;
   --proto-line: rgba(17, 20, 22, .14);
-  --proto-muted: #687171;
-  --proto-shadow: 0 28px 80px rgba(18, 23, 23, .12);
+  --proto-muted: #525b5b;
+  --proto-shadow: 0 16px 42px rgba(18, 23, 23, .10);
 }
 
 * { box-sizing: border-box; }
 
 .prototype-app {
+  --prototype-topbar-height: 67px;
+  /* 统一详情页作为基准的页面外边界，避免各路由各写一套间距。 */
+  --prototype-page-gutter: clamp(20px, 4vw, 58px);
+  --prototype-page-max-width: 1440px;
+  --prototype-page-bottom-space: 36px;
   min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
   display: flex;
   background: var(--proto-paper);
   color: var(--proto-ink);
+  color-scheme: light;
   font-family: 'Manrope', 'Geist', Arial, sans-serif;
 }
 
@@ -27,16 +35,25 @@
   width: 246px;
   flex: 0 0 246px;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 27px 18px 22px;
   display: flex;
   flex-direction: column;
-  background: var(--proto-ink);
+  background: var(--proto-ink) !important;
   color: var(--proto-paper);
   position: sticky;
   top: 0;
   align-self: flex-start;
   height: 100vh;
+  height: 100dvh;
   z-index: 20;
+}
+
+/* Ant Design Sider 会包裹一层内容节点，这里让导航继续撑满侧栏高度。 */
+.prototype-sidebar > .ant-layout-sider-children {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .prototype-brand {
@@ -118,16 +135,17 @@
 .status-light { display: flex; align-items: center; gap: 7px; color: var(--proto-acid); margin-bottom: 7px; }
 .status-light i { width: 7px; height: 7px; border-radius: 50%; background: var(--proto-acid); box-shadow: 0 0 0 5px rgba(186,255,61,.08); }
 
-.prototype-main { min-width: 0; flex: 1; overflow-x: hidden; }
+.prototype-main { min-width: 0; min-height: 100vh; min-height: 100dvh; flex: 1; overflow-x: hidden; background: var(--proto-paper); }
 .prototype-topbar {
-  min-height: 67px;
-  padding: 0 clamp(20px, 4vw, 58px);
+  height: var(--prototype-topbar-height) !important;
+  min-height: var(--prototype-topbar-height) !important;
+  padding: 0 var(--prototype-page-gutter) !important;
+  line-height: normal;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--proto-line);
-  background: rgba(241, 242, 237, .86);
-  backdrop-filter: blur(18px);
+  background: rgba(241, 242, 237, .98) !important;
   position: sticky;
   top: 0;
   z-index: 15;
@@ -140,12 +158,44 @@
 .topbar-exit.ant-btn { padding-inline: 0; color: var(--proto-ink) !important; font-family: 'Manrope', 'Geist', Arial, sans-serif; font-size: 14px !important; font-weight: 600; line-height: 1.4; }
 .topbar-exit.ant-btn:hover { color: var(--proto-orange) !important; }
 
-.prototype-page { width: min(100%, 1440px); margin: 0 auto; padding: 0 clamp(20px, 4vw, 58px) 36px; }
-.prototype-page-fixed { height: calc(100vh - 67px); padding-bottom: 0; overflow: hidden; }
+.prototype-page {
+  width: min(100%, var(--prototype-page-max-width));
+  margin: 0 auto;
+  padding: 0 var(--prototype-page-gutter) var(--prototype-page-bottom-space);
+}
+.prototype-page.prototype-page-upload {
+  /* 桌面端让上传区接住顶部栏以下的剩余空间，避免内容缩在页面上方。 */
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: min(100%, 1680px);
+  /* 上传页继续保持宽屏容器，只与详情页统一左右边界。 */
+  padding-inline: var(--prototype-page-gutter);
+  padding-bottom: 24px;
+}
+/*
+ * 紧凑页默认至少占满剩余视口，但不再统一锁死高度。
+ * 内容略高于视口时允许页面自然增长，确保提交按钮和提示始终可达。
+ */
+.prototype-page-fixed {
+  min-height: calc(100vh - var(--prototype-topbar-height));
+  min-height: calc(100dvh - var(--prototype-topbar-height));
+  padding-bottom: 20px;
+}
+
+/* 图片详情仍保持严格一屏，通过内部自适应缩放完整展示图片与信息。 */
+.prototype-page-detail {
+  height: calc(100vh - var(--prototype-topbar-height));
+  height: calc(100dvh - var(--prototype-topbar-height));
+  min-height: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+}
 .proto-section { padding-top: clamp(24px, 4vw, 46px); }
-.proto-eyebrow { color: var(--proto-orange); font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
-.proto-title { margin: 12px 0 18px; font-size: clamp(35px, 5vw, 72px); line-height: .97; letter-spacing: -.075em; font-weight: 800; max-width: 920px; }
-.proto-copy { max-width: 580px; color: var(--proto-muted); font-size: 14px; line-height: 1.8; }
+.proto-eyebrow { color: var(--proto-orange); font-family: 'Manrope', 'Geist', Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0; }
+.proto-title { margin: 12px 0 18px; max-width: 920px; font-size: clamp(35px, 5vw, 64px); line-height: 1; letter-spacing: -.04em; font-weight: 800; text-wrap: balance; }
+.proto-copy { max-width: 65ch; color: var(--proto-muted); font-size: 14px; line-height: 1.7; text-wrap: pretty; }
 .proto-subtitle { margin: 0; font-size: clamp(23px, 3vw, 43px); line-height: 1.02; letter-spacing: -.06em; }
 
 .proto-button.ant-btn { height: 43px; padding: 0 18px; border-radius: 5px; box-shadow: none; font-weight: 700; }
@@ -200,8 +250,7 @@
 .proto-toolbar .ant-input-search { width: min(320px, 100%); }
 
 .proto-image-wrap { overflow: hidden; background: var(--proto-paper-deep); }
-.proto-image-wrap img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .75s cubic-bezier(.2,.75,.2,1), filter .75s ease; }
-.proto-image-wrap:hover img { transform: scale(1.06); filter: saturate(1.1) contrast(1.04); }
+.proto-image-wrap img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .proto-tag.ant-tag { border: 0; background: var(--proto-paper-deep); color: var(--proto-ink); font-size: 10px; margin-inline-end: 4px; margin-bottom: 4px; }
 .proto-tag.acid-tag { background: var(--proto-acid); }
 .proto-status.ant-tag { border: 0; font-size: 10px; margin: 0; }
@@ -209,26 +258,78 @@
 .proto-status.wait { background: rgba(255,137,106,.22); color: #973816; }
 .proto-status.refuse { background: rgba(17,20,22,.1); color: #4a5050; }
 
+/* 为键盘用户提供统一、清晰的焦点反馈。 */
+.prototype-app :where(a, button, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #4f7900;
+  outline-offset: 2px;
+}
+
+.prototype-app .ant-input::placeholder,
+.prototype-app textarea.ant-input::placeholder {
+  color: #697171;
+  opacity: 1;
+}
+
+/* 用户选择减少动效时，仅保留必要的状态切换。 */
+@media (prefers-reduced-motion: reduce) {
+  .prototype-app *,
+  .prototype-app *::before,
+  .prototype-app *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/*
+ * 浏览器 100% 缩放且可用高度不足时，统一切换为桌面紧凑密度。
+ * 只压缩装饰留白，不牺牲输入框、按钮和正文的可读性。
+ */
+@media (min-width: 681px) and (max-height: 900px) {
+  .prototype-app { --prototype-topbar-height: 60px; }
+  .prototype-sidebar { padding-top: 20px; padding-bottom: 16px; }
+  .prototype-brand { padding-bottom: 20px; }
+  .prototype-nav { padding-top: 18px; }
+  .nav-group { margin-bottom: 14px; }
+  .prototype-nav-item { min-height: 34px; }
+  .prototype-sidebar-foot { padding-top: 11px; }
+  .prototype-page { padding-inline: var(--prototype-page-gutter); }
+  .proto-page-head { padding-top: 8px; }
+  .proto-section { padding-top: 18px; }
+}
+
 @media (max-width: 980px) {
-  .prototype-sidebar { width: 205px; flex-basis: 205px; }
+  .prototype-sidebar { width: 205px !important; flex-basis: 205px !important; }
   .proto-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .proto-page-head { align-items: flex-start; flex-direction: column; }
   .proto-page-head-actions { justify-content: flex-start; padding-bottom: 0; }
 }
 
+@media (max-width: 920px) {
+  /* 窄屏改为自然高度，保证上传表单顺序清晰且可以正常滚动。 */
+  .prototype-page.prototype-page-upload {
+    display: block;
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+}
+
 @media (max-width: 680px) {
-  .prototype-app { display: block; }
-  .prototype-sidebar { width: 100%; height: auto; min-height: 0; position: relative; padding: 17px 17px 13px; }
+  .prototype-app { display: block; --prototype-page-gutter: 17px; }
+  .prototype-sidebar { width: 100% !important; flex-basis: 100% !important; height: auto; min-height: 0; position: relative; padding: 17px 17px 13px; }
+  .prototype-sidebar > .ant-layout-sider-children { min-height: 0; }
   .prototype-brand { padding-bottom: 16px; }
   .prototype-nav { display: flex; gap: 8px; padding-top: 13px; overflow-x: auto; }
   .nav-group { display: contents; }
   .nav-group-title, .prototype-sidebar-foot { display: none; }
   .prototype-nav-item { flex: 0 0 auto; padding: 0 11px; min-height: 32px; background: rgba(241,242,237,.07); font-size: 11px; }
   .prototype-nav-item em { display: none; }
-  .prototype-topbar { padding-inline: 17px; min-height: 57px; }
+  .prototype-topbar { height: 57px !important; padding-inline: var(--prototype-page-gutter) !important; min-height: 57px !important; }
   .topbar-actions .ant-tag { display: none; }
-  .prototype-page { padding-inline: 17px; }
-  .prototype-page-fixed { height: auto; padding-bottom: 36px; overflow: visible; }
+  .prototype-page { padding-inline: var(--prototype-page-gutter); }
+  .prototype-page-fixed,
+  .prototype-page-detail { height: auto; min-height: 0; padding-bottom: 36px; overflow: visible; }
   .proto-bento { grid-template-columns: 1fr; }
   .proto-bento-card.span-2 { grid-column: span 1; }
   .proto-title { font-size: clamp(38px, 13vw, 62px); }

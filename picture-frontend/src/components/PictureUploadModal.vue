@@ -112,7 +112,7 @@
             {{ props.mode === 'reupload' ? '点击或拖拽新图片到此区域上传（可选）' : '点击或拖拽图片到此区域上传' }}
           </p>
           <p class="ant-upload-hint">
-            {{ props.mode === 'reupload' ? '不上传则保持原图，仅修改信息；上传则用新图替换原图' : '支持 JPG、PNG、GIF、WEBP 等常见图片格式，最大 10MB' }}
+            {{ props.mode === 'reupload' ? '不上传则保持原图，仅修改信息；上传则用新图替换原图' : '支持 JPG、PNG、WEBP，最大 5MB' }}
           </p>
         </a-upload-dragger>
       </a-form-item>
@@ -243,9 +243,9 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
     message.error('只能上传图片文件！')
     return false
   }
-  const isLt10M = file.size / 1024 / 1024 < 10
-  if (!isLt10M) {
-    message.error('图片大小不能超过 10MB！')
+  const isWithinLimit = file.size <= 5 * 1024 * 1024
+  if (!isWithinLimit) {
+    message.error('图片大小不能超过 5MB！')
     return false
   }
   if (!uploadForm.value.name) {

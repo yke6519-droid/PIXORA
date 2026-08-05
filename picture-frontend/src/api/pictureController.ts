@@ -37,7 +37,7 @@ export async function adminFetchPictureBatchUsingPost(
   body: API.PictureUploadByBatchRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseString_>("/picture/adminFetchPictureBatch", {
+  return request<API.BaseResponsePictureListVO_>("/picture/adminFetchPictureBatch", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

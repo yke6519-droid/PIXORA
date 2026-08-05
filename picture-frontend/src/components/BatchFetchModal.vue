@@ -129,7 +129,9 @@ const handleFetch = async () => {
     })
 
     if (res.data.code === 200) {
-      message.success(res.data.data || '批量拉取完成！')
+      // 后端返回本次成功落库的图片列表，旧弹窗只反馈数量，父页面负责刷新图库。
+      const pictures = res.data.data || []
+      message.success(`批量拉取完成，成功 ${pictures.length} 张`)
       visible.value = false
       // 重置表单
       formData.value = { searchText: '', name: '', count: 10 }

@@ -7,7 +7,7 @@ import { getCurrentUserUsingGet } from '../api/userController'
  */
 export const useLoginUserStore = defineStore('loginUser', () => {
   // 定义状态
-  const loginUser = ref<API.User | null>(null)
+  const loginUser = ref<API.UserVO | null>(null)
 
   // 定义方法
   function setLoginUser(newLoginUser: any) {

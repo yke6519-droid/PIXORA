@@ -301,7 +301,7 @@ const tagList = ref<string[]>([])
 
 // 判断是否为管理员
 const isAdmin = computed(() => {
-  return loginUserStore.loginUser?.userstatus === 'admin'
+  return loginUserStore.loginUser?.userLevel === 'admin'
 })
 
 // 判断是否可编辑（管理员或上传者本人）
@@ -445,7 +445,7 @@ const handleSaveEdit = async () => {
 
   editLoading.value = true
   try {
-    if (loginUserStore.loginUser?.userstatus !== 'admin') {
+    if (loginUserStore.loginUser?.userLevel !== 'admin') {
       // 用户上传接口
       const res = await uploadPicUserUsingPost(
         {
@@ -515,9 +515,9 @@ const beforeEditUpload = (file: File) => {
     message.error('只能上传图片文件！')
     return false
   }
-  const isLt10M = file.size / 1024 / 1024 < 10
-  if (!isLt10M) {
-    message.error('图片大小不能超过 10MB！')
+  const isWithinLimit = file.size <= 5 * 1024 * 1024
+  if (!isWithinLimit) {
+    message.error('图片大小不能超过 5MB！')
     return false
   }
   return true

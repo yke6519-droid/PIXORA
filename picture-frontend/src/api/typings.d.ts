@@ -4,24 +4,26 @@ declare namespace API {
     phone?: string;
     useraccount?: string;
     username?: string;
-    userstatus?: string;
+    userLevel?: string;
   };
 
   type AdminCheckPictureBatchRequest = {
     checkMessage?: string;
     checkResult?: number;
-    picIds?: number[];
+    /** Java Long 由后端 JsonConfig 序列化为字符串，前端不能转成 Number。 */
+    picIds?: Array<number | string>;
   };
 
   type AdminCheckPictureRequest = {
     checkMessage?: string;
     checkResult?: number;
-    picId?: number;
+    /** Java Long 由后端 JsonConfig 序列化为字符串，前端不能转成 Number。 */
+    picId?: number | string;
   };
 
   type AlterLevelRequest = {
     alterLevel?: number;
-    spaceId?: number;
+    spaceId?: number | string;
   };
 
   type BaseResponseBoolean_ = {
@@ -36,9 +38,16 @@ declare namespace API {
     message?: string;
   };
 
-  type BaseResponseListUser_ = {
+  type BaseResponseListUserVO_ = {
     code?: number;
-    data?: User[];
+    data?: UserVO[];
+    message?: string;
+  };
+
+  /** 批量抓图接口返回的结构化结果。 */
+  type BaseResponsePictureListVO_ = {
+    code?: number;
+    data?: PictureListVO;
     message?: string;
   };
 
@@ -84,9 +93,9 @@ declare namespace API {
     message?: string;
   };
 
-  type BaseResponseUser_ = {
+  type BaseResponseUserVO_ = {
     code?: number;
-    data?: User;
+    data?: UserVO;
     message?: string;
   };
 
@@ -102,12 +111,12 @@ declare namespace API {
 
   type deleteByIdUsingDELETEParams = {
     /** spaceId */
-    spaceId?: number;
+    spaceId?: number | string;
   };
 
   type DeleteRequest = {
-    id?: number;
-    ids?: number[];
+    id?: number | string;
+    ids?: Array<number | string>;
   };
 
   type getPictureByIdUsingGETParams = {
@@ -124,17 +133,17 @@ declare namespace API {
     pages?: number;
     records?: Picture[];
     size?: number;
-    total?: number;
+    total?: number | string;
   };
 
   type Picture = {
     category?: string;
-    checkAdminId?: number;
+    checkAdminId?: number | string;
     checkMessage?: string;
     checkTime?: string;
     createtime?: string;
     edittime?: string;
-    id?: number;
+    id?: number | string;
     introduction?: string;
     isdelete?: number;
     name?: string;
@@ -144,23 +153,29 @@ declare namespace API {
     picsize?: number;
     pictureCheck?: number;
     picwidth?: number;
-    spaceId?: number;
+    spaceId?: number | string;
     tags?: string;
     thumbnailUrl?: string;
     updatetime?: string;
     url?: string;
-    userid?: number;
+    userid?: number | string;
   };
 
   type PicturePageVO = {
     pictureList?: PictureVO[];
-    total?: number;
+    total?: number | string;
+  };
+
+  type PictureListVO = {
+    pictureList?: PictureVO[];
+    targetCount?: number;
+    successCount?: number;
   };
 
   type PictureQueryRequest = {
     category?: string;
     current?: number;
-    id?: number;
+    id?: number | string;
     introduction?: string;
     name?: string;
     pageSize?: number;
@@ -168,9 +183,9 @@ declare namespace API {
     searchText?: string;
     sortFiled?: string;
     sortOrder?: string;
-    spaceId?: number;
+    spaceId?: number | string;
     tags?: string[];
-    userId?: number;
+    userId?: number | string;
   };
 
   type PictureTagCategory = {
@@ -180,10 +195,10 @@ declare namespace API {
 
   type PictureUpdateRequest = {
     category?: string;
-    id?: number;
+    id?: number | string;
     introduction?: string;
     name?: string;
-    spaceId?: number;
+    spaceId?: number | string;
     tags?: string[];
   };
 
@@ -197,9 +212,9 @@ declare namespace API {
 
   type PictureVO = {
     category?: string;
-    checkAdminId?: number;
+    checkAdminId?: number | string;
     checkMessage?: string;
-    createdUser?: User;
+    createdUser?: UserVO;
     createtime?: string;
     id?: number | string;
     introduction?: string;
@@ -210,35 +225,36 @@ declare namespace API {
     picsize?: number;
     pictureCheck?: number;
     picwidth?: number;
-    spaceId?: number;
+    spaceId?: number | string;
     tags?: string[];
     thumbnailUrl?: string;
     updatetime?: string;
     url?: string;
-    userId?: number;
+    userId?: number | string;
   };
 
   type QueryPageRequest = {
     current?: number;
     gender?: number;
-    id?: number;
+    id?: number | string;
     profile?: string;
     queryUserAccount?: string;
     queryUsername?: string;
     size?: number;
     sortField?: string;
     sortOrder?: string;
-    userStatus?: string;
+    userLevel?: string;
+    accountStatus?: number;
   };
 
   type querySpaceByIdUsingGETParams = {
     /** spaceId */
-    spaceId?: number;
+    spaceId?: number | string;
   };
 
   type querySpacePageUsingGETParams = {
     current?: number;
-    id?: number;
+    id?: number | string;
     pageSize?: number;
     sortFiled?: string;
     sortOrder?: string;
@@ -257,40 +273,40 @@ declare namespace API {
 
   type Space = {
     createTime?: string;
-    id?: number;
+    id?: number | string;
     isDelete?: number;
-    maxCount?: number;
-    maxSize?: number;
+    maxCount?: number | string;
+    maxSize?: number | string;
     spaceLevel?: number;
     spaceName?: string;
     updateTime?: string;
-    usedCount?: number;
-    usedSize?: number;
-    userId?: number;
+    usedCount?: number | string;
+    usedSize?: number | string;
+    userId?: number | string;
   };
 
   type SpacePageVO = {
     spaceVOList?: SpaceVO[];
-    total?: number;
+    total?: number | string;
   };
 
   type SpaceUpdateRequest = {
-    spaceId?: number;
+    spaceId?: number | string;
     updatedName?: string;
   };
 
   type SpaceVO = {
     createTime?: string;
-    createdUser?: User;
-    id?: number;
-    maxCount?: number;
-    maxSize?: number;
+    createdUser?: UserVO;
+    id?: number | string;
+    maxCount?: number | string;
+    maxSize?: number | string;
     spaceLevel?: number;
     spaceName?: string;
     updateTime?: string;
-    usedCount?: number;
-    usedSize?: number;
-    userId?: number;
+    usedCount?: number | string;
+    usedSize?: number | string;
+    userId?: number | string;
   };
 
   type testDownloadFileUsingGETParams = {
@@ -311,10 +327,11 @@ declare namespace API {
     avatarurl?: string;
     email?: string;
     gender?: number;
-    id?: number;
+    id?: number | string;
     phone?: string;
     profile?: string;
-    userStatus?: string;
+    userLevel?: string;
+    accountStatus?: number;
     username?: string;
   };
 
@@ -322,34 +339,17 @@ declare namespace API {
     /** category */
     category?: string;
     /** id */
-    id?: number;
+    id?: number | string;
     /** introduction */
     introduction?: string;
     /** name */
     name?: string;
     /** spaceId */
-    spaceId?: number;
+    spaceId?: number | string;
     /** tags */
     tags?: string[];
     /** url */
     url?: string;
-  };
-
-  type User = {
-    avatarurl?: string;
-    createtime?: string;
-    email?: string;
-    gender?: number;
-    id?: number;
-    isdelete?: number;
-    phone?: string;
-    profile?: string;
-    spaceId?: number;
-    updatetime?: string;
-    useraccount?: string;
-    username?: string;
-    userpassword?: string;
-    userstatus?: string;
   };
 
   type UserLoginRequest = {
@@ -358,7 +358,23 @@ declare namespace API {
   };
 
   type UserPagesVO = {
-    totalSize?: number;
-    userList?: User[];
+    totalSize?: number | string;
+    userList?: UserVO[];
+  };
+
+  type UserVO = {
+    avatarurl?: string;
+    createtime?: string;
+    email?: string;
+    gender?: number;
+    id?: number | string;
+    phone?: string;
+    profile?: string;
+    spaceId?: number | string;
+    updatetime?: string;
+    useraccount?: string;
+    username?: string;
+    userLevel?: string;
+    userStatus?: number;
   };
 }

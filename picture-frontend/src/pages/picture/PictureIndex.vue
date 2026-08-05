@@ -155,7 +155,7 @@ const router = useRouter()
 const loginUserStore = useLoginUserStore()
 
 // 判断是否为管理员
-const isAdmin = computed(() => loginUserStore.loginUser?.userstatus === 'admin')
+const isAdmin = computed(() => loginUserStore.loginUser?.userLevel === 'admin')
 
 // 加载状态
 const loading = ref(false)

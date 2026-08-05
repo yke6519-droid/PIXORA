@@ -41,7 +41,7 @@ router.beforeEach(async(to, from, next)=>{
             next(`/user/login?redirect=${to.fullPath}`)
             return
         }
-        if(loginUser.userstatus!='admin'){
+        if(loginUser.userLevel!='admin'){
             message.error("当前用户没有权限")
             next('/')
             return
