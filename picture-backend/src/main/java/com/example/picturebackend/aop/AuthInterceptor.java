@@ -5,7 +5,7 @@ import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.annotation.AuthCheck;
 import com.example.picturebackend.constant.UserConstant;
-import com.example.picturebackend.domain.MyEnums.UserStatus;
+import com.example.picturebackend.domain.MyEnums.UserLevel;
 import com.example.picturebackend.domain.po.User;
 
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -41,13 +41,13 @@ public class AuthInterceptor {
         HttpServletRequest request = ((ServletRequestAttributes) requestAttributes).getRequest();
         // 获取当前登录用户
         User currentUser = userService.getCurrentUser(request);
-        UserStatus mustRoleEnum = UserStatus.getEnumByValue(mustRole);
+        UserLevel mustRoleEnum = UserLevel.getEnumByValue(mustRole);
         // 如果没有设权限 或 运行本人操作 则放行
         if (mustRoleEnum == null){
             return joinPoint.proceed();
         }
         // 必须有权限才能通过下面的代码
-        UserStatus currentUserEnum = UserStatus.getEnumByValue(currentUser.getUserstatus());
+        UserLevel currentUserEnum = UserLevel.getEnumByValue(currentUser.getUserLevel());
         ThrowExceptionUtils.throwIF(
                 // 用户角色为空，或不等于当前必须的角色
                 currentUserEnum == null,

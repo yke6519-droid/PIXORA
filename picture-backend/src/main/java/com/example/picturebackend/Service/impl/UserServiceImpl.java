@@ -11,6 +11,8 @@ import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.constant.UserConstant;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.Mapper.UserMapper;
+import com.example.picturebackend.domain.MyEnums.UserLevel;
+import com.example.picturebackend.domain.MyEnums.UserStatus;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.user.*;
 import io.netty.util.internal.StringUtil;
@@ -78,6 +80,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         registerRequest.setUserpassword(encryptPassword);
         User user = new User();
         BeanUtils.copyProperties(registerRequest,user);
+        // 注册用户统一从后端写入默认等级和正常状态，避免依赖不同数据库环境的默认值。
+        user.setUserLevel(UserConstant.DEFAULT_ROLE);
+        user.setUserStatus(UserStatus.NORMAL.getValue());
         return this.save(user);
     }
 
@@ -106,6 +111,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         QueryWrapper<User> queryUserWrapper = new QueryWrapper<User>()
                 .eq("userAccount",userLoginRequest.getUseraccount());
         User user = this.getOne(queryUserWrapper);
+        ThrowExceptionUtils.throwIF(
+                user != null && UserStatus.BANNED.getValue().equals(user.getUserStatus()),
+                ErrorCode.FORBIDDEN_ERROR,
+                "账号已被封禁"
+        );
         User saftyUser = this.getSaftyUser(user);
         request.getSession().setAttribute(UserConstant.CURRENT_USER_SESSION_KEY,saftyUser);
         return "登录成功";
@@ -125,7 +135,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 currentUser == null,
                 ErrorCode.NOT_LOGIN_ERROR
         );
-        return this.getById(currentUser.getId());
+        User latestUser = this.getById(currentUser.getId());
+        ThrowExceptionUtils.throwIF(
+                latestUser != null && UserStatus.BANNED.getValue().equals(latestUser.getUserStatus()),
+                ErrorCode.FORBIDDEN_ERROR,
+                "账号已被封禁"
+        );
+        return latestUser;
     }
 
     /**
@@ -166,6 +182,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String initPassword = "123456";
         User user = new User();
         BeanUtils.copyProperties(addUserRequest,user);
+        String userLevel = StrUtil.blankToDefault(addUserRequest.getUserLevel(), UserConstant.DEFAULT_ROLE);
+        ThrowExceptionUtils.throwIF(
+                UserLevel.getEnumByValue(userLevel) == null,
+                ErrorCode.PARAMS_ERROR,
+                "用户等级只能是 user、admin 或 vip"
+        );
+        user.setUserLevel(userLevel);
+        user.setUserStatus(UserStatus.NORMAL.getValue());
         user.setCreatetime(LocalDateTime.now());
         user.setUpdatetime(LocalDateTime.now());
         user.setUserpassword(this.passwordEncrypt(initPassword));
@@ -192,12 +216,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String queryUsername = queryPageRequest.getQueryUsername();
         String queryUserAccount = queryPageRequest.getQueryUserAccount();
         String profile = queryPageRequest.getProfile();
-        String userStatus = queryPageRequest.getUserStatus();
+        String userLevel = queryPageRequest.getUserLevel();
+        Integer accountStatus = queryPageRequest.getAccountStatus();
         Integer gender = queryPageRequest.getGender();
         // 根据查询逻辑，是否合法为依据，创建queryWrapper
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq(ObjectUtil.isNotNull(id), "id", id);
-        queryWrapper.eq(StrUtil.isNotBlank(userStatus), "userStatus", userStatus);
+        queryWrapper.eq(StrUtil.isNotBlank(userLevel), "userLevel", userLevel);
+        queryWrapper.eq(ObjectUtil.isNotNull(accountStatus), "userStatus", accountStatus);
         queryWrapper.like(StrUtil.isNotBlank(queryUsername), "username", queryUsername);
         queryWrapper.like(StrUtil.isNotBlank(queryUserAccount), "userAccount", queryUserAccount);
         queryWrapper.like(StrUtil.isNotBlank(profile), "profile", profile);
@@ -219,7 +245,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         saftyUser.setPhone(user.getPhone());
         saftyUser.setProfile(user.getProfile());
         saftyUser.setCreatetime(user.getCreatetime());
-        saftyUser.setUserstatus(user.getUserstatus());
+        saftyUser.setUserLevel(user.getUserLevel());
+        saftyUser.setUserStatus(user.getUserStatus());
         // todo 前端上传图片时，可以根据用户登录态选择是否展示单选择器
         saftyUser.setSpaceId(user.getSpaceId());
         return saftyUser;

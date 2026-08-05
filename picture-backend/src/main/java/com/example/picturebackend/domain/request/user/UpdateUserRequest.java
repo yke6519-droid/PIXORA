@@ -45,7 +45,12 @@ public class UpdateUserRequest implements Serializable {
     private String profile;
 
     /**
-     * 用户状态
+     * 用户等级：user、admin、vip。
      */
-    private String userStatus;
+    private String userLevel;
+
+    /**
+     * 账户状态：0-正常，1-封禁。
+     */
+    private Integer accountStatus;
 }

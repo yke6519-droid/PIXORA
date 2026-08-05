@@ -52,11 +52,6 @@ public class User implements Serializable {
     private String phone;
 
     /**
-     * 用户状态
-     */
-    private String userstatus;
-
-    /**
      * 电子邮箱
      */
     private String email;
@@ -82,9 +77,30 @@ public class User implements Serializable {
     private String profile;
 
     /**
+     * 用户等级
+     */
+    @TableField("userLevel")
+    private String userLevel;
+
+    /**
+     * 账户状态：0-正常，1-封禁。
+     */
+    @TableField("userStatus")
+    private Integer userStatus;
+
+    public Integer getUserStatus() {
+        return userStatus;
+    }
+
+    public void setUserStatus(Integer userStatus) {
+        this.userStatus = userStatus;
+    }
+
+    /**
      * 是否删除
      */
     @TableLogic
+    @TableField("isDelete")
     private Integer isdelete;
 
     @TableField(exist = false)

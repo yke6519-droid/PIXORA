@@ -7,6 +7,8 @@ import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.Utils.ResponseUtils;
 import com.example.picturebackend.annotation.AuthCheck;
 import com.example.picturebackend.constant.UserConstant;
+import com.example.picturebackend.domain.MyEnums.UserLevel;
+import com.example.picturebackend.domain.MyEnums.UserStatus;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.BaseResponse;
 import com.example.picturebackend.domain.request.user.*;
@@ -164,13 +166,32 @@ public class UserController {
          final String Phone = updateUserRequest.getPhone();
          final String Email = updateUserRequest.getEmail();
          final String Profile = updateUserRequest.getProfile();
+         final String userLevel = updateUserRequest.getUserLevel();
+         final Integer accountStatus = updateUserRequest.getAccountStatus();
          ThrowExceptionUtils.throwIF(
-                 StrUtil.isAllBlank(Username,AvatarURL,Phone,Email,Profile) && gender==null,
+                 StrUtil.isAllBlank(Username,AvatarURL,Phone,Email,Profile)
+                         && gender == null
+                         && userLevel == null
+                         && accountStatus == null,
                  ErrorCode.PARAMS_ERROR,
                  "更新信息全为空！"
          );
+        ThrowExceptionUtils.throwIF(
+                userLevel != null && (StrUtil.isBlank(userLevel) || UserLevel.getEnumByValue(userLevel) == null),
+                ErrorCode.PARAMS_ERROR,
+                "用户等级只能是 user、admin 或 vip"
+        );
+        ThrowExceptionUtils.throwIF(
+                accountStatus != null && UserStatus.getEnumByValue(accountStatus) == null,
+                ErrorCode.PARAMS_ERROR,
+                "账户状态只能是 0（正常）或 1（封禁）"
+        );
         User user = new User();
         BeanUtils.copyProperties(updateUserRequest,user);
+        // 请求对象用 accountStatus 表达账户状态，实体字段仍对应数据库 userStatus。
+        if (accountStatus != null) {
+            user.setUserStatus(accountStatus);
+        }
         boolean b = userService.updateById(user);
         return ResponseUtils.success(b);
     }
@@ -185,22 +206,26 @@ public class UserController {
     public BaseResponse<Boolean> updateSelf(@RequestBody UpdateSelfRequest updateSelfRequest,HttpServletRequest request){
         // 不从前端接收用户id，从当前Session中获取更安全
         User currentUser = userService.getCurrentUser(request);
+
         ThrowExceptionUtils.throwIF(
                 currentUser ==null,
                 ErrorCode.NOT_LOGIN_ERROR
         );
+
         // 请求体判空
         ThrowExceptionUtils.throwIF(
                 updateSelfRequest == null,
                 ErrorCode.PARAMS_ERROR,
                 "更新请求体为空"
         );
+
         final String Username = updateSelfRequest.getUsername();
         final String AvatarURL = updateSelfRequest.getAvatarurl();
         final Integer gender = updateSelfRequest.getGender();
         final String Phone = updateSelfRequest.getPhone();
         final String Email = updateSelfRequest.getEmail();
         final String Profile = updateSelfRequest.getProfile();
+        
         ThrowExceptionUtils.throwIF(
                 StrUtil.isAllBlank(Username,AvatarURL,Phone,Email,Profile) && gender==null,
                 ErrorCode.PARAMS_ERROR,
