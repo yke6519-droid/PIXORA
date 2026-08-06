@@ -102,8 +102,8 @@ async function submitRegister() {
   height: auto;
   min-height: calc(100dvh - var(--prototype-topbar-height) - 20px);
   display: grid;
-  grid-template-columns: minmax(320px, .94fr) minmax(480px, 1.06fr);
-  gap: clamp(14px, 1.5vw, 22px);
+  grid-template-columns: minmax(0, 1.06fr) minmax(0, .94fr);
+  gap: var(--prototype-layout-gap);
   align-items: center;
   padding: 16px 0 12px;
   color: var(--proto-ink);
@@ -115,7 +115,7 @@ async function submitRegister() {
 .register-intro-image img { width: 100%; height: 100%; display: block; object-fit: cover; mix-blend-mode: luminosity; filter: grayscale(1) contrast(1.16) brightness(.82); }
 .register-intro-copy { position: relative; z-index: 2; }
 .register-kicker { display: block; margin-bottom: 22px; color: #fff; font-family: 'DM Mono', monospace; font-size: 15px; font-weight: 500; letter-spacing: .08em; line-height: 1.4; }
-.register-intro .proto-title { max-width: 700px; margin: 0; color: #fff; font-family: 'Geist', 'Manrope', 'Segoe UI', Arial, sans-serif; font-size: clamp(40px, 4.5vw, 62px); font-weight: 800; line-height: .98; letter-spacing: -.04em; white-space: nowrap; }
+.register-intro .proto-title { max-width: 700px; margin: 0; color: #fff; font-family: 'Geist', 'Manrope', 'Segoe UI', Arial, sans-serif; font-size: clamp(40px, 4.5vw, 62px); font-weight: 800; line-height: .98; letter-spacing: -.04em; white-space: normal; }
 .register-card.proto-surface { align-self: stretch; width: 100%; padding: 0; border: 1px solid rgba(13, 17, 18, .16); border-radius: 12px; background: rgba(255, 255, 255, .78); box-shadow: 0 24px 58px rgba(13, 17, 18, .13); }
 .register-card :deep(.ant-card-body) { height: 100%; display: flex; flex-direction: column; justify-content: center; padding: clamp(36px, 5vw, 70px) clamp(24px, 3.8vw, 52px); }
 .register-card-head { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--proto-line); }
@@ -142,6 +142,6 @@ async function submitRegister() {
 .register-actions .ant-btn { min-width: 116px; height: 50px; border-radius: 10px; font-family: 'Geist', 'Manrope', 'Segoe UI', Arial, sans-serif; font-size: 15px; font-weight: 700; }
 .register-actions .acid-button.ant-btn-primary { background: var(--proto-acid); border-color: var(--proto-acid); color: var(--proto-ink); }
 .register-actions .acid-button.ant-btn-primary:hover { filter: brightness(.97); box-shadow: 0 12px 24px rgba(13, 17, 18, .12); }
-@media (max-width: 1100px) { .register-prototype { height: auto; min-height: 0; grid-template-columns: 1fr; gap: 30px; padding: 28px 0 42px; } .register-intro { height: auto; min-height: 330px; } .register-card.proto-surface { align-self: stretch; } .register-card :deep(.ant-card-body) { height: auto; } .register-intro .proto-title { max-width: none; font-size: clamp(42px, 8vw, 64px); white-space: normal; } }
+@media (max-width: 980px) { .register-prototype { height: auto; min-height: 0; grid-template-columns: 1fr; gap: 30px; padding: 28px 0 42px; } .register-intro { height: auto; min-height: 330px; } .register-card.proto-surface { align-self: stretch; } .register-card :deep(.ant-card-body) { height: auto; } .register-intro .proto-title { max-width: none; font-size: clamp(42px, 8vw, 64px); white-space: normal; } }
 @media (max-width: 560px) { .register-two-col { grid-template-columns: 1fr; gap: 0; } .register-actions { flex-wrap: wrap; } .register-actions .ant-btn { flex: 1 1 140px; } }
 </style>

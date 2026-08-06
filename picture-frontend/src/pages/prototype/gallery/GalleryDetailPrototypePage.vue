@@ -254,8 +254,8 @@ watch(() => route.params.id, () => {
   display: grid;
   /* 加载态与完成态保持相同列宽，避免内容出现时页面突然跳动。 */
   /* 桌面加载态固定主要图片区占比，保证加载完成后布局不跳动。 */
-  grid-template-columns: minmax(0, 75%) minmax(0, 1fr);
-  gap: 22px;
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr);
+  gap: var(--prototype-layout-gap);
   padding-top: 12px;
 }
 
@@ -294,8 +294,8 @@ watch(() => route.params.id, () => {
   display: grid;
   /* 桌面端让图片承担主要视觉面积，右侧信息栏保留可读的最小宽度。 */
   /* 桌面端固定图片区为主要区域，右侧信息栏自适应剩余空间。 */
-  grid-template-columns: minmax(0, 75%) minmax(0, 1fr);
-  gap: 22px;
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr);
+  gap: var(--prototype-layout-gap);
   align-items: stretch;
   padding-top: 12px;
   padding-bottom: 10px;
@@ -583,8 +583,9 @@ watch(() => route.params.id, () => {
 @media (max-width: 980px) {
   .detail-layout,
   .detail-loading-shell {
-    grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr);
-    gap: 18px;
+    /* 仍沿用桌面端 3:1 主次关系，直到移动端真正需要上下堆叠。 */
+    grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
+    gap: var(--prototype-layout-gap);
   }
 
   .detail-image-title {

@@ -357,7 +357,7 @@ onMounted(() => {
 .import-limit span { font-family: 'DM Mono', monospace; font-size: 10px; }
 .import-limit strong { margin-top: 14px; font-size: 49px; line-height: .8; letter-spacing: -.1em; }
 .import-limit small { margin-top: 11px; font-family: 'DM Mono', monospace; font-size: 10px; opacity: .55; }
-.import-layout.proto-section { display: grid; grid-template-columns: minmax(400px, .85fr) minmax(360px, 1.15fr); gap: 12px; padding-top: 10px; }
+.import-layout.proto-section { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: var(--prototype-layout-gap); padding-top: 10px; }
 .import-form-card { padding: clamp(14px, 2.1vw, 23px); }
 .import-form-card :deep(.ant-form-item) { margin-bottom: 11px; }
 .form-card-heading { margin-bottom: 14px; }
@@ -397,6 +397,6 @@ onMounted(() => {
 .import-picture-empty { margin: 12px 0 0; padding: 22px 16px; }
 .import-boundary { margin-top: 12px; padding: 18px; border: 1px solid var(--proto-line); background: rgba(255,255,255,.45); }
 .import-boundary p { max-width: 500px; margin: 10px 0 17px; color: var(--proto-muted); font-size: 11px; line-height: 1.7; }
-@media (max-width: 820px) { .import-layout.proto-section { grid-template-columns: 1fr; } }
+@media (max-width: 980px) { .import-layout.proto-section { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { .import-two-col, .import-picture-grid, .import-result-stats { grid-template-columns: 1fr; gap: 0; } .import-picture-card + .import-picture-card, .import-result-stat + .import-result-stat { margin-top: 10px; } }
 </style>

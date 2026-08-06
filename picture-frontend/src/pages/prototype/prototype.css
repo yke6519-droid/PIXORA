@@ -19,6 +19,8 @@
   --prototype-topbar-height: 67px;
   /* 统一详情页作为基准的页面外边界，避免各路由各写一套间距。 */
   --prototype-page-gutter: clamp(20px, 4vw, 58px);
+  /* 页面之间共用同一个结构间距，避免各页网格互相漂移。 */
+  --prototype-layout-gap: clamp(16px, 1.8vw, 24px);
   --prototype-page-max-width: 1440px;
   --prototype-page-bottom-space: 36px;
   min-height: 100vh;
@@ -169,7 +171,7 @@
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
-  width: min(100%, 1680px);
+  width: min(100%, var(--prototype-page-max-width));
   /* 上传页继续保持宽屏容器，只与详情页统一左右边界。 */
   padding-inline: var(--prototype-page-gutter);
   padding-bottom: 24px;
@@ -306,7 +308,7 @@
   .proto-page-head-actions { justify-content: flex-start; padding-bottom: 0; }
 }
 
-@media (max-width: 920px) {
+@media (max-width: 980px) {
   /* 窄屏改为自然高度，保证上传表单顺序清晰且可以正常滚动。 */
   .prototype-page.prototype-page-upload {
     display: block;

@@ -111,7 +111,7 @@ import { Upload, message } from 'ant-design-vue'
 import type { UploadFile, UploadProps } from 'ant-design-vue'
 import {
   editPictureUsingPost,
-  uploadPicUsingPost,
+  reloadPictureUsingPost,
 } from '../../../../api/pictureController'
 
 type EditorMode = 'edit' | 'reupload'
@@ -268,7 +268,7 @@ async function submit() {
   try {
     const res: any = props.mode === 'edit'
       ? await editPictureUsingPost(metadata)
-      : await uploadPicUsingPost(
+      : await reloadPictureUsingPost(
           {},
           {
             ...metadata,

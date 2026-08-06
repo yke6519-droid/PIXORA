@@ -84,8 +84,8 @@ async function submitLogin() {
   --proto-shadow: 0 24px 58px rgba(13, 17, 18, .13);
   min-height: calc(100dvh - var(--prototype-topbar-height) - 20px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(340px, .72fr);
-  gap: clamp(14px, 1.5vw, 22px);
+  grid-template-columns: minmax(0, 1.06fr) minmax(0, .94fr);
+  gap: var(--prototype-layout-gap);
   align-items: stretch;
   padding: 16px 0 12px;
   color: var(--proto-ink);
@@ -134,5 +134,5 @@ async function submitLogin() {
 .auth-submit.ant-btn { width: 100%; height: 52px; border-radius: 8px; font-family: 'Geist', 'Manrope', 'Segoe UI', Arial, sans-serif; font-size: 16px; font-weight: 700; letter-spacing: .02em; transition: transform .2s ease, filter .2s ease, box-shadow .2s ease; }
 .auth-submit.ant-btn:hover { transform: translateY(-2px); filter: brightness(.97); box-shadow: 0 12px 24px rgba(13, 17, 18, .12); }
 .auth-submit.ant-btn:active { transform: translateY(0); }
-@media (max-width: 800px) { .auth-prototype { min-height: 0; grid-template-columns: 1fr; padding: 18px 0 30px; } .auth-visual { height: auto; min-height: 330px; } .auth-card { height: auto; } .auth-card :deep(.ant-card-body) { height: auto; } .auth-visual-copy h1 { font-size: clamp(32px, 9vw, 40px); } }
+@media (max-width: 980px) { .auth-prototype { min-height: 0; grid-template-columns: 1fr; padding: 18px 0 30px; } .auth-visual { height: auto; min-height: 330px; } .auth-card { height: auto; } .auth-card :deep(.ant-card-body) { height: auto; } .auth-visual-copy h1 { font-size: clamp(32px, 9vw, 40px); } }
 </style>

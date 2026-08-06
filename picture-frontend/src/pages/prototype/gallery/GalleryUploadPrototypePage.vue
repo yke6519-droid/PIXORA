@@ -512,20 +512,21 @@ onBeforeUnmount(() => {
 }
 
 .upload-layout.proto-section {
-  /* 左右面板等高，预览区再把剩余空间吃满，避免页面下方出现断层。 */
-  flex: 1 1 auto;
+  /* 上传页按内容自然排版，避免父级剩余高度把预览框强行拉长。 */
+  flex: 0 0 auto;
   min-height: 0;
   padding-top: 6px;
   overflow: visible;
 }
 
 .upload-layout {
+  /* 左侧图片区占主视觉，右侧元信息保留足够宽度并与左侧等高。 */
+  --upload-preview-height: clamp(460px, 58vh, 640px);
   display: grid;
-  grid-template-columns: minmax(420px, .96fr) minmax(560px, 1.04fr);
-  grid-template-rows: minmax(0, 1fr);
-  min-height: calc(100vh - var(--prototype-topbar-height) - 24px);
-  min-height: calc(100dvh - var(--prototype-topbar-height) - 24px);
-  gap: 16px;
+  grid-template-columns: minmax(0, 7fr) minmax(320px, 3fr);
+  grid-template-rows: auto;
+  min-height: 0;
+  gap: var(--prototype-layout-gap);
   overflow: visible;
   align-items: stretch;
 }
@@ -533,7 +534,9 @@ onBeforeUnmount(() => {
 .upload-source-panel,
 .upload-form-panel {
   min-height: 0;
-  height: 100%;
+  height: auto;
+  /* 元信息面板跟随图片区的网格行高，避免右侧提前结束形成断层。 */
+  align-self: stretch;
   padding: 16px;
 }
 
@@ -602,11 +605,17 @@ onBeforeUnmount(() => {
 }
 
 .source-control {
+  /* 本地拖拽区和网络地址区共用同一条高度轨道，切换模式时页面不跳动。 */
+  flex: 0 0 112px;
+  height: 112px;
+  min-height: 112px;
   margin-top: 14px;
 }
 
 .upload-source-panel :deep(.ant-upload.ant-upload-drag) {
-  min-height: 104px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   padding: 12px;
   border: 1px dashed rgba(241, 242, 237, 0.32);
   border-radius: 6px;
@@ -668,9 +677,13 @@ onBeforeUnmount(() => {
 }
 
 .upload-preview {
-  flex: 1 1 auto;
-  min-height: 280px;
-  height: auto;
+  /* 固定预览轨道，超大图只能在轨道内 contain，不能反向撑开整页。 */
+  flex: 0 0 var(--upload-preview-height);
+  width: 100%;
+  height: var(--upload-preview-height);
+  min-width: 0;
+  min-height: 0;
+  max-height: var(--upload-preview-height);
   margin-top: 12px;
   overflow: hidden;
   border: 1px solid rgba(241, 242, 237, 0.16);
@@ -680,6 +693,8 @@ onBeforeUnmount(() => {
 
 .upload-preview img {
   display: block;
+  max-width: 100%;
+  max-height: 100%;
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -842,8 +857,11 @@ onBeforeUnmount(() => {
   }
 
   .upload-preview {
-    min-height: 220px;
-    height: auto;
+    /* 短桌面视口压缩轨道，但仍保持固定高度。 */
+    min-height: 0;
+    flex: 0 0 var(--upload-preview-height);
+    height: var(--upload-preview-height);
+    max-height: var(--upload-preview-height);
     margin-top: 9px;
   }
 
@@ -868,7 +886,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 920px) {
+@media (max-width: 980px) {
   .upload-layout.proto-section {
     flex: none;
     min-height: 0;
@@ -881,6 +899,7 @@ onBeforeUnmount(() => {
   }
 
   .upload-layout {
+    --upload-preview-height: 280px;
     grid-template-columns: 1fr;
     grid-template-rows: auto;
     min-height: 0;
@@ -893,9 +912,10 @@ onBeforeUnmount(() => {
   }
 
   .upload-preview {
-    height: 280px;
+    height: var(--upload-preview-height);
+    max-height: var(--upload-preview-height);
     min-height: 0;
-    flex: none;
+    flex: 0 0 var(--upload-preview-height);
   }
 
   .upload-form {

@@ -458,14 +458,14 @@ onMounted(loadPage)
 /* 空间页优先展示真实空间状态，收紧解释性区域，避免首屏被空白拉开。 */
 .space-prototype { padding-top: 20px; padding-bottom: 18px; }
 .space-skeleton { padding-top: 12px; }
-.space-skeleton-grid { margin-top: 16px; display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
+.space-skeleton-grid { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: var(--prototype-layout-gap); }
 .space-skeleton-grid > * { min-height: 300px; padding: 20px; border: 1px solid var(--proto-line); background: rgba(255,255,255,.45); }
 .space-empty {
   width: 100%;
   min-height: 420px;
   margin: 18px 0 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
   border: 1px solid var(--proto-line);
 }
 .space-empty-main {
@@ -533,7 +533,7 @@ onMounted(loadPage)
 .space-level-block small { display: none; }
 /* 统一概览框承载容量、数量和权限，减少首屏纵向占用。 */
 .space-overview.proto-section, .space-gallery.proto-section { padding-top: 12px; }
-.space-overview { margin-top: 18px; display: grid; grid-template-columns: minmax(380px, 1.18fr) minmax(260px, .82fr); gap: 12px; align-items: stretch; padding: 14px; border: 1px solid var(--proto-line); border-radius: 10px; background: rgba(255,255,255,.46); box-shadow: var(--proto-shadow); }
+.space-overview { margin-top: 18px; display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(0, .82fr); gap: var(--prototype-layout-gap); align-items: stretch; padding: 14px; border: 1px solid var(--proto-line); border-radius: 10px; background: rgba(255,255,255,.46); box-shadow: var(--proto-shadow); }
 .space-usage-card { min-width: 0; padding: 4px 8px 2px; border: 0; border-radius: 0; background: transparent; box-shadow: none; display: grid; grid-template-columns: 124px minmax(0, 1fr); grid-template-rows: auto auto auto auto; column-gap: 18px; }
 .usage-card-head { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-start; gap: 15px; }
 .usage-card-head h2 { margin: 0; font-size: 20px; letter-spacing: -.06em; }
@@ -585,7 +585,6 @@ onMounted(loadPage)
     overflow: hidden;
   }
   .space-usage-card {
-    transform: translateX(24px);
     grid-template-rows: 28px minmax(0, 1fr) 8px 22px;
   }
   .usage-ring {

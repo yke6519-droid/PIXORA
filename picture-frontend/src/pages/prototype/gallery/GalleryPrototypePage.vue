@@ -218,9 +218,9 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.gallery-prototype { margin-inline: -26px; padding-top: 2px; }
+.gallery-prototype { margin-inline: 0; padding-top: 2px; }
 /* 缩短图库首屏头部，让用户更快看到图片内容。 */
-.gallery-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: end; padding: 12px 0 14px; border-bottom: 1px solid var(--proto-line); }
+.gallery-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--prototype-layout-gap); align-items: end; padding: 12px 0 14px; border-bottom: 1px solid var(--proto-line); }
 .gallery-hero-copy { max-width: 960px; }
 .gallery-brand { margin-bottom: 4px; color: var(--proto-muted); font-family: 'Geist', 'Manrope', Arial, sans-serif; font-size: clamp(30px, 3.2vw, 48px); font-weight: 800; letter-spacing: -.055em; line-height: .95; }
 .gallery-title { max-width: 960px; margin: 0; color: var(--proto-ink); font-family: 'Cabinet Grotesk', 'Geist', 'Manrope', Arial, sans-serif; font-size: clamp(25px, 2.6vw, 38px); font-weight: 700; line-height: 1.05; letter-spacing: -.04em; text-wrap: balance; }
@@ -263,7 +263,7 @@ onMounted(() => {
 .gallery-sort-group :deep(.ant-radio-button-wrapper:hover) { color: var(--proto-ink); }
 .gallery-sort-group :deep(.ant-radio-button-wrapper-checked) { border-color: var(--proto-ink); background: var(--proto-ink); color: var(--proto-paper); }
 .gallery-alert { margin-bottom: 14px; }
-.gallery-grid { display: grid; grid-auto-flow: dense; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.gallery-grid { display: grid; grid-auto-flow: dense; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--prototype-layout-gap); }
 .gallery-card.ant-card { position: relative; display: block; overflow: hidden; cursor: pointer; border-radius: 12px; background: var(--proto-paper-deep); transition: transform .4s cubic-bezier(.22, 1, .36, 1), box-shadow .4s ease, border-color .3s ease; }
 .gallery-card :deep(.ant-card-body) { padding: 0; }
 .gallery-card:hover { border-color: rgba(17, 20, 22, .35); transform: translateY(-5px); box-shadow: var(--proto-shadow); }
@@ -306,8 +306,8 @@ onMounted(() => {
   .gallery-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (max-width: 1100px) {
-  .gallery-prototype { margin-inline: -10px; }
-  .gallery-hero { grid-template-columns: 1fr; gap: 18px; }
+  .gallery-prototype { margin-inline: 0; }
+  .gallery-hero { grid-template-columns: 1fr; gap: var(--prototype-layout-gap); }
   .gallery-hero-actions { justify-content: flex-start; }
   .gallery-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

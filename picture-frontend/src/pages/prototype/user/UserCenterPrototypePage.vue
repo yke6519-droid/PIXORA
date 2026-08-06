@@ -87,43 +87,58 @@
             </RouterLink>
           </div>
 
-          <div class="center-recent proto-surface">
-            <div class="center-recent-head">
-              <h3>最近上传</h3>
-              <a-button type="link" @click="router.push('/prototype/gallery/manage')">查看全部</a-button>
-            </div>
-
-            <a-skeleton v-if="summaryLoading" active :paragraph="{ rows: 3 }" />
-            <a-alert
-              v-else-if="summaryError"
-              type="error"
-              show-icon
-              :message="summaryError"
-            >
-              <template #action>
-                <a-button size="small" @click="loadPictureSummary(user.id)">重试</a-button>
-              </template>
-            </a-alert>
-            <a-empty
-              v-else-if="!recentPictures.length"
-              description="还没有上传图片，从第一张作品开始吧"
-            >
-              <a-button type="primary" class="proto-button acid-button" @click="router.push('/prototype/gallery/upload')">
-                上传图片
-              </a-button>
-            </a-empty>
-            <div v-else>
-              <div v-for="picture in recentPictures" :key="String(picture.id)" class="recent-row">
-                <img :src="picture.thumbnailUrl || picture.url" :alt="picture.name || '图片缩略图'" />
-                <div>
-                  <strong>{{ picture.name || '未命名图片' }}</strong>
-                  <span>{{ formatDate(picture.createtime) }}</span>
+          <div class="center-recent-grid">
+            <section v-for="panel in recentPanels" :key="panel.key" class="center-recent proto-surface">
+              <div class="center-recent-head">
+                <div class="center-recent-title">
+                  <h3>{{ panel.title }}</h3>
+                  <span>{{ panel.subtitle }}</span>
                 </div>
-                <a-tag class="proto-status" :class="statusClass(picture.pictureCheck)">
-                  {{ pictureStatusText(picture.pictureCheck) }}
-                </a-tag>
+                <a-button type="link" @click="openRecentPanel(panel.key)">查看全部</a-button>
               </div>
-            </div>
+
+              <a-skeleton v-if="recentLoading" active :paragraph="{ rows: 3 }" />
+              <a-alert
+                v-else-if="recentError"
+                type="error"
+                show-icon
+                :message="recentError"
+              >
+                <template #action>
+                  <a-button size="small" @click="loadRecentPictures(user.spaceId)">重试</a-button>
+                </template>
+              </a-alert>
+              <a-empty v-else-if="!panel.pictures.length" :description="panel.emptyText">
+                <a-button
+                  v-if="panel.key === 'private' && !hasPrivateSpace"
+                  class="proto-button acid-button"
+                  type="primary"
+                  @click="router.push('/prototype/space')"
+                >
+                  创建空间
+                </a-button>
+                <a-button
+                  v-else
+                  class="proto-button acid-button"
+                  type="primary"
+                  @click="router.push('/prototype/gallery/upload')"
+                >
+                  上传图片
+                </a-button>
+              </a-empty>
+              <div v-else class="recent-list">
+                <div v-for="picture in panel.pictures" :key="String(picture.id)" class="recent-row">
+                  <img :src="picture.thumbnailUrl || picture.url" :alt="picture.name || '图片缩略图'" />
+                  <div>
+                    <strong>{{ picture.name || '未命名图片' }}</strong>
+                    <span>{{ formatDate(picture.createtime) }}</span>
+                  </div>
+                  <a-tag class="proto-status" :class="statusClass(picture.pictureCheck)">
+                    {{ pictureStatusText(picture.pictureCheck) }}
+                  </a-tag>
+                </div>
+              </div>
+            </section>
           </div>
         </main>
       </section>
@@ -157,13 +172,35 @@ const centerError = ref('')
 const summaryError = ref('')
 const pictureTotal = ref(0)
 const pendingTotal = ref(0)
-const recentPictures = ref<API.PictureVO[]>([])
+const recentLoading = ref(false)
+const recentError = ref('')
+const publicRecentPictures = ref<API.PictureVO[]>([])
+const privateRecentPictures = ref<API.PictureVO[]>([])
 const emptyUser: API.UserVO = { username: '', useraccount: '', gender: undefined, phone: '', email: '', profile: '', avatarurl: '', spaceId: undefined }
 const user = computed<API.UserVO>(() => loginUserStore.loginUser || emptyUser)
 const displayName = computed(() => user.value.username || '图库用户')
 const roleText = computed(() => user.value.userLevel === 'admin' ? '管理员' : user.value.userLevel === 'vip' ? 'VIP 用户' : '普通用户')
 const genderText = computed(() => user.value.gender === 0 ? '男' : user.value.gender === 1 ? '女' : '未填写')
 const hasPrivateSpace = computed(() => user.value.spaceId != null && String(user.value.spaceId) !== '0')
+
+type RecentPanelKey = 'public' | 'private'
+
+const recentPanels = computed(() => [
+  {
+    key: 'public' as RecentPanelKey,
+    title: '公共图库',
+    subtitle: '最近上传',
+    pictures: publicRecentPictures.value,
+    emptyText: '公共图库暂无图片',
+  },
+  {
+    key: 'private' as RecentPanelKey,
+    title: '个人空间',
+    subtitle: hasPrivateSpace.value ? '最近上传' : '尚未创建',
+    pictures: privateRecentPictures.value,
+    emptyText: hasPrivateSpace.value ? '个人空间暂无图片' : '还没有个人空间',
+  },
+])
 
 function statusClass(status?: number) { return status === 1 ? 'pass' : status === 2 ? 'refuse' : 'wait' }
 
@@ -178,14 +215,13 @@ function parseTotal(value?: number | string) {
 }
 
 /**
- * 后端在 pictureCheck 为空时只查询“审核通过”，因此这里按三个审核状态分别查询，
- * 才能得到当前用户准确的总数、待审核数和最近上传记录。
+ * 按审核状态和空间分别查询，保证公共图库与私人空间的统计都不会混淆。
+ * 公共图库固定传0；后端对历史请求中的null只做兜底，不依赖前端传null。
  */
-async function loadPictureSummary(userId?: number | string) {
+async function loadPictureSummary(userId?: number | string, spaceId?: number | string) {
   if (!userId) {
     pictureTotal.value = 0
     pendingTotal.value = 0
-    recentPictures.value = []
     return
   }
 
@@ -193,40 +229,100 @@ async function loadPictureSummary(userId?: number | string) {
   summaryError.value = ''
   try {
     const statuses = [0, 1, 2] as const
+    const scopeIds: Array<number | string> = [0]
+    if (spaceId != null && String(spaceId) !== '0') {
+      scopeIds.push(spaceId)
+    }
+
+    const requests = scopeIds.flatMap((scopeId) =>
+      statuses.map((pictureCheck) => ({ scopeId, pictureCheck })),
+    )
     const responses = await Promise.all(
-      statuses.map((pictureCheck) =>
-        queryPicturePageUsingPost({
+      requests.map(async ({ scopeId, pictureCheck }) => ({
+        pictureCheck,
+        response: await queryPicturePageUsingPost({
           userId,
+          // 公共图库必须显式传0，私人空间只传当前用户的空间id。
+          spaceId: scopeId,
           pictureCheck,
           current: 1,
-          // 每种审核状态各取 5 张，合并排序后才能稳定展示最近上传的 5 张图片。
-          pageSize: 5,
+          // 统计只需要total，取1条即可，避免无意义地拉取图片列表。
+          pageSize: 1,
           sortFiled: 'createtime',
           sortOrder: 'descend',
         }),
-      ),
+      })),
     )
 
-    responses.forEach((response) => {
+    responses.forEach(({ response }) => {
       if (response.data?.code !== 200) {
         throw new Error(response.data?.message || '图片概览加载失败')
       }
     })
 
     pictureTotal.value = responses.reduce(
-      (total, response) => total + parseTotal(response.data.data?.total),
+      (total, { response }) => total + parseTotal(response.data.data?.total),
       0,
     )
-    pendingTotal.value = parseTotal(responses[0].data.data?.total)
-    recentPictures.value = responses
-      .flatMap((response) => response.data.data?.pictureList || [])
-      .sort((a, b) => Date.parse(b.createtime || '') - Date.parse(a.createtime || ''))
-      .slice(0, 5)
+    pendingTotal.value = responses
+      .filter(({ pictureCheck }) => pictureCheck === 0)
+      .reduce((total, { response }) => total + parseTotal(response.data.data?.total), 0)
   } catch (error: any) {
     summaryError.value = error?.response?.data?.message || error?.message || '图片概览加载失败'
   } finally {
     summaryLoading.value = false
   }
+}
+
+/**
+ * 用户中心分别拉取公共图库和当前私人空间的最近图片，两个面板各自渲染。
+ */
+async function loadRecentPictures(spaceId?: number | string) {
+  recentLoading.value = true
+  recentError.value = ''
+  try {
+    const queryBodies: API.PictureQueryRequest[] = [
+      {
+        spaceId: 0,
+        pictureCheck: 1,
+        current: 1,
+        pageSize: 5,
+        sortFiled: 'createtime',
+        sortOrder: 'descend',
+      },
+    ]
+
+    if (spaceId != null && String(spaceId) !== '0') {
+      queryBodies.push({
+        spaceId,
+        pictureCheck: 1,
+        current: 1,
+        pageSize: 5,
+        sortFiled: 'createtime',
+        sortOrder: 'descend',
+      })
+    }
+
+    const responses = await Promise.all(queryBodies.map((body) => queryPicturePageUsingPost(body)))
+    responses.forEach((response) => {
+      if (response.data?.code !== 200) {
+        throw new Error(response.data?.message || '最近上传加载失败')
+      }
+    })
+
+    publicRecentPictures.value = responses[0].data.data?.pictureList || []
+    privateRecentPictures.value = responses[1]?.data.data?.pictureList || []
+  } catch (error: any) {
+    publicRecentPictures.value = []
+    privateRecentPictures.value = []
+    recentError.value = error?.response?.data?.message || error?.message || '最近上传加载失败'
+  } finally {
+    recentLoading.value = false
+  }
+}
+
+function openRecentPanel(scope: RecentPanelKey) {
+  void router.push(scope === 'public' ? '/prototype/gallery' : '/prototype/space')
 }
 
 async function loadCenter(showSkeleton = true) {
@@ -245,7 +341,10 @@ async function loadCenter(showSkeleton = true) {
       return
     }
     loginUserStore.setLoginUser(currentUser)
-    await loadPictureSummary(currentUser.id)
+    await Promise.all([
+      loadPictureSummary(currentUser.id, currentUser.spaceId),
+      loadRecentPictures(currentUser.spaceId),
+    ])
   } catch (error: any) {
     const unauthorized = error?.response?.status === 401 || error?.response?.data?.code === 40100
     if (unauthorized) {
@@ -288,12 +387,12 @@ onMounted(loadCenter)
 <style scoped>
 .center-prototype { min-height: 100%; }
 .center-skeleton { padding-top: 18px; }
-.center-skeleton-grid { margin-top: 16px; display: grid; grid-template-columns: minmax(240px, .28fr) minmax(0, .72fr); gap: 48px; }
+.center-skeleton-grid { margin-top: 16px; display: grid; grid-template-columns: minmax(0, .3fr) minmax(0, .7fr); gap: var(--prototype-layout-gap); }
 .center-skeleton-grid > * { min-height: 340px; padding: 20px; background: rgba(255,255,255,.45); border: 1px solid var(--proto-line); border-radius: 10px; }
 .center-content { height: 100%; min-height: 0; display: flex; flex-direction: column; }
 .center-top-actions { display: flex; justify-content: flex-end; min-height: 43px; }
 .center-layout.proto-section { flex: 1 1 auto; min-height: 0; padding-top: 0; }
-.center-layout { display: grid; grid-template-columns: minmax(240px, .28fr) minmax(0, .72fr); gap: 48px; align-items: start; }
+.center-layout { display: grid; grid-template-columns: minmax(0, .3fr) minmax(0, .7fr); gap: var(--prototype-layout-gap); align-items: start; }
 
 /* 左侧只承担身份识别，避免把资料和统计信息挤在同一张大卡片里。 */
 .profile-panel { min-width: 0; padding: 4px 10px 0 0; }
@@ -330,9 +429,12 @@ onMounted(loadCenter)
 .center-action-card.acid:hover { background: #c5ff55; color: var(--proto-ink); border-color: #c5ff55; }
 .center-action-card h3 { margin: 0; font-size: 17px; letter-spacing: -.04em; }
 .center-action-arrow { flex: 0 0 auto; color: var(--proto-orange); font-size: 20px; line-height: 1; }
-.center-recent { flex: 1 1 auto; min-height: 220px; padding: 20px; }
+.center-recent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.center-recent { min-width: 0; min-height: 220px; padding: 16px; }
 .center-recent-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 7px; border-bottom: 1px solid var(--proto-line); }
-.center-recent-head h3 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.04em; }
+.center-recent-title { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.center-recent-head h3 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -.04em; }
+.center-recent-title span { color: var(--proto-muted); font-size: 10px; }
 .center-recent-head :deep(.ant-btn-link) { padding-inline: 0; color: var(--proto-ink); font-size: 11px; }
 .center-recent :deep(.ant-skeleton),
 .center-recent :deep(.ant-alert),
@@ -345,12 +447,13 @@ onMounted(loadCenter)
 .recent-row strong { font-size: 12px; }
 .recent-row span { margin-top: 3px; color: var(--proto-muted); font-family: inherit; font-size: 10px; }
 @media (max-width: 980px) {
-  .center-layout, .center-skeleton-grid { gap: 28px; grid-template-columns: minmax(220px, .3fr) minmax(0, .7fr); }
+  .center-layout, .center-skeleton-grid { gap: var(--prototype-layout-gap); grid-template-columns: minmax(0, .3fr) minmax(0, .7fr); }
 }
 @media (max-width: 760px) {
   .center-content { height: auto; }
   .center-layout.proto-section { flex: none; padding-top: 18px; }
   .center-layout, .center-skeleton-grid { grid-template-columns: 1fr; }
+  .center-recent-grid { grid-template-columns: 1fr; }
   .center-top-actions { justify-content: flex-start; }
   .profile-panel { padding-right: 0; }
   .profile-details { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }
