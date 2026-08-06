@@ -3,7 +3,6 @@ package com.example.picturebackend.domain.request.picture;
 import com.example.picturebackend.domain.request.PageRequest;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import org.apache.ibatis.plugin.Interceptor;
 
 import java.util.List;
 
