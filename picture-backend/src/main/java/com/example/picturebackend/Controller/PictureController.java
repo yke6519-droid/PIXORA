@@ -1,6 +1,7 @@
 package com.example.picturebackend.Controller;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.collection.ListUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.BeanUtils;
@@ -28,12 +29,14 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -42,6 +45,11 @@ import java.util.List;
 @RestController
 @RequestMapping("/picture")
 public class PictureController {
+    /** 
+     * 批量本地上传时，所有文件内容的总大小上限（不含 multipart 边界和文本字段）。 
+     * */
+    private static final long MAX_BATCH_TOTAL_SIZE = 30L * 1024 * 1024;
+
     @Resource
     private PictureService pictureService;
     @Resource
@@ -66,11 +74,11 @@ public class PictureController {
      * @param request
      * @return
      */
-    @PostMapping("/uploadPic")
-    public BaseResponse<PictureVO> uploadPic(
-            @RequestPart(value = "file", required = false) MultipartFile file,
+    @PostMapping(value = "/uploadPic", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public BaseResponse<List<PictureVO>> uploadPic(
+            // @RequestPart(value = "file", required = false) MultipartFile file,
+            @RequestPart(value = "fileList", required = false) List<MultipartFile> fileList,
             @RequestParam(value = "url", required = false) String url,
-            // @RequestParam(value = "id", required = false) Long id,
             @RequestParam(value = "name", required = false) String name,
             @RequestParam(value = "category", required = false) String category,
             @RequestParam(value = "tags", required = false) List<String> tags,
@@ -79,22 +87,6 @@ public class PictureController {
             HttpServletRequest request) {
 
         User currentUser = userService.getCurrentUser(request);
-
-        // 确定输入源：优先使用文件，其次使用URL
-        Object inputSource = null;
-        if (file != null && !file.isEmpty()) {
-            inputSource = file;
-        } else if (url != null && !url.isEmpty()) {
-            inputSource = url;
-        }
-
-        // // 判断是新增还是更新
-        // boolean isUpdate = id != null && id > 0;
-
-        // // 新增时必须传文件或URL；更新时可以不传（只改字段）
-        // if (!isUpdate && inputSource == null) {
-        //     ThrowExceptionUtils.throwIF(true, ErrorCode.PARAMS_ERROR, "请选择要上传的图片文件或输入图片URL");
-        // }
 
         // 构建请求对象
         PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
@@ -105,9 +97,49 @@ public class PictureController {
         pictureUploadRequest.setIntroduction(introduction);
         pictureUploadRequest.setSpaceId(spaceId);
         
-        // 上传图片
-        PictureVO pictureVO = pictureService.uploadPicture2DB(inputSource, pictureUploadRequest, currentUser);
-        return ResponseUtils.success(pictureVO);
+        List<PictureVO> pictureVOs = new ArrayList<>();
+        boolean hasFiles = fileList != null && !fileList.isEmpty();
+        boolean hasUrl = url != null && !url.isBlank();
+
+        // 文件和 URL 是两种互斥输入来源，避免客户端误传时静默忽略其中一种。
+        ThrowExceptionUtils.throwIF(
+                hasFiles && hasUrl,
+                ErrorCode.PARAMS_ERROR,
+                "本地文件和图片 URL 不能同时上传"
+        );
+
+        if (hasFiles) {
+            long totalFileSize = 0L;
+            for (MultipartFile file : fileList) {
+                ThrowExceptionUtils.throwIF(
+                        file == null || file.isEmpty(),
+                        ErrorCode.PARAMS_ERROR,
+                        "上传文件不能为空"
+                );
+                totalFileSize += file.getSize();
+            }
+            ThrowExceptionUtils.throwIF(
+                    totalFileSize > MAX_BATCH_TOTAL_SIZE,
+                    ErrorCode.PARAMS_ERROR,
+                    "批量上传图片总大小不能超过30MB"
+            );
+
+            for (MultipartFile file : fileList) {
+                PictureVO pictureVO = pictureService.uploadPicture2DB(file, pictureUploadRequest, currentUser);
+                pictureVOs.add(pictureVO);
+            }
+        } else if (hasUrl) {
+            PictureVO pictureVO = pictureService.uploadPicture2DB(url, pictureUploadRequest, currentUser);
+            pictureVOs.add(pictureVO);
+        } else {
+            ThrowExceptionUtils.throwIF(
+                    true,
+                    ErrorCode.PARAMS_ERROR,
+                    "请选择要上传的图片文件或输入图片 URL"
+            );
+        }
+        
+        return ResponseUtils.success(pictureVOs);
     }
 
     /**

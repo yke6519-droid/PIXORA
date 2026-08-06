@@ -107,32 +107,39 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 loginUser == null,
                 ErrorCode.NOT_LOGIN_ERROR
         );
-        System.out.println(inputSource);
-        System.out.println(pictureUploadRequest);
+        // System.out.println(inputSource);
+        // System.out.println(pictureUploadRequest);
+
         ThrowExceptionUtils.throwIF(
                 inputSource == null || pictureUploadRequest == null,
                 ErrorCode.PARAMS_ERROR,"数据不能为空"
         );
+        
         // 判断是新增还是更新
         Long pictureId = pictureUploadRequest.getId();
+
         // 若上传了图片id则视为更新
         if (pictureId != null) {
             Picture oldPicture = this.getById(pictureId);
             ThrowExceptionUtils.throwIF(oldPicture==null,ErrorCode.PARAMS_ERROR,"图片不存在");
             ThrowExceptionUtils.throwIF(!loginUser.getId().equals(oldPicture.getUserid()),ErrorCode.NO_AUTH_ERROR,"仅用户本人可以修改图片");
         }
+
         // 上传图库
         String uploadPathPrefix = String.format("public/%s", loginUser.getId());
+
         // 按照用户id划分目录
         if (pictureUploadRequest.getSpaceId() != null) {
             uploadPathPrefix = String.format("userSpace/%s", loginUser.getId());
         }
+
         // 获取到要上传的图片的原始信息
         // 根据inputSource的类型，使用不同的上传方式
         PictureUploadTemplate pictureUploadTemplate = filePictureUpload;
         if (inputSource instanceof String){
             pictureUploadTemplate = urlPictureUpload;
         }
+
         UploadPictureResult uploadPictureResult = pictureUploadTemplate.uploadPicture(inputSource, uploadPathPrefix);
         return uploadPictureResult;
     }
@@ -248,9 +255,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         ThrowExceptionUtils.throwIF(pictureUploadRequest == null, ErrorCode.PARAMS_ERROR, "上传参数不能为空");
         ThrowExceptionUtils.throwIF(inputSource == null, 
             ErrorCode.PARAMS_ERROR, 
-            "新建图片时，上传文件或URL不能为空");
+            "新建图片时，上传文件列表或URL不能为空");
 
         Picture picture = new Picture();
+
         // 上传到cos并获取上传结果
         UploadPictureResult uploadPictureResult = this.uploadPicture2COS(inputSource, pictureUploadRequest, loginUser);
 

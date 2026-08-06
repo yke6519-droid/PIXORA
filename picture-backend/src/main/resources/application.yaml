@@ -19,9 +19,10 @@ spring:
     timeout: 2h
   servlet:
     multipart:
-      # 单文件限制与业务校验保持一致；请求体额外预留 Multipart 边界开销。
-      max-request-size: 6MB
+      # 批量文件内容最多 30MB，31MB 额外预留 Multipart 边界开销。
+      max-request-size: 31MB
       enabled: true
+      # 单文件最多 5MB；
       max-file-size: 5MB
 
 server:
