@@ -44,6 +44,12 @@ declare namespace API {
     message?: string;
   };
 
+  type BaseResponseListPictureVO_ = {
+    code?: number;
+    data?: PictureVO[];
+    message?: string;
+  };
+
   /** 批量抓图接口返回的结构化结果。 */
   type BaseResponsePictureListVO_ = {
     code?: number;
