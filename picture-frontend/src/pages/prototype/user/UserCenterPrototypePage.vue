@@ -105,7 +105,7 @@
                 :message="recentError"
               >
                 <template #action>
-                  <a-button size="small" @click="loadRecentPictures(user.spaceId)">重试</a-button>
+                  <a-button size="small" @click="loadRecentPictures(user.spaceId,user.id)">重试</a-button>
                 </template>
               </a-alert>
               <a-empty v-else-if="!panel.pictures.length" :description="panel.emptyText">
@@ -277,12 +277,13 @@ async function loadPictureSummary(userId?: number | string, spaceId?: number | s
 /**
  * 用户中心分别拉取公共图库和当前私人空间的最近图片，两个面板各自渲染。
  */
-async function loadRecentPictures(spaceId?: number | string) {
+async function loadRecentPictures(spaceId?: number | string, userId?: number | string) {
   recentLoading.value = true
   recentError.value = ''
   try {
     const queryBodies: API.PictureQueryRequest[] = [
       {
+        userId,
         spaceId: 0,
         pictureCheck: 1,
         current: 1,
@@ -343,7 +344,7 @@ async function loadCenter(showSkeleton = true) {
     loginUserStore.setLoginUser(currentUser)
     await Promise.all([
       loadPictureSummary(currentUser.id, currentUser.spaceId),
-      loadRecentPictures(currentUser.spaceId),
+      loadRecentPictures(currentUser.spaceId,currentUser.id),
     ])
   } catch (error: any) {
     const unauthorized = error?.response?.status === 401 || error?.response?.data?.code === 40100
