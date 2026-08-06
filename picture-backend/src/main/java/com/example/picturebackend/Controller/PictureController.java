@@ -69,7 +69,7 @@ public class PictureController {
     public BaseResponse<PictureVO> uploadPic(
             @RequestPart(value = "file", required = false) MultipartFile file,
             @RequestParam(value = "url", required = false) String url,
-            @RequestParam(value = "id", required = false) Long id,
+            // @RequestParam(value = "id", required = false) Long id,
             @RequestParam(value = "name", required = false) String name,
             @RequestParam(value = "category", required = false) String category,
             @RequestParam(value = "tags", required = false) List<String> tags,
@@ -86,17 +86,18 @@ public class PictureController {
         } else if (url != null && !url.isEmpty()) {
             inputSource = url;
         }
-        // 判断是新增还是更新
-        boolean isUpdate = id != null && id > 0;
 
-        // 新增时必须传文件或URL；更新时可以不传（只改字段）
-        if (!isUpdate && inputSource == null) {
-            ThrowExceptionUtils.throwIF(true, ErrorCode.PARAMS_ERROR, "请选择要上传的图片文件或输入图片URL");
-        }
+        // // 判断是新增还是更新
+        // boolean isUpdate = id != null && id > 0;
+
+        // // 新增时必须传文件或URL；更新时可以不传（只改字段）
+        // if (!isUpdate && inputSource == null) {
+        //     ThrowExceptionUtils.throwIF(true, ErrorCode.PARAMS_ERROR, "请选择要上传的图片文件或输入图片URL");
+        // }
 
         // 构建请求对象
         PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
-        pictureUploadRequest.setId(id);
+        // pictureUploadRequest.setId(id);
         pictureUploadRequest.setName(name);
         pictureUploadRequest.setCategory(category);
         pictureUploadRequest.setTags(tags);
@@ -105,6 +106,63 @@ public class PictureController {
         
         // 上传图片
         PictureVO pictureVO = pictureService.uploadPicture2DB(inputSource, pictureUploadRequest, currentUser);
+        return ResponseUtils.success(pictureVO);
+    }
+
+    /**
+     * 重新上传图片（能够更新原图片，或单独修改元信息）
+     * @param file
+     * @param pictureId
+     * @param name
+     * @param category
+     * @param tags
+     * @param introduction
+     * @param request
+     * @return
+     */
+    @PostMapping("/reloadPicture")
+    public BaseResponse<PictureVO> reloadPicture(
+        @RequestPart(value = "file", required = false) MultipartFile file,
+        @RequestParam(value = "url", required = false) String url,
+        @RequestParam(value = "id", required = false) Long pictureId,
+        @RequestParam(value = "name", required = false) String name,
+        @RequestParam(value = "category", required = false) String category,
+        @RequestParam(value = "tags", required = false) List<String> tags,
+        @RequestParam(value = "introduction", required = false) String introduction,
+        // @RequestParam(value = "spaceId", required = false) Long spaceId,
+        HttpServletRequest request){
+
+        Object inputSource = null;
+        if (file != null && !file.isEmpty()) {
+            inputSource = file;
+        } else if (url != null && !url.isEmpty()) {
+            inputSource = url;
+        }
+
+        User currentUser = userService.getCurrentUser(request);
+
+        // 目的是让uploadPic接口不承担过多业务，将图片重新上传单独解耦出来
+        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(pictureId), 
+            ErrorCode.PARAMS_ERROR, 
+            "图片ID不能为空");
+        
+        Picture oldPicture = pictureService.getById(pictureId);
+        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(oldPicture), 
+            ErrorCode.PARAMS_ERROR, 
+            "目标图片不存在");
+        
+        // 构造请求体
+        PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
+        pictureUploadRequest.setId(pictureId);
+        pictureUploadRequest.setName(name);
+        pictureUploadRequest.setCategory(category);
+        pictureUploadRequest.setTags(tags);
+        pictureUploadRequest.setIntroduction(introduction);
+        // pictureUploadRequest.setSpaceId(spaceId);
+
+        // 上传图片
+        PictureVO pictureVO = pictureService.reloadPicture(inputSource, pictureUploadRequest, currentUser);
+
         return ResponseUtils.success(pictureVO);
     }
 
@@ -127,9 +185,13 @@ public class PictureController {
 //    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @PostMapping("/updatePicture")
     public BaseResponse<Boolean> updatePicture(@RequestBody PictureUpdateRequest pictureUpdateRequest, HttpServletRequest request) {
+        // 参数校验
         ThrowExceptionUtils.throwIF(pictureUpdateRequest == null, ErrorCode.PARAMS_ERROR);
+        // 获取当前登录用户
         User loginUser = userService.getCurrentUser(request);
+        // 调用服务层方法更新图片
         boolean result = pictureService.updatePictureById(pictureUpdateRequest, loginUser);
+        // 返回结果
         return ResponseUtils.success(result);
     }
 
@@ -141,6 +203,7 @@ public class PictureController {
             @RequestBody PictureQueryRequest pictureQueryRequest,
             HttpServletRequest request) {
         ThrowExceptionUtils.throwIF(pictureQueryRequest == null, ErrorCode.PARAMS_ERROR);
+        normalizePublicSpaceId(pictureQueryRequest);
         UserVO currentUser = (UserVO)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
 
         User user= new User();
@@ -179,6 +242,7 @@ public class PictureController {
                 
         // 参数校验
         ThrowExceptionUtils.throwIF(pictureQueryRequest == null, ErrorCode.PARAMS_ERROR);
+        normalizePublicSpaceId(pictureQueryRequest);
 
         UserVO currentUser = (UserVO)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
 
@@ -190,6 +254,16 @@ public class PictureController {
                 pictureQueryRequest, user, pictureService::queryPicturePage);
 
         return ResponseUtils.success(picturePageVO);
+    }
+
+    /**
+     * 公共图库前端统一传0；兼容历史客户端未传spaceId的请求，按公共图库处理。
+     * 统一在进入缓存和业务层前归一化，避免null形成另一套缓存键或查询到私人空间图片。
+     */
+    private void normalizePublicSpaceId(PictureQueryRequest pictureQueryRequest) {
+        if (pictureQueryRequest.getSpaceId() == null) {
+            pictureQueryRequest.setSpaceId(0L);
+        }
     }
 
     /**

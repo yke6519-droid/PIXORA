@@ -291,6 +291,30 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         spaceQueryWrapper.orderBy(StrUtil.isNotEmpty(sortFiled), sortOrder.equals("ascend"), sortFiled);
         return spaceQueryWrapper;
     }
+
+    @Override
+    public void checkUsage(Long spaceId, Picture picture){
+
+        // 校验参数
+        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceId),
+            ErrorCode.PARAMS_ERROR, "spaceId is null");
+
+        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(picture),
+            ErrorCode.PARAMS_ERROR,"picture is null");
+
+        Space space = this.getById(spaceId);
+
+        Long usedCount = space.getUsedCount();
+        Long maxCount = space.getMaxCount();
+        ThrowExceptionUtils.throwIF(usedCount >= maxCount,
+            ErrorCode.OPERATION_ERROR ,"空间图片张数已达上限");
+
+        Long usedSize = space.getUsedSize();
+        Long maxSize = space.getMaxSize();
+        ThrowExceptionUtils.throwIF(
+            usedSize >= maxSize || usedSize+picture.getPicsize() >= maxSize,
+            ErrorCode.OPERATION_ERROR ,"空间容量已达上限");
+    }
 }
 
 

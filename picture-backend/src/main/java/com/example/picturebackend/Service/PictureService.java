@@ -128,4 +128,6 @@ public interface PictureService extends IService<Picture> {
      * @return
      */
     PictureListVO UploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser);
+
+    PictureVO reloadPicture(Object inputSource, PictureUploadRequest pictureUploadRequest, User currentUser);
 }

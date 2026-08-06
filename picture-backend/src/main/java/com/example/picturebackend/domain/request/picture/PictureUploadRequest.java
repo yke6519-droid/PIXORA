@@ -16,18 +16,31 @@ public class PictureUploadRequest implements Serializable {
      */
     private Long id;
 
+    /**
+     * 图片名称
+     */
     private String name;
 
+    /**
+     * 图片分类
+     */
     private String category;
 
+    /**
+     * 图片标签
+     */
     private List<String> tags;
 
+    /**
+     * 图片简介
+     */
     private String introduction;
 
     /**
      * 空间id
      */
     private Long spaceId;
+
     @TableField(exist = false)
     private static final long serialVersionUID = 3191241716373120793L;
 }
