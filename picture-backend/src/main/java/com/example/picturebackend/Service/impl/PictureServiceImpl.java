@@ -290,12 +290,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             // 校验该空间内是否还有容量和图片张数
             spaceService.checkUsage(spaceId,picture);
 
-            // 则覆盖原图片的空间；若未指定，则保持原图片的空间。
-            picture.setSpaceId(pictureUploadRequest.getSpaceId());
+            // 若有容量 给当前Picture 绑定 spaceId
+            picture.setSpaceId(spaceId);
 
-            // 直接更新空间容量
+            // 直接更新空间容量和照片数
             Space space = spaceService.getById(spaceId);
+
             space.setUsedSize(space.getUsedSize()+picture.getPicsize());
+            space.setUsedCount(space.getUsedCount()+1);
             spaceService.updateById(space);
         }
 

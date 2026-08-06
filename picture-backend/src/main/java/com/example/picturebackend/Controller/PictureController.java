@@ -10,6 +10,7 @@ import com.example.picturebackend.Service.PictureService;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.Utils.ResponseUtils;
 import com.example.picturebackend.annotation.AuthCheck;
+import com.example.picturebackend.constant.PictureConstant;
 import com.example.picturebackend.constant.UserConstant;
 import com.example.picturebackend.domain.po.Picture;
 import com.example.picturebackend.domain.po.PictureTagCategory;
@@ -131,17 +132,18 @@ public class PictureController {
         @RequestParam(value = "introduction", required = false) String introduction,
         // @RequestParam(value = "spaceId", required = false) Long spaceId,
         HttpServletRequest request){
-
+        
+        User currentUser = userService.getCurrentUser(request);
+        
+        // 判断是url还是本地file
         Object inputSource = null;
         if (file != null && !file.isEmpty()) {
             inputSource = file;
         } else if (url != null && !url.isEmpty()) {
             inputSource = url;
         }
-
-        User currentUser = userService.getCurrentUser(request);
-
-        // 目的是让uploadPic接口不承担过多业务，将图片重新上传单独解耦出来
+        
+        // 参数校验
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(pictureId), 
             ErrorCode.PARAMS_ERROR, 
             "图片ID不能为空");
@@ -151,6 +153,11 @@ public class PictureController {
             ErrorCode.PARAMS_ERROR, 
             "目标图片不存在");
         
+        ThrowExceptionUtils.throwIF(
+            !oldPicture.getPictureCheck().equals(PictureConstant.CHECK_REFUSE),
+            ErrorCode.PARAMS_ERROR,
+            "只能重新上传审核拒绝的图片");
+
         // 构造请求体
         PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
         pictureUploadRequest.setId(pictureId);
