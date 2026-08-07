@@ -87,5 +87,5 @@ public interface SpaceService extends IService<Space> {
      */
     void checkUsage(Long spaceId, Picture picture);
 
-    Space SpaceAuthCheck(Long spaceId, User loginUser);
+    void SpaceAuthCheck(Long spaceId, User loginUser);
 }

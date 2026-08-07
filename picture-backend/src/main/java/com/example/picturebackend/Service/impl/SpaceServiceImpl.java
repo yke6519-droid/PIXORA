@@ -322,13 +322,13 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
      * @param loginUser
      */
     @Override
-    public Space SpaceAuthCheck(Long spaceId, User loginUser) {
+    public void SpaceAuthCheck(Long spaceId, User loginUser) {
         Space space = this.getById(spaceId);
 
         ThrowExceptionUtils.throwIF(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
 
-        this.SpaceAuthCheck(space.getId(), loginUser);
-        return space;
+        ThrowExceptionUtils.throwIF(!space.getUserId().equals(loginUser.getId()),
+            ErrorCode.NO_AUTH_ERROR);
     }
 }
 
