@@ -76,7 +76,6 @@ public class PictureController {
      */
     @PostMapping(value = "/uploadPic", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public BaseResponse<List<PictureVO>> uploadPic(
-            // @RequestPart(value = "file", required = false) MultipartFile file,
             @RequestPart(value = "fileList", required = false) List<MultipartFile> fileList,
             @RequestParam(value = "url", required = false) String url,
             @RequestParam(value = "name", required = false) String name,
@@ -90,7 +89,6 @@ public class PictureController {
 
         // 构建请求对象
         PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
-        // pictureUploadRequest.setId(id);
         pictureUploadRequest.setName(name);
         pictureUploadRequest.setCategory(category);
         pictureUploadRequest.setTags(tags);
@@ -162,16 +160,25 @@ public class PictureController {
         @RequestParam(value = "category", required = false) String category,
         @RequestParam(value = "tags", required = false) List<String> tags,
         @RequestParam(value = "introduction", required = false) String introduction,
-        // @RequestParam(value = "spaceId", required = false) Long spaceId,
         HttpServletRequest request){
         
         User currentUser = userService.getCurrentUser(request);
         
+        boolean hasFile = file != null;
+        boolean hasUrl = url != null && !url.isBlank();
+
+        // 文件和 URL 是两种互斥输入来源，避免客户端误传时静默忽略其中一种。
+        ThrowExceptionUtils.throwIF(
+                hasFile && hasUrl,
+                ErrorCode.PARAMS_ERROR,
+                "本地文件和图片 URL 不能同时上传"
+        );
+
         // 判断是url还是本地file
         Object inputSource = null;
-        if (file != null && !file.isEmpty()) {
+        if (hasFile) {
             inputSource = file;
-        } else if (url != null && !url.isEmpty()) {
+        } else if (hasUrl) {
             inputSource = url;
         }
         
@@ -189,7 +196,9 @@ public class PictureController {
             !oldPicture.getPictureCheck().equals(PictureConstant.CHECK_REFUSE),
             ErrorCode.PARAMS_ERROR,
             "只能重新上传审核拒绝的图片");
-
+        
+        pictureService.PictureAuthCheck(currentUser,pictureService.getById(pictureId));
+        
         // 构造请求体
         PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
         pictureUploadRequest.setId(pictureId);
@@ -197,7 +206,6 @@ public class PictureController {
         pictureUploadRequest.setCategory(category);
         pictureUploadRequest.setTags(tags);
         pictureUploadRequest.setIntroduction(introduction);
-        // pictureUploadRequest.setSpaceId(spaceId);
 
         // 上传图片
         PictureVO pictureVO = pictureService.reloadPicture(inputSource, pictureUploadRequest, currentUser);
