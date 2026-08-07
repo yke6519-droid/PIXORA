@@ -315,6 +315,21 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
             usedSize >= maxSize || usedSize+picture.getPicsize() >= maxSize,
             ErrorCode.OPERATION_ERROR ,"空间容量已达上限");
     }
+
+    /**
+     * 校验该用户是否有权限操作该空间
+     * @param spaceId
+     * @param loginUser
+     */
+    @Override
+    public Space SpaceAuthCheck(Long spaceId, User loginUser) {
+        Space space = this.getById(spaceId);
+
+        ThrowExceptionUtils.throwIF(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
+
+        this.SpaceAuthCheck(space.getId(), loginUser);
+        return space;
+    }
 }
 
 

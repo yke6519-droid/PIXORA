@@ -15,7 +15,6 @@ import com.example.picturebackend.domain.vo.picture.PictureVO;
 import org.springframework.web.bind.annotation.RequestBody;
 
 import jakarta.servlet.http.HttpServletRequest;
-import java.util.List;
 
 /**
 * @author chen
@@ -24,7 +23,7 @@ import java.util.List;
 */
 public interface PictureService extends IService<Picture> {
 
-    Boolean SpaceCheck(Long userId, User loginUser);
+    // Boolean AuthCheck(Long userId, User loginUser);
 
     /**
      * 通用上传图片到存储对象方法
@@ -71,12 +70,12 @@ public interface PictureService extends IService<Picture> {
     /**
      * 管理员分页获取图片列表
      */
-    PicturePageVO queryPicturePage(PictureQueryRequest pictureQueryRequest, User currentUser);
+    PicturePageVO queryPicturePage(PictureQueryRequest pictureQueryRequest, User loginUser);
 
     /**
      * 管理员根据id获取图片（不脱敏）
      */
-    PictureVO getPictureById(Long id, User currentUser);
+    PictureVO getPictureById(Long id, User loginUser);
 
     /**
      * 修改图片（仅图片所属用户可修改）
@@ -113,12 +112,12 @@ public interface PictureService extends IService<Picture> {
      * 管理员校验 并更新图片状态
      *
      * @param adminCheckPictureRequest
-     * @param currentUser
+     * @param loginUser
      * @return
      */
-    Boolean adminCheck(AdminCheckPictureRequest adminCheckPictureRequest, User currentUser);
+    Boolean adminCheck(AdminCheckPictureRequest adminCheckPictureRequest, User loginUser);
 
-    Boolean adminCheckBatch(@RequestBody AdminCheckPictureBatchRequest adminCheckPictureBatchRequest, User currentUser);
+    Boolean adminCheckBatch(@RequestBody AdminCheckPictureBatchRequest adminCheckPictureBatchRequest, User loginUser);
 
     /**
      * 按批次抓取并上传图片
@@ -129,5 +128,7 @@ public interface PictureService extends IService<Picture> {
      */
     PictureListVO UploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser);
 
-    PictureVO reloadPicture(Object inputSource, PictureUploadRequest pictureUploadRequest, User currentUser);
+    PictureVO reloadPicture(Object inputSource, PictureUploadRequest pictureUploadRequest, User loginUser);
+
+    void PictureAuthCheck(User loginUser, Picture picture);
 }
