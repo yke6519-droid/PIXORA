@@ -120,6 +120,21 @@ public class Picture implements Serializable {
     private Long spaceId;
 
     /**
+     * WebP 正式图片
+     */
+    private String pictureKey;
+    
+    /**
+     * 缩略图
+     */
+    private String thumbnailKey;
+    
+    /**
+     * 原始上传文件
+     */
+    private String originalKey; 
+
+    /**
      * 是否删除 0：未删 1：删除
      */
     @TableLogic

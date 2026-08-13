@@ -5,6 +5,7 @@ import cn.hutool.core.collection.ListUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.BeanUtils;
+import com.example.picturebackend.Exception.BusinessException;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.Service.PictureService;
@@ -20,6 +21,8 @@ import com.example.picturebackend.domain.request.BaseResponse;
 import com.example.picturebackend.domain.request.picture.*;
 import com.example.picturebackend.domain.vo.picture.PictureListVO;
 import com.example.picturebackend.domain.vo.picture.PicturePageVO;
+import com.example.picturebackend.domain.vo.picture.PictureUploadFailVO;
+import com.example.picturebackend.domain.vo.picture.PictureUploadVO;
 import com.example.picturebackend.domain.vo.picture.PictureVO;
 import com.example.picturebackend.domain.vo.user.UserVO;
 import com.example.picturebackend.manager.MultiCacheManager;
@@ -75,7 +78,7 @@ public class PictureController {
      * @return
      */
     @PostMapping(value = "/uploadPic", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public BaseResponse<List<PictureVO>> uploadPic(
+    public BaseResponse<PictureUploadVO> uploadPic(
             @RequestPart(value = "fileList", required = false) List<MultipartFile> fileList,
             @RequestParam(value = "url", required = false) String url,
             @RequestParam(value = "name", required = false) String name,
@@ -87,6 +90,7 @@ public class PictureController {
 
         User currentUser = userService.getCurrentUser(request);
 
+
         // 构建请求对象
         PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
         pictureUploadRequest.setName(name);
@@ -95,7 +99,10 @@ public class PictureController {
         pictureUploadRequest.setIntroduction(introduction);
         pictureUploadRequest.setSpaceId(spaceId);
         
-        List<PictureVO> pictureVOs = new ArrayList<>();
+        Integer totalSize = 0;
+        List<PictureVO> successPictureVOs = new ArrayList<>();
+        List<PictureUploadFailVO> failPictureVOs = new ArrayList<>();
+        
         boolean hasFiles = fileList != null && !fileList.isEmpty();
         boolean hasUrl = url != null && !url.isBlank();
 
@@ -107,7 +114,9 @@ public class PictureController {
         );
 
         if (hasFiles) {
-            long totalFileSize = 0L;
+
+            // 批次上传容量校验
+            Long totalFileSize = 0L;
             for (MultipartFile file : fileList) {
                 ThrowExceptionUtils.throwIF(
                         file == null || file.isEmpty(),
@@ -115,6 +124,7 @@ public class PictureController {
                         "上传文件不能为空"
                 );
                 totalFileSize += file.getSize();
+                totalSize++;
             }
             ThrowExceptionUtils.throwIF(
                     totalFileSize > MAX_BATCH_TOTAL_SIZE,
@@ -122,13 +132,28 @@ public class PictureController {
                     "批量上传图片总大小不能超过30MB"
             );
 
+            // 开始上传
             for (MultipartFile file : fileList) {
-                PictureVO pictureVO = pictureService.uploadPicture2DB(file, pictureUploadRequest, currentUser);
-                pictureVOs.add(pictureVO);
+                try {
+                    // 上传图片
+                    PictureVO pictureVO = pictureService.uploadPicture2DB(file, pictureUploadRequest, currentUser);
+                    // 成功
+                    successPictureVOs.add(pictureVO);
+                } catch (BusinessException e) {
+
+                    // 封装失败原因
+                    failPictureVOs.add(new PictureUploadFailVO(
+                        // index,
+                        file.getSize(),
+                        file.getOriginalFilename(),
+                        e.getMessage()));
+                }
             }
+
         } else if (hasUrl) {
+            totalSize++;
             PictureVO pictureVO = pictureService.uploadPicture2DB(url, pictureUploadRequest, currentUser);
-            pictureVOs.add(pictureVO);
+            successPictureVOs.add(pictureVO);
         } else {
             ThrowExceptionUtils.throwIF(
                     true,
@@ -136,8 +161,16 @@ public class PictureController {
                     "请选择要上传的图片文件或输入图片 URL"
             );
         }
+
+        // 构造vo
+        PictureUploadVO pictureUploadVO = new PictureUploadVO();
+        pictureUploadVO.setSuccessPictureList(successPictureVOs);
+        pictureUploadVO.setSuccessCount(successPictureVOs.size());
+        pictureUploadVO.setFailPictureList(failPictureVOs);
+        pictureUploadVO.setFailCount(failPictureVOs.size());
+        pictureUploadVO.setTotalCount(totalSize);
         
-        return ResponseUtils.success(pictureVOs);
+        return ResponseUtils.success(pictureUploadVO);
     }
 
     /**
@@ -216,13 +249,18 @@ public class PictureController {
     /**
      * 管理员根据id删除图片
      */
-    //    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @DeleteMapping("/deletePicture")
     public BaseResponse<Boolean> deletePicture(@RequestBody PictureUpdateRequest pictureUpdateRequest, HttpServletRequest request) {
+        
+        // 参数校验
         ThrowExceptionUtils.throwIF(pictureUpdateRequest == null || pictureUpdateRequest.getId() == null,
                 ErrorCode.PARAMS_ERROR);
+        
         User loginUser = userService.getCurrentUser(request);
+        
+        // 执行删除
         boolean result = pictureService.deletePictureById(pictureUpdateRequest.getId(), loginUser);
+
         return ResponseUtils.success(result);
     }
 
@@ -265,14 +303,16 @@ public class PictureController {
 
     @PostMapping("/queryAll")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<IPage<Picture>> queryAll(@RequestBody PictureQueryRequest pictureQueryRequest,
+    public BaseResponse<IPage<PictureVO>> queryAll(@RequestBody PictureQueryRequest pictureQueryRequest,
                                                  HttpServletRequest request) {
 
         UserVO currentUser = (UserVO) request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
         User user= new User();
         BeanUtil.copyProperties(currentUser, user);
+        
+        IPage<PictureVO> picturIPage = pictureService.queryAll(pictureQueryRequest, user);
 
-        return ResponseUtils.success(pictureService.queryAll(pictureQueryRequest, user));
+        return ResponseUtils.success(picturIPage);
     }
 
     /**
@@ -320,7 +360,9 @@ public class PictureController {
     @GetMapping("/getPictureById")
     public BaseResponse<PictureVO> getPictureById(Long id,HttpServletRequest request) {
         ThrowExceptionUtils.throwIF(id == null || id <= 0, ErrorCode.PARAMS_ERROR);
+
         UserVO currentUser = (UserVO)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
+        
         User user= new User();
         BeanUtil.copyProperties(currentUser, user);
 

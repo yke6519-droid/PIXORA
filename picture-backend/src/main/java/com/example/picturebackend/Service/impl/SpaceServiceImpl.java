@@ -17,6 +17,7 @@ import com.example.picturebackend.Service.SpaceService;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.constant.SpaceConstant;
 import com.example.picturebackend.constant.UserConstant;
+import com.example.picturebackend.domain.dto.file.UploadPictureResult;
 import com.example.picturebackend.domain.po.Picture;
 import com.example.picturebackend.domain.po.Space;
 import com.example.picturebackend.domain.po.User;
@@ -27,6 +28,7 @@ import com.example.picturebackend.domain.request.space.SpaceUpdateRequest;
 import com.example.picturebackend.domain.vo.space.SpaceLevel;
 import com.example.picturebackend.domain.vo.space.SpacePageVO;
 import com.example.picturebackend.domain.vo.space.SpaceVO;
+import com.example.picturebackend.manager.CosManager;
 
 import org.joda.time.LocalDateTime;
 import org.springframework.stereotype.Service;
@@ -48,6 +50,8 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
     private PictureMapper pictureMapper;
     @Resource
     private UserService userService;
+    @Resource
+    private CosManager cosManager;
 
     /**
      * 创建空间
@@ -293,7 +297,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
     }
 
     @Override
-    public void checkUsage(Long spaceId, Picture picture){
+    public void checkUsage(Long spaceId, Picture picture, UploadPictureResult uploadPictureResult){
 
         // 校验参数
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceId),
@@ -306,14 +310,32 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
 
         Long usedCount = space.getUsedCount();
         Long maxCount = space.getMaxCount();
-        ThrowExceptionUtils.throwIF(usedCount >= maxCount,
-            ErrorCode.OPERATION_ERROR ,"空间图片张数已达上限");
 
         Long usedSize = space.getUsedSize();
         Long maxSize = space.getMaxSize();
-        ThrowExceptionUtils.throwIF(
+
+        // 如果已达上限，则删除cos中上传的图片。
+        if (usedCount >= maxCount || usedSize >= maxSize 
+            || usedSize+picture.getPicsize() >= maxSize) {
+
+            // 删除cos中上传的该图片 根据key删除
+
+            cosManager.deleteObject(uploadPictureResult.getPictureKey());
+            System.out.println("spaceCheck：deleteObject by key");
+
+            cosManager.deleteObject(uploadPictureResult.getThumbnailKey());
+            System.out.println("spaceCheck：deleteObject by ThumbnailKey");
+
+            cosManager.deleteObject(uploadPictureResult.getOriginalKey());
+            System.out.println("spaceCheck：deleteObject by getOriginalKey");
+            
+            ThrowExceptionUtils.throwIF(usedCount >= maxCount,
+                ErrorCode.OPERATION_ERROR ,"空间图片张数已达上限");
+            
+            ThrowExceptionUtils.throwIF(
             usedSize >= maxSize || usedSize+picture.getPicsize() >= maxSize,
             ErrorCode.OPERATION_ERROR ,"空间容量已达上限");
+        }
     }
 
     /**
@@ -327,7 +349,9 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
 
         ThrowExceptionUtils.throwIF(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
 
-        ThrowExceptionUtils.throwIF(!space.getUserId().equals(loginUser.getId()),
+        ThrowExceptionUtils.throwIF(
+            !space.getUserId().equals(loginUser.getId())
+            && !loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE),
             ErrorCode.NO_AUTH_ERROR);
     }
 }

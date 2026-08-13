@@ -2,6 +2,7 @@ package com.example.picturebackend.Service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.spring.service.IService;
+import com.example.picturebackend.domain.dto.file.UploadPictureResult;
 import com.example.picturebackend.domain.po.Picture;
 import com.example.picturebackend.domain.po.Space;
 import com.example.picturebackend.domain.po.User;
@@ -85,7 +86,7 @@ public interface SpaceService extends IService<Space> {
      * @param spaceId
      * @param picture
      */
-    void checkUsage(Long spaceId, Picture picture);
+    void checkUsage(Long spaceId, Picture picture, UploadPictureResult uploadPictureResult);
 
     void SpaceAuthCheck(Long spaceId, User loginUser);
 }

@@ -63,6 +63,9 @@ public abstract class PictureUploadTemplate {
         // 自己拼接文件上传路径，而不是让用户自己上传（可能会导致url出异常）
         String fileName = String.format("%s_%s.%s", DateUtil.formatDate(new Date()), uuid, fileSuffix);
         String uploadPath = String.format("/%s/%s", uploadPrefix, fileName);
+
+        System.out.println("uploadPath = "+uploadPath);
+
         File file = null;
         try {
             /*
@@ -83,21 +86,28 @@ public abstract class PictureUploadTemplate {
 
             // 4. 上传对象存储，并获取上传对象结果
             PutObjectResult putObjectResult = cosManager.putPictureObject(uploadPath, file);
+
             // 5. 获取图片信息对象
             ImageInfo imageInfo = putObjectResult.getCiUploadResult().getOriginalInfo().getImageInfo();
+            
             // 5.1 获取处理后的图片列表
             ProcessResults processResults = putObjectResult.getCiUploadResult().getProcessResults();
+
             List<CIObject> objectList = processResults.getObjectList();
+
             if (CollUtil.isNotEmpty(objectList)){
                 // 获取压缩后的文件信息
                 CIObject compressCiObject = objectList.get(0);
                 CIObject thumbnailCiObject = objectList.get(1);
                 // 封装压缩图的返回结果
-                return getUploadPictureResult(originalFilename, compressCiObject, thumbnailCiObject);
+                return getUploadPictureResult(uploadPath,originalFilename, compressCiObject, thumbnailCiObject);
             }
+
             // 6. 封装返回结果
             UploadPictureResult uploadPictureResult = getUploadPictureResult(originalFilename, imageInfo, file, uploadPath);
+
             return uploadPictureResult;
+
         } catch (IOException e) {
             log.error("图片上传到对象存储失败");
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传失败");
@@ -106,6 +116,7 @@ public abstract class PictureUploadTemplate {
             deleteTemFile(file);
         }
     }
+    
     protected abstract void vailPic(Object inputSource);
 
     protected abstract String getOriginalFilename(Object inputSource);
@@ -118,7 +129,7 @@ public abstract class PictureUploadTemplate {
      * @param compressCiObject 压缩后的对象
      * @return
      */
-    private UploadPictureResult getUploadPictureResult(String originalFilename, CIObject compressCiObject, CIObject thumbnailCiObject) {
+    private UploadPictureResult getUploadPictureResult(String originalKey, String originalFilename, CIObject compressCiObject, CIObject thumbnailCiObject) {
         UploadPictureResult uploadPictureResult = new UploadPictureResult();
         uploadPictureResult.setName(FileUtil.mainName(originalFilename));
         uploadPictureResult.setThumbnailUrl(cosClientConfig.getHost() + "/" + thumbnailCiObject.getKey());
@@ -128,6 +139,12 @@ public abstract class PictureUploadTemplate {
         uploadPictureResult.setPicsize(compressCiObject.getSize().longValue());
         uploadPictureResult.setPicscale(NumberUtil.round((double) compressCiObject.getWidth() / compressCiObject.getHeight(), 2).doubleValue());
         uploadPictureResult.setUrl(cosClientConfig.getHost() + "/" + compressCiObject.getKey());
+
+        uploadPictureResult.setThumbnailKey(thumbnailCiObject.getKey());
+        uploadPictureResult.setPictureKey(compressCiObject.getKey());
+        uploadPictureResult.setOriginalKey(originalKey);
+
+
         return uploadPictureResult;
     }
 
@@ -148,6 +165,7 @@ public abstract class PictureUploadTemplate {
         uploadPictureResult.setPicsize(FileUtil.size(file));
         uploadPictureResult.setPicscale(NumberUtil.round((double) imageInfo.getWidth() / imageInfo.getHeight(), 2).doubleValue());
         uploadPictureResult.setUrl(cosClientConfig.getHost() + "/" + uploadPath);
+        // uploadPictureResult.setKey(uploadPath);
         return uploadPictureResult;
     }
 

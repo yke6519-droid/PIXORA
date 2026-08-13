@@ -65,7 +65,13 @@ public interface PictureService extends IService<Picture> {
      */
     Boolean updatePictureById(PictureUpdateRequest pictureUpdateRequest, User loginUser);
 
-    IPage<Picture> queryAll(PictureQueryRequest pictureQueryRequest, User adminUser);
+    /**
+     * 拿到所有图片的分页
+     * @param pictureQueryRequest
+     * @param adminUser
+     * @return
+     */
+    IPage<PictureVO> queryAll(PictureQueryRequest pictureQueryRequest, User adminUser);
 
     /**
      * 管理员分页获取图片列表
@@ -128,7 +134,25 @@ public interface PictureService extends IService<Picture> {
      */
     PictureListVO UploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser);
 
+    /**
+     * 重新上传图片
+     * @param inputSource
+     * @param pictureUploadRequest
+     * @param loginUser
+     * @return
+     */
     PictureVO reloadPicture(Object inputSource, PictureUploadRequest pictureUploadRequest, User loginUser);
 
+    /**
+     * 校验图片归属
+     * @param loginUser
+     * @param picture
+     */
     void PictureAuthCheck(User loginUser, Picture picture);
+
+    /**
+     * 删除COS中的图片
+     * @param picture
+     */
+    void deleteCosPicture(Picture picture);
 }
