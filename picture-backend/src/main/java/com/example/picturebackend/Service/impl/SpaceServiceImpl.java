@@ -182,16 +182,15 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
 
         String updatedName = spaceUpdateRequest.getUpdatedName();
 
-        // 空间id判空
+        // 空间id 与 目标空间判空
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceId) || StrUtil.isBlank(updatedName),
                 ErrorCode.PARAMS_ERROR);
-
         Space space = this.getById(spaceId);
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(space),ErrorCode.PARAMS_ERROR,"目标空间不存在");
         
-        ThrowExceptionUtils.throwIF(
-                !Objects.equals(loginUser.getId(), space.getUserId())
-                        && !loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE),
+        // 权限校验 - 先管理员再校验id
+        ThrowExceptionUtils.throwIF(!loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE)&& 
+                        !Objects.equals(loginUser.getId(), space.getUserId()),
                 ErrorCode.NO_AUTH_ERROR
         );
 

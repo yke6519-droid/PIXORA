@@ -20,6 +20,8 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 
+import cn.hutool.core.util.StrUtil;
+
 @Aspect
 @Component
 public class AuthInterceptor {
@@ -41,6 +43,10 @@ public class AuthInterceptor {
         HttpServletRequest request = ((ServletRequestAttributes) requestAttributes).getRequest();
         // 获取当前登录用户
         User currentUser = userService.getCurrentUser(request);
+        // mustRole 为空表示不限制角色，直接放行
+        if (StrUtil.isBlank(mustRole)) {
+            return joinPoint.proceed();
+        }
         UserLevel mustRoleEnum = UserLevel.getEnumByValue(mustRole);
         // 如果没有设权限 或 运行本人操作 则放行
         if (mustRoleEnum == null){

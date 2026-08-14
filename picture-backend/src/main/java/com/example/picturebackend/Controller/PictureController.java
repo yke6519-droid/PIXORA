@@ -282,20 +282,26 @@ public class PictureController {
 
     /**
      * 分页获取图片列表
+     * 允许未登录用户访问，但是有限制
      */
     @PostMapping("/queryPicturePage")
     public BaseResponse<PicturePageVO> queryPicturePage(
             @RequestBody PictureQueryRequest pictureQueryRequest,
             HttpServletRequest request) {
+        // 校验
         ThrowExceptionUtils.throwIF(pictureQueryRequest == null, ErrorCode.PARAMS_ERROR);
         normalizePublicSpaceId(pictureQueryRequest);
-        UserVO currentUser = (UserVO)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
 
+        // 允许未登录用户
+        UserVO currentUser = (UserVO)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
+        
+        
+        
+        // 若currentUser为空，则对应传入的是一个空参的User
         User user= new User();
         BeanUtil.copyProperties(currentUser, user);
-
+        
         PicturePageVO picturePageVO = new PicturePageVO();
-
         picturePageVO = pictureService.queryPicturePage(pictureQueryRequest,user);
 
         return ResponseUtils.success(picturePageVO);
@@ -332,9 +338,11 @@ public class PictureController {
         normalizePublicSpaceId(pictureQueryRequest);
 
         UserVO currentUser = (UserVO)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
-
+        
         User user= new User();
         BeanUtil.copyProperties(currentUser, user);
+        
+        //todo： 这里未登录用户要做额外的适配。
 
         // 将多级缓存封装到一个工具类中，传入查询函数避免循环依赖
         PicturePageVO picturePageVO = multiCacheManager.getPicturePage(

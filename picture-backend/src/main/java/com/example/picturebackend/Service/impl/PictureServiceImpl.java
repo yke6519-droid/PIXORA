@@ -496,12 +496,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Override
     public PicturePageVO queryPicturePage(PictureQueryRequest pictureQueryRequest, User loginUser) {
 
+        // 参数校验
         ThrowExceptionUtils.throwIF(
             ObjectUtil.isNull(pictureQueryRequest),
                 ErrorCode.PARAMS_ERROR,
                 "请求体为空");
+    
         final Long spaceId = pictureQueryRequest.getSpaceId();
-        System.out.println("----------------------------pictureQueryRequest = " + pictureQueryRequest.getSpaceId());
+        // System.out.println("----------------------------pictureQueryRequest = " + pictureQueryRequest.getSpaceId());
 
         // 不为空表示，现在在访问私人空间的图片列表，因此需要不为为负
         if (ObjectUtil.isNotNull(spaceId)) {
@@ -514,11 +516,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         if (spaceId != null && spaceId != 0L) { // 若请求体中传入的空间id
             // 校验当前登录用户是否是空间持有人
             Space space = spaceService.getById(spaceId);
+
             ThrowExceptionUtils.throwIF(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
 
-            ThrowExceptionUtils.throwIF(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
+            // ThrowExceptionUtils.throwIF(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
 
-            ThrowExceptionUtils.throwIF(!space.getUserId().equals(loginUser.getId()),
+            // 仅空间持有者和管理员可查
+            ThrowExceptionUtils.throwIF(!space.getUserId().equals(loginUser.getId()) 
+                                    && !loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE),
                     ErrorCode.NO_AUTH_ERROR, "无法查看他人空间中的内容");
         }
 
@@ -526,10 +531,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         long size = pictureQueryRequest.getPageSize();
 
         // 限制普通用户和未登录用户的分页上限
-        if (ObjectUtil.isNull(loginUser) || 
-            !loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE)){
-            if (size > 10){
-                size = 10;
+        // 若等级为空，则肯定是未登录
+        if (ObjectUtil.isNull(loginUser.getUserLevel()) ||
+            loginUser.getUserLevel().equals(UserConstant.DEFAULT_ROLE)){
+            if (size > 5){
+                size = 5;
             }
         }
 
@@ -567,12 +573,18 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Picture picture = this.getById(id);
         ThrowExceptionUtils.throwIF(picture == null, ErrorCode.NOT_FOUND_ERROR, "图片不存在");
 
-        // 判断图片是否在私人空间内
-        if (picture.getSpaceId() != 0L && picture.getSpaceId() != null) {
+        // 判断目标图片是否在私人空间内
+        if (!ObjectUtil.isNull(picture.getSpaceId()) && picture.getSpaceId() != 0L) {
+            // 若是未登录用户，则不允许查询私人空间，自己NO_Auth
+            ThrowExceptionUtils.throwIF(ObjectUtil.isNull(loginUser.getId()),
+                ErrorCode.NOT_LOGIN_ERROR);
+
+            // 若id不为空,则表示用户正常登录,则进行空间校验
             Space space = spaceService.getById(picture.getSpaceId());
             // 判断当前用户是否有权限修改
             spaceService.SpaceAuthCheck(space.getId(), loginUser);
         }
+
         PictureVO pictureVO = getPictureVO(picture);
 
         // 不脱敏，直接设置完整的创建用户信息

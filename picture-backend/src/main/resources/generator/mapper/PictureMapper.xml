@@ -28,7 +28,6 @@
         id
         ,url,thumbnailUrl,name,introduction,category,tags,
         picSize,picWidth,picHeight,picScale,picFormat,
-        userId,createTime,updateTime,editTime,isDelete,
-        列_name
+        userId,createTime,updateTime,editTime,isDelete
     </sql>
 </mapper>
