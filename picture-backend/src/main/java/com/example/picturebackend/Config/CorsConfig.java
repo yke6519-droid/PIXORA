@@ -21,10 +21,9 @@ public class CorsConfig {
         corsConfiguration.setAllowCredentials(true);
         corsConfiguration.addAllowedMethod("*");
         corsConfiguration.addAllowedHeader("*");
-//        corsConfiguration.addAllowedOrigin("http://localhost:5173");
-//        corsConfiguration.addAllowedOrigin("http://localhost:5174");
-//        corsConfiguration.addAllowedOrigin("http://localhost:8088");
-        corsConfiguration.addAllowedOriginPattern("*");
+        corsConfiguration.addAllowedOrigin("http://localhost:5173");
+        corsConfiguration.addAllowedOrigin("http://localhost:5174");
+        corsConfiguration.addAllowedOrigin("http://localhost:8088");
         /**
          * 再放入source中指定生效的路径
          */

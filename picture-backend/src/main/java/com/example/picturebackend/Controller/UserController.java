@@ -39,7 +39,9 @@ public class UserController {
                registerRequest ==null,
                ErrorCode.PARAMS_ERROR
        );
+
        Boolean save = userService.userRegister(registerRequest);
+
        return ResponseUtils.success(save);
    }
 
@@ -93,7 +95,7 @@ public class UserController {
         UserVO latestUser = userService.getSaftyUser(currentUser);
 
         // 每次get完都要把最新的user存进去
-        request.setAttribute(UserConstant.CURRENT_USER_SESSION_KEY,latestUser);
+        request.getSession().setAttribute(UserConstant.CURRENT_USER_SESSION_KEY,latestUser);
         return ResponseUtils.success(latestUser);
     }
 
@@ -263,8 +265,22 @@ public class UserController {
      */
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @DeleteMapping("/deleteById")
-    public BaseResponse<Boolean> deleteUser(@RequestBody DeleteRequest deleteRequest){
+    public BaseResponse<Boolean> deleteUser(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request){
+        ThrowExceptionUtils.throwIF(deleteRequest==null,ErrorCode.PARAMS_ERROR);
+        
+        User loginUser = userService.getCurrentUser(request);
+
+        ThrowExceptionUtils.throwIF(deleteRequest.getId() == loginUser.getId(),
+                ErrorCode.PARAMS_ERROR,"不能删除自己"
+        );
+
+        ThrowExceptionUtils.throwIF(userService.getById(deleteRequest.getId())
+                                .getUserLevel().equals(UserConstant.ADMIN_ROLE),
+         ErrorCode.NO_AUTH_ERROR,"不能删除管理员"
+        );
+
         boolean b = userService.removeById(deleteRequest.getId());
+
         return ResponseUtils.success(b);
     }
 

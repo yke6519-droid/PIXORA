@@ -82,13 +82,22 @@ public class SpaceController {
      */
     @DeleteMapping("/deleteById")
     public BaseResponse<Boolean> deleteById(Long spaceId, HttpServletRequest request){
+        
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceId),ErrorCode.PARAMS_ERROR,"空间id为空");
 
         User loginUser = userService.getCurrentUser(request);
 
-        ThrowExceptionUtils.throwIF(!loginUser.getSpaceId().equals(spaceId)
-        && loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE) == false
-        , ErrorCode.PARAMS_ERROR, "无权删除此空间");
+        // 先拦截未创建空间，且非管理员的用户
+        ThrowExceptionUtils.throwIF(!loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE) && 
+                                    ObjectUtil.isNull(loginUser.getSpaceId()),
+            ErrorCode.PARAMS_ERROR,"当前用户未创建空间"
+        );
+
+        // 再进行鉴权
+        ThrowExceptionUtils.throwIF(!loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE)&&
+            !loginUser.getSpaceId().equals(spaceId),
+            ErrorCode.NO_AUTH_ERROR, "无权删除此空间"
+        );
 
         Boolean res = spaceService.deleteById(spaceId,loginUser);
         return ResponseUtils.success(res);
@@ -104,12 +113,23 @@ public class SpaceController {
     @PutMapping("/updateById")
     public BaseResponse<Boolean> updateById(@RequestBody SpaceUpdateRequest spaceUpdateRequest, HttpServletRequest request){
 
-        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceUpdateRequest),ErrorCode.PARAMS_ERROR,"空间id为空");
+        // 参数校验
+        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceUpdateRequest),
+            ErrorCode.PARAMS_ERROR,"空间id为空"
+        );
         User loginUser = userService.getCurrentUser(request);
 
-        ThrowExceptionUtils.throwIF(!loginUser.getSpaceId().equals(spaceUpdateRequest.getSpaceId())
-        && loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE) == false
-        , ErrorCode.PARAMS_ERROR, "无权修改此空间");
+        // 先拦截未创建空间，且非管理员的用户
+        ThrowExceptionUtils.throwIF(!loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE) && 
+                                    ObjectUtil.isNull(loginUser.getSpaceId()),
+            ErrorCode.PARAMS_ERROR,"当前用户未创建空间"
+        );
+
+        // 再进行鉴权
+        ThrowExceptionUtils.throwIF(!loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE)&&
+            !loginUser.getSpaceId().equals(spaceUpdateRequest.getSpaceId()),
+            ErrorCode.NO_AUTH_ERROR, "无权删除此空间"
+        );
 
         Boolean res = spaceService.updateById(spaceUpdateRequest,loginUser);
 

@@ -46,42 +46,69 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
      */
     @Override
     public Boolean userRegister(RegisterRequest registerRequest) {
-        //2. 判断当前账号是否已经存在
-        QueryWrapper<User> queryWrapper = new QueryWrapper<User>()
-                .eq("userAccount", registerRequest.getUseraccount());
-        ThrowExceptionUtils.throwIF(
-                this.getOne(queryWrapper)!= null,
-                ErrorCode.PARAMS_ERROR,
-                "当前账号已存在!"
-        );
-        String Account= registerRequest.getUseraccount();
-        String Password = registerRequest.getUserpassword();
-        String RePassword = registerRequest.getReUserPassword();
-        String Username = registerRequest.getUsername();
-        //3. 判断合法性
-        ThrowExceptionUtils.throwIF(
-                Account.isBlank()||Password.isBlank()||RePassword.isBlank()||Username.isBlank(),
+        // 1. 请求体判空
+        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(registerRequest),
                 ErrorCode.PARAMS_ERROR
         );
+
+        // 2. 先读取字段，再统一校验必填项，避免缺字段时调用方法导致 NPE
+        String account = registerRequest.getUseraccount();
+        String password = registerRequest.getUserpassword();
+        String rePassword = registerRequest.getReUserPassword();
+        String username = registerRequest.getUsername();
+        String phone = registerRequest.getPhone();
+        Integer gender = registerRequest.getGender();
+
         ThrowExceptionUtils.throwIF(
-                Account.length()<6 || Account.length()>20||
-                        Password.length()<6 || Password.length()>20||
-                        RePassword.length()<6 || RePassword.length()>20||
-                        Username.length()>10 || registerRequest.getPhone().length()!=11,
+                StrUtil.isBlank(account)
+                        || StrUtil.isBlank(password)
+                        || StrUtil.isBlank(rePassword)
+                        || StrUtil.isBlank(username)
+                        || StrUtil.isBlank(phone)
+                        || ObjectUtil.isNull(gender),
                 ErrorCode.PARAMS_ERROR,
-                "用户名长度限制在在1-10位，账号密码限制在6-20位 手机号为11位"
+                "账号、用户名、密码、确认密码、手机号和性别不能为空"
         );
+
+        // 3. 校验字段长度和手机号格式
         ThrowExceptionUtils.throwIF(
-                registerRequest.getGender()<0|| registerRequest.getGender()>2,
+                account.length() < 6 || account.length() > 20
+                        || password.length() < 6 || password.length() > 20
+                        || rePassword.length() < 6 || rePassword.length() > 20
+                        || username.length() > 10
+                        || !phone.matches("^1[3-9]\\d{9}$"),
+                ErrorCode.PARAMS_ERROR,
+                "用户名长度限制在1-10位，账号密码限制在6-20位，手机号格式不正确"
+        );
+
+        // 4. 性别沿用当前接口约定：0、1、2 为合法值
+        ThrowExceptionUtils.throwIF(
+                gender < 0 || gender > 2,
                 ErrorCode.PARAMS_ERROR,
                 "性别超出限定范围"
         );
-        //4. 给密码加密
-        String encryptPassword = this.passwordEncrypt(Password);
+
+        // 5. 校验两次密码一致性
+        ThrowExceptionUtils.throwIF(!password.equals(rePassword),
+                ErrorCode.PARAMS_ERROR,"两次密码输入不一致"
+        );
+
+        // 6. 参数通过后，再查询账号是否已经存在
+        QueryWrapper<User> queryWrapper = new QueryWrapper<User>()
+                .eq("userAccount", account);
+        ThrowExceptionUtils.throwIF(
+                this.getOne(queryWrapper) != null,
+                ErrorCode.PARAMS_ERROR,
+                "当前账号已存在!"
+        );
+
+        // 7. 给密码加密
+        String encryptPassword = this.passwordEncrypt(password);
         registerRequest.setUserpassword(encryptPassword);
         User user = new User();
         BeanUtils.copyProperties(registerRequest,user);
-        // 注册用户统一从后端写入默认等级和正常状态，避免依赖不同数据库环境的默认值。
+
+        // 8. 注册用户统一从后端写入默认等级和正常状态，避免依赖不同数据库环境的默认值。
         user.setUserLevel(UserConstant.DEFAULT_ROLE);
         user.setUserStatus(UserStatus.NORMAL.getValue());
         return this.save(user);
@@ -144,14 +171,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
      */
     @Override
     public User getCurrentUser(HttpServletRequest request) {
+
         //1. 从Session中获取到当前用户信息
         UserVO currentUser = (UserVO)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
-        System.out.println("----------------------------currentUser = " + currentUser);
 
         ThrowExceptionUtils.throwIF(
-                currentUser == null,
+                currentUser == null || currentUser.getId() == null,
                 ErrorCode.NOT_LOGIN_ERROR
         );
+
         User latestUser = this.getById(currentUser.getId());
 
         ThrowExceptionUtils.throwIF(
