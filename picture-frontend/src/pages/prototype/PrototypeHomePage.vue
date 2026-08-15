@@ -1,240 +1,740 @@
 <template>
   <div class="prototype-home">
-    <section class="proto-hero">
-      <div class="proto-hero-copy">
-        <span class="proto-eyebrow">智能云图库 / 功能原型</span>
-        <h1 class="proto-title">让每一张图片，都有一条清晰的工作路径。</h1>
-        <p class="proto-copy">这一版不是重新发明业务，而是把现有图库项目已经具备的浏览、上传、审核、空间和用户管理能力，整理成一套可以继续接入真实接口的视觉工作台。</p>
-        <div class="proto-hero-actions">
-          <a-button class="proto-button acid-button" type="primary" @click="router.push('/prototype/gallery')">进入公共图库</a-button>
-          <a-button class="proto-button ghost-button" @click="router.push('/prototype/gallery/manage')">查看图片管理</a-button>
+    <section class="home-hero" aria-labelledby="home-title">
+      <div class="home-hero-copy">
+        <div class="home-brandline">
+          <span class="home-brand-mark">P</span>
+          <strong>PIXORA</strong>
+          <span class="home-brand-rule" aria-hidden="true"></span>
+          <span class="home-brand-context">{{ userContext }}</span>
+        </div>
+
+        <h1 id="home-title">图片，从这里开始。</h1>
+        <p class="home-hero-description">
+          浏览公共图库，上传新的图片，或继续整理已经属于你的内容。
+        </p>
+
+        <div class="home-hero-actions">
+          <a-button class="proto-button acid-button" type="primary" @click="router.push('/prototype/gallery')">
+            浏览公共图库
+          </a-button>
+          <a-button class="proto-button hero-secondary-button" @click="router.push('/prototype/gallery/upload')">
+            上传图片
+          </a-button>
+        </div>
+
+        <div class="home-hero-footer">
+          <span>公共图库</span>
+          <strong>{{ total }} 张已审核图片</strong>
+          <span class="home-hero-footer-arrow" aria-hidden="true">↗</span>
         </div>
       </div>
-      <div class="proto-hero-media">
-        <div class="hero-note hero-note-top">pictureCheck / 0 → 1</div>
-        <div class="hero-note hero-note-bottom">spaceId / 27</div>
-        <img data-hero-image src="https://picsum.photos/seed/editorial-archive/1200/900" alt="图库原型视觉封面" />
-        <div class="hero-media-overlay"></div>
-      </div>
-    </section>
 
-    <section class="proto-section">
-      <div class="proto-section-heading">
-        <div>
-          <span class="proto-eyebrow">当前业务地图</span>
-          <h2 class="proto-subtitle">从发现，到收纳，再到审核。</h2>
-        </div>
-        <p class="proto-copy">每个入口都对应现有接口，页面先用静态数据演示状态，最终接入时不改变业务边界。</p>
-      </div>
+      <div class="home-hero-gallery" aria-label="公共图库最近上传">
+        <template v-if="pictureList.length">
+          <button
+            class="home-feature home-feature-large"
+            type="button"
+            @click="openDetail(pictureList[0]?.id)"
+          >
+            <a-image
+              :src="pictureImage(pictureList[0])"
+              :preview="false"
+              :alt="pictureList[0]?.name || '公共图库图片'"
+            />
+            <span class="home-feature-overlay">
+              <strong>{{ pictureList[0]?.name || '未命名图片' }}</strong>
+              <span>查看图片详情 ↗</span>
+            </span>
+          </button>
 
-      <div class="proto-bento home-bento">
-        <RouterLink to="/prototype/gallery" class="proto-bento-card dark span-2 bento-link">
-          <h3>公共图库</h3>
-          <p>按 searchText、category、tags 查询审核通过的图片，浏览缩略图并进入详情。</p>
-          <span class="bento-corner">queryPicturePageCache</span>
-        </RouterLink>
-        <RouterLink to="/prototype/gallery/upload" class="proto-bento-card acid bento-link">
-          <h3>上传图片</h3>
-          <p>文件或 URL，补充名称、分类、标签、简介和空间。</p>
-          <span class="bento-corner">uploadPic</span>
-        </RouterLink>
-        <RouterLink to="/prototype/space" class="proto-bento-card orange bento-link">
-          <h3>个人空间</h3>
-          <p>实时呈现 usedSize / maxSize 与 usedCount / maxCount。</p>
-          <span class="bento-corner">querySpaceById</span>
-        </RouterLink>
-        <RouterLink to="/prototype/admin/pictures/review" class="proto-bento-card blue span-2 bento-link">
-          <h3>图片审核工作台</h3>
-          <p>按 pictureCheck 筛选，支持单张和批量通过、拒绝以及审核原因记录。</p>
-          <span class="bento-corner">adminCheckPictureBatch</span>
-        </RouterLink>
-      </div>
-    </section>
-
-    <section class="proto-section proto-marquee-section">
-      <div class="proto-marquee" aria-label="当前原型覆盖模块">
-        <span>PUBLIC GALLERY</span><b>×</b><span>UPLOAD</span><b>×</b><span>PERSONAL SPACE</span><b>×</b><span>REVIEW QUEUE</span><b>×</b><span>USER CENTER</span><b>×</b>
-        <span>PUBLIC GALLERY</span><b>×</b><span>UPLOAD</span><b>×</b><span>PERSONAL SPACE</span><b>×</b><span>REVIEW QUEUE</span><b>×</b>
-      </div>
-    </section>
-
-    <section class="proto-section home-experience">
-      <div class="home-experience-copy">
-        <span class="proto-eyebrow">工作流预览</span>
-        <h2 class="proto-subtitle">同一张图片，在不同角色眼里有不同状态。</h2>
-        <p class="proto-copy">普通用户看到自己的上传记录与审核结果，管理员看到待审核队列、审核人和拒绝原因。下面的卡片是原型中真实会反复出现的状态结构。</p>
-        <a-button class="proto-button proto-button-primary" type="primary" @click="router.push('/prototype/admin/pictures/review')">打开审核队列</a-button>
-      </div>
-      <div class="stack-stage" ref="stackStage">
-        <article v-for="(card, index) in stackCards" :key="card.title" class="stack-card" :style="{ zIndex: stackCards.length - index }">
-          <div class="stack-card-index">0{{ index + 1 }}</div>
-          <div class="stack-card-image proto-image-wrap"><img :src="card.image" :alt="card.title" /></div>
-          <div class="stack-card-copy">
-            <div>
-              <strong>{{ card.title }}</strong>
-              <p>{{ card.description }}</p>
-            </div>
-            <a-tag class="proto-status" :class="card.statusClass">{{ card.status }}</a-tag>
+          <div class="home-feature-stack">
+            <button
+              v-for="picture in pictureList.slice(1, 3)"
+              :key="picture.id"
+              class="home-feature home-feature-small"
+              type="button"
+              @click="openDetail(picture.id)"
+            >
+              <a-image
+                :src="pictureImage(picture)"
+                :preview="false"
+                :alt="picture.name || '公共图库图片'"
+              />
+              <span class="home-feature-overlay">
+                <strong>{{ picture.name || '未命名图片' }}</strong>
+                <span>打开 ↗</span>
+              </span>
+            </button>
           </div>
-        </article>
+        </template>
+
+        <a-skeleton v-else-if="loading" class="home-gallery-skeleton" active :paragraph="false" />
+        <a-empty v-else class="home-gallery-empty" description="暂时没有可展示的图片" />
       </div>
     </section>
 
-    <section class="proto-section home-accordion-section">
-      <div class="proto-section-heading">
+    <section class="home-library" aria-labelledby="home-library-title">
+      <div class="home-section-heading">
         <div>
-          <span class="proto-eyebrow">接口边界</span>
-          <h2 class="proto-subtitle">原型不替后端发明新事实。</h2>
+          <span class="home-section-kicker">最近上传</span>
+          <h2 id="home-library-title">公共图库</h2>
+        </div>
+        <RouterLink to="/prototype/gallery" class="home-section-link">查看全部 <span aria-hidden="true">↗</span></RouterLink>
+      </div>
+
+      <a-alert v-if="loadError" class="home-alert" type="error" show-icon :message="loadError" />
+
+      <div v-if="pictureList.length" class="home-library-grid">
+        <button
+          v-for="picture in pictureList.slice(0, 5)"
+          :key="picture.id"
+          class="home-library-item"
+          type="button"
+          @click="openDetail(picture.id)"
+        >
+          <a-image
+            :src="pictureImage(picture)"
+            :preview="false"
+            :alt="picture.name || '公共图库图片'"
+          />
+          <span class="home-library-overlay">
+            <strong>{{ picture.name || '未命名图片' }}</strong>
+            <span>{{ picture.category || '未分类' }} · {{ picture.createdUser?.username || '未知用户' }}</span>
+          </span>
+        </button>
+      </div>
+
+      <a-empty v-else-if="!loading && !loadError" description="公共图库暂时没有图片" />
+    </section>
+
+    <section class="home-continue" aria-labelledby="home-continue-title">
+      <div class="home-section-heading home-continue-heading">
+        <div>
+          <span class="home-section-kicker">继续使用</span>
+          <h2 id="home-continue-title">进入你的工作区</h2>
         </div>
       </div>
-      <div class="horizontal-accordion">
-        <article v-for="item in accordionItems" :key="item.title" class="accordion-item">
-          <span class="accordion-number">{{ item.number }}</span>
-          <div class="accordion-content"><strong>{{ item.title }}</strong><p>{{ item.description }}</p></div>
-          <span class="accordion-arrow">↗</span>
-        </article>
+
+      <div class="home-continue-grid">
+        <RouterLink to="/prototype/gallery/manage" class="home-continue-item home-continue-dark">
+          <span class="home-continue-label">整理</span>
+          <strong>管理我的图片</strong>
+          <span class="home-continue-arrow" aria-hidden="true">↗</span>
+        </RouterLink>
+        <RouterLink to="/prototype/user/center" class="home-continue-item home-continue-acid">
+          <span class="home-continue-label">账户</span>
+          <strong>打开用户中心</strong>
+          <span class="home-continue-arrow" aria-hidden="true">↗</span>
+        </RouterLink>
+        <RouterLink to="/prototype/space" class="home-continue-item home-continue-paper">
+          <span class="home-continue-label">收纳</span>
+          <strong>进入个人空间</strong>
+          <span class="home-continue-arrow" aria-hidden="true">↗</span>
+        </RouterLink>
       </div>
     </section>
 
-    <section class="proto-section home-quote-section">
-      <a-carousel autoplay arrows class="quote-carousel">
-        <div v-for="quote in quotes" :key="quote.name" class="quote-slide">
-          <span class="quote-mark">“</span>
-          <p>{{ quote.text }}</p>
-          <div class="quote-author"><img :src="quote.avatar" :alt="quote.name" /><span><strong>{{ quote.name }}</strong><small>{{ quote.role }}</small></span></div>
+    <section v-if="isAdmin" class="home-admin" aria-labelledby="home-admin-title">
+      <div class="home-section-heading home-continue-heading">
+        <div>
+          <span class="home-section-kicker">管理员</span>
+          <h2 id="home-admin-title">平台管理</h2>
         </div>
-      </a-carousel>
-    </section>
-
-    <section class="proto-section home-action">
-      <div>
-        <span class="proto-eyebrow">准备开始</span>
-        <h2>从一个真实的接口，长出一整个清晰的页面。</h2>
       </div>
-      <a-button class="proto-button acid-button" type="primary" @click="router.push('/prototype/user/login')">从登录开始浏览</a-button>
+
+      <div class="home-admin-list">
+        <RouterLink to="/prototype/admin/pictures/review" class="home-admin-link">
+          <span>图片审核</span>
+          <small>处理待审核图片</small>
+          <strong aria-hidden="true">↗</strong>
+        </RouterLink>
+        <RouterLink to="/prototype/admin/pictures/import" class="home-admin-link">
+          <span>批量抓图</span>
+          <small>批量拉取并上传图片</small>
+          <strong aria-hidden="true">↗</strong>
+        </RouterLink>
+        <RouterLink to="/prototype/admin/users" class="home-admin-link">
+          <span>用户管理</span>
+          <small>查看平台用户</small>
+          <strong aria-hidden="true">↗</strong>
+        </RouterLink>
+        <RouterLink to="/prototype/admin/spaces" class="home-admin-link">
+          <span>空间运营</span>
+          <small>查看空间使用情况</small>
+          <strong aria-hidden="true">↗</strong>
+        </RouterLink>
+      </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { queryPicturePageCache } from '../../api/pictureController'
+import { useLoginUserStore } from '../../stores/useLoginUserStore'
 
 const router = useRouter()
-const stackStage = ref<HTMLElement | null>(null)
+const loginUserStore = useLoginUserStore()
+const loading = ref(false)
+const loadError = ref('')
+const pictureList = ref<API.PictureVO[]>([])
+const total = ref(0)
 
-const stackCards = [
-  { title: 'Blue architecture', description: '新上传图片进入审核队列，普通用户默认是待审核。', status: '待审核', statusClass: 'wait', image: 'https://picsum.photos/seed/blue-architecture/720/480' },
-  { title: 'Quiet forest', description: '审核通过后进入公共图库，可被搜索、分类和标签筛选。', status: '审核通过', statusClass: 'pass', image: 'https://picsum.photos/seed/quiet-forest/720/480' },
-  { title: 'Red object', description: '审核拒绝会留下 checkMessage，用户可在图片管理中查看。', status: '审核拒绝', statusClass: 'refuse', image: 'https://picsum.photos/seed/red-object/720/480' },
-]
-
-const accordionItems = [
-  { number: 'A', title: '字段先行', description: '页面状态沿用 PictureVO、User、SpaceVO 的真实字段。' },
-  { number: 'B', title: '权限清楚', description: '管理员操作与普通用户操作在导航和按钮层面分开。' },
-  { number: 'C', title: '接口可替换', description: '静态数据结构与生成 API 返回结构保持一致。' },
-]
-
-const quotes = [
-  { name: '林默', role: '普通用户 / 图片上传者', text: '我不需要猜图片现在在哪里，上传、审核、拒绝原因都应该在同一个工作流里被看见。', avatar: 'https://i.pravatar.cc/100?img=12' },
-  { name: '管理员', role: '平台运营', text: '审核页不是另一个图库，它应该优先展示状态、原因和批量决策。', avatar: 'https://i.pravatar.cc/100?img=68' },
-]
-
-let gsapContext: any
-
-onMounted(() => {
-  const gsapApi = (window as any).gsap
-  const scrollTrigger = (window as any).ScrollTrigger
-  if (!gsapApi) return
-  if (scrollTrigger) gsapApi.registerPlugin(scrollTrigger)
-  gsapContext = gsapApi.context(() => {
-    gsapApi.fromTo('[data-hero-image]', { scale: .86, opacity: .25 }, { scale: 1, opacity: 1, duration: 1.4, ease: 'power3.out' })
-    if (stackStage.value && scrollTrigger) {
-      gsapApi.to('.stack-card', {
-        y: (index: number) => index * -54,
-        rotate: (index: number) => index === 1 ? -4 : index === 2 ? 4 : 0,
-        scale: (index: number) => 1 - index * .035,
-        scrollTrigger: { trigger: stackStage.value, start: 'top 75%', end: 'bottom 30%', scrub: true },
-      })
-    }
-  })
+// 管理入口只对当前登录的管理员展示，普通用户和匿名访客不会看到后台功能。
+const isAdmin = computed(() => loginUserStore.loginUser?.userLevel === 'admin')
+const userContext = computed(() => {
+  const username = loginUserStore.loginUser?.username
+  return username ? `你好，${username}` : '开放浏览'
 })
 
-onBeforeUnmount(() => gsapContext?.revert?.())
+async function loadPublicPictures() {
+  loading.value = true
+  loadError.value = ''
+  try {
+    // 首页只读取公共图库，并显式传 0，避免把 null 传给后端权限分支。
+    const res = await queryPicturePageCache({
+      current: 1,
+      pageSize: 5,
+      pictureCheck: 1,
+      spaceId: 0,
+      sortFiled: 'createtime',
+      sortOrder: 'descend',
+    })
+    if (res.data?.code !== 200) {
+      throw new Error(res.data?.message || '公共图库加载失败')
+    }
+    pictureList.value = res.data.data?.pictureList || []
+    total.value = Number(res.data.data?.total || 0)
+  } catch (error: any) {
+    pictureList.value = []
+    total.value = 0
+    loadError.value = error?.response?.data?.message || error?.message || '公共图库暂时无法加载'
+  } finally {
+    loading.value = false
+  }
+}
+
+function pictureImage(picture?: API.PictureVO) {
+  return picture?.thumbnailUrl || picture?.url || ''
+}
+
+function openDetail(id?: number | string) {
+  const normalizedId = String(id || '').trim()
+  if (normalizedId) {
+    router.push(`/prototype/gallery/detail/${encodeURIComponent(normalizedId)}`)
+  }
+}
+
+onMounted(() => {
+  void loadPublicPictures()
+  if (!loginUserStore.loginUser) {
+    void loginUserStore.fetchLoginUser()
+  }
+})
 </script>
 
 <style scoped>
-.proto-hero { min-height: 500px; padding-top: clamp(36px, 6vw, 78px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .8fr); gap: clamp(28px, 5vw, 86px); align-items: center; }
-.proto-hero-copy { position: relative; z-index: 2; }
-.proto-hero .proto-title { font-size: clamp(48px, 6.9vw, 104px); max-width: 770px; }
-.proto-hero-actions { display: flex; gap: 10px; margin-top: 29px; flex-wrap: wrap; }
-.proto-hero-media { min-height: 410px; position: relative; transform: rotate(3deg); }
-.proto-hero-media img { width: 100%; height: 100%; min-height: 410px; object-fit: cover; filter: grayscale(.35) contrast(1.1); }
-.hero-media-overlay { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(17,20,22,.1), rgba(17,20,22,.5)); pointer-events: none; }
-.hero-note { position: absolute; z-index: 2; padding: 9px 12px; background: var(--proto-acid); color: var(--proto-ink); font-family: 'DM Mono', monospace; font-size: 10px; box-shadow: 8px 8px 0 rgba(17,20,22,.7); }
-.hero-note-top { top: 32px; left: -32px; transform: rotate(-8deg); }
-.hero-note-bottom { right: -25px; bottom: 36px; transform: rotate(7deg); background: var(--proto-orange); }
-.proto-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
-.proto-section-heading .proto-copy { margin: 0 0 3px; }
-.bento-link { display: block; color: inherit; text-decoration: none; }
-.bento-link:hover { color: inherit; }
-.proto-marquee-section { padding-top: 38px; overflow: hidden; }
-.proto-marquee { display: flex; align-items: center; gap: 18px; min-width: max-content; animation: proto-marquee 28s linear infinite; color: var(--proto-muted); font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .06em; }
-.proto-marquee b { color: var(--proto-orange); font-size: 18px; font-weight: 400; }
-@keyframes proto-marquee { to { transform: translateX(-45%); } }
-.home-experience { display: grid; grid-template-columns: minmax(230px, .7fr) minmax(380px, 1fr); gap: clamp(24px, 6vw, 90px); align-items: start; }
-.home-experience-copy { position: sticky; top: 110px; }
-.home-experience-copy .proto-subtitle { margin: 13px 0 17px; }
-.home-experience-copy .proto-button { margin-top: 25px; }
-.stack-stage { min-height: 470px; position: relative; }
-.stack-card { width: min(100%, 470px); padding: 11px; position: absolute; inset: 0 auto auto 50%; transform: translateX(-50%); background: #fff; border: 1px solid var(--proto-line); box-shadow: var(--proto-shadow); }
-.stack-card:nth-child(1) { top: 0; }
-.stack-card:nth-child(2) { top: 33px; }
-.stack-card:nth-child(3) { top: 66px; }
-.stack-card-index { position: absolute; top: 22px; left: 23px; z-index: 2; color: white; font-family: 'DM Mono', monospace; font-size: 10px; }
-.stack-card-image { height: 330px; }
-.stack-card-copy { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding: 16px 6px 5px; }
-.stack-card-copy strong { font-size: 18px; letter-spacing: -.04em; }
-.stack-card-copy p { max-width: 290px; margin: 7px 0 0; color: var(--proto-muted); font-size: 11px; line-height: 1.6; }
-.home-accordion-section { padding-bottom: 42px; }
-.horizontal-accordion { display: flex; gap: 7px; min-height: 205px; }
-.accordion-item { flex: 1; min-width: 0; padding: 24px 19px; display: flex; flex-direction: column; justify-content: space-between; background: var(--proto-ink); color: var(--proto-paper); overflow: hidden; transition: flex .45s cubic-bezier(.2,.7,.2,1), background .45s ease; }
-.accordion-item:hover { flex: 2.15; background: var(--proto-orange); color: var(--proto-ink); }
-.accordion-number { font-family: 'DM Mono', monospace; font-size: 11px; opacity: .5; }
-.accordion-content strong { display: block; font-size: 21px; letter-spacing: -.05em; white-space: nowrap; }
-.accordion-content p { max-width: 265px; margin: 11px 0 0; font-size: 12px; line-height: 1.7; opacity: .68; }
-.accordion-arrow { align-self: flex-end; font-size: 24px; }
-.home-quote-section { padding-bottom: 42px; }
-.quote-carousel { max-width: 760px; min-height: 240px; margin: 0 auto; background: var(--proto-acid); }
-.quote-carousel :deep(.slick-slide) { min-height: 240px; }
-.quote-slide { min-height: 240px; padding: 32px 42px 28px; }
-.quote-mark { display: block; font-size: 60px; line-height: .6; }
-.quote-slide p { max-width: 610px; margin: 16px 0 20px; font-size: clamp(20px, 3vw, 32px); line-height: 1.18; letter-spacing: -.05em; }
-.quote-author { display: flex; align-items: center; gap: 10px; }
-.quote-author img { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; }
-.quote-author strong, .quote-author small { display: block; }
-.quote-author strong { font-size: 12px; }
-.quote-author small { margin-top: 2px; font-size: 10px; opacity: .62; }
-.home-action { min-height: 190px; padding: 30px; display: flex; align-items: flex-end; justify-content: space-between; gap: 25px; background: var(--proto-ink); color: var(--proto-paper); }
-.home-action h2 { max-width: 680px; margin: 15px 0 0; font-size: clamp(27px, 4vw, 53px); line-height: .98; letter-spacing: -.07em; }
-.home-action .proto-button { flex: 0 0 auto; }
+.prototype-home {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 22px 0 42px;
+}
 
-@media (max-width: 800px) {
-  .proto-hero { grid-template-columns: 1fr; padding-top: 42px; }
-  .proto-hero-media { min-height: 380px; margin: 15px 16px 0 0; }
-  .proto-hero-media img { min-height: 380px; }
-  .home-experience { grid-template-columns: 1fr; }
-  .home-experience-copy { position: static; }
-  .stack-stage { min-height: 470px; }
-  .stack-card-image { height: 290px; }
-  .home-action { align-items: flex-start; flex-direction: column; padding: 29px; }
+.home-hero {
+  min-height: 420px;
+  display: grid;
+  grid-template-columns: minmax(340px, .86fr) minmax(0, 1.14fr);
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--proto-ink);
+  color: var(--proto-paper);
+  box-shadow: var(--proto-shadow);
+}
+
+.home-hero-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 34px 38px 26px;
+}
+
+.home-brandline {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--proto-paper);
+  font-size: 13px;
+  letter-spacing: .08em;
+}
+
+.home-brand-mark {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--proto-acid);
+  color: var(--proto-ink);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.home-brand-rule {
+  width: 30px;
+  height: 1px;
+  margin-inline: 4px;
+  background: rgba(241, 242, 237, .34);
+}
+
+.home-brand-context {
+  color: rgba(241, 242, 237, .62);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.home-hero h1 {
+  max-width: 440px;
+  margin: auto 0 13px;
+  color: var(--proto-paper);
+  font-size: clamp(38px, 4vw, 58px);
+  line-height: .98;
+  letter-spacing: -.07em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.home-hero-description {
+  max-width: 31ch;
+  margin: 0;
+  color: rgba(241, 242, 237, .72);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.home-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 25px;
+}
+
+.home-hero-actions .ant-btn {
+  min-width: 122px;
+  height: 42px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.home-hero-actions .hero-secondary-button {
+  border-color: rgba(241, 242, 237, .66);
+  background: transparent;
+  color: var(--proto-paper);
+}
+
+.home-hero-actions .hero-secondary-button:hover {
+  border-color: var(--proto-acid) !important;
+  color: var(--proto-acid) !important;
+}
+
+.home-hero-footer {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: auto;
+  padding-top: 25px;
+  color: rgba(241, 242, 237, .54);
+  font-size: 11px;
+}
+
+.home-hero-footer strong {
+  color: var(--proto-paper);
+  font-weight: 600;
+}
+
+.home-hero-footer-arrow {
+  margin-left: auto;
+  color: var(--proto-acid);
+  font-size: 17px;
+}
+
+.home-hero-gallery {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.46fr) minmax(150px, .7fr);
+  gap: 9px;
+  padding: 9px;
+  background: var(--proto-paper-deep);
+}
+
+.home-feature,
+.home-library-item {
+  position: relative;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.home-feature {
+  background: var(--proto-paper);
+}
+
+.home-feature :deep(.ant-image),
+.home-feature :deep(.ant-image-img),
+.home-library-item :deep(.ant-image),
+.home-library-item :deep(.ant-image-img) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.home-feature :deep(.ant-image-img),
+.home-library-item :deep(.ant-image-img) {
+  object-fit: cover;
+}
+
+.home-feature-large {
+  min-height: 402px;
+  border-radius: 8px;
+}
+
+.home-feature-stack {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.home-feature-small {
+  min-height: 0;
+  border-radius: 8px;
+}
+
+.home-feature-overlay,
+.home-library-overlay {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 34px 14px 13px;
+  background: linear-gradient(180deg, transparent, rgba(17, 20, 22, .84));
+  color: var(--proto-paper);
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+
+.home-feature:hover .home-feature-overlay,
+.home-feature:focus-visible .home-feature-overlay,
+.home-library-item:hover .home-library-overlay,
+.home-library-item:focus-visible .home-library-overlay {
+  opacity: 1;
+}
+
+.home-feature-overlay strong,
+.home-library-overlay strong {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-feature-overlay span,
+.home-library-overlay span {
+  color: rgba(241, 242, 237, .76);
+  font-size: 11px;
+}
+
+.home-gallery-skeleton {
+  grid-column: 1 / -1;
+  min-height: 402px;
+  padding: 40px;
+  background: rgba(255, 255, 255, .5);
+}
+
+.home-gallery-empty {
+  grid-column: 1 / -1;
+  align-self: center;
+  min-height: 300px;
+  padding-top: 100px;
+  background: rgba(255, 255, 255, .5);
+}
+
+.home-library,
+.home-continue,
+.home-admin {
+  margin-top: 34px;
+}
+
+.home-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 13px;
+}
+
+.home-section-kicker {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--proto-orange);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.home-section-heading h2 {
+  margin: 0;
+  color: var(--proto-ink);
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: -.055em;
+}
+
+.home-section-link {
+  padding-bottom: 3px;
+  color: var(--proto-ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.home-section-link:hover {
+  color: var(--proto-orange);
+}
+
+.home-alert {
+  margin-bottom: 13px;
+}
+
+.home-library-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.home-library-item {
+  aspect-ratio: 1 / 1.16;
+  border-radius: 8px;
+  background: var(--proto-paper-deep);
+}
+
+.home-library-overlay {
+  padding: 30px 11px 11px;
+}
+
+.home-library-overlay strong {
+  font-size: 12px;
+}
+
+.home-library-overlay span {
+  font-size: 10px;
+}
+
+.home-continue-heading {
+  margin-bottom: 12px;
+}
+
+.home-continue-grid {
+  display: grid;
+  grid-template-columns: 1.16fr 1fr 1fr;
+  gap: 9px;
+}
+
+.home-continue-item {
+  position: relative;
+  min-height: 118px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 17px 18px;
+  color: var(--proto-ink);
+  text-decoration: none;
+  transition: box-shadow .18s ease, transform .18s ease;
+}
+
+.home-continue-item:hover {
+  color: var(--proto-ink);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 25px rgba(18, 23, 23, .12);
+}
+
+.home-continue-dark {
+  background: var(--proto-ink);
+  color: var(--proto-paper);
+}
+
+.home-continue-dark:hover {
+  color: var(--proto-paper);
+}
+
+.home-continue-acid {
+  background: var(--proto-acid);
+}
+
+.home-continue-paper {
+  border: 1px solid var(--proto-line);
+  background: rgba(255, 255, 255, .56);
+}
+
+.home-continue-label {
+  font-size: 11px;
+  opacity: .66;
+}
+
+.home-continue-item strong {
+  margin-top: auto;
+  font-size: 20px;
+  letter-spacing: -.045em;
+}
+
+.home-continue-arrow {
+  position: absolute;
+  top: 15px;
+  right: 17px;
+  font-size: 19px;
+}
+
+.home-admin {
+  padding-top: 26px;
+  border-top: 1px solid var(--proto-line);
+}
+
+.home-admin-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--proto-line);
+  border-bottom: 1px solid var(--proto-line);
+}
+
+.home-admin-link {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 17px;
+  color: var(--proto-ink);
+  text-decoration: none;
+}
+
+.home-admin-link + .home-admin-link {
+  border-left: 1px solid var(--proto-line);
+}
+
+.home-admin-link:hover {
+  background: rgba(186, 255, 61, .22);
+}
+
+.home-admin-link span {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.home-admin-link small {
+  color: var(--proto-muted);
+  font-size: 11px;
+}
+
+.home-admin-link strong {
+  position: absolute;
+  top: 14px;
+  right: 15px;
+  color: var(--proto-orange);
+  font-size: 16px;
+}
+
+@media (max-width: 980px) {
+  .prototype-home {
+    padding-top: 18px;
+  }
+
+  .home-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .home-hero-copy {
+    min-height: 330px;
+  }
+
+  .home-hero-gallery {
+    min-height: 360px;
+  }
+}
+
+@media (max-width: 720px) {
+  .home-library-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .home-continue-grid,
+  .home-admin-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-admin-link:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid var(--proto-line);
+  }
+
+  .home-admin-link:nth-child(4) {
+    border-top: 1px solid var(--proto-line);
+  }
 }
 
 @media (max-width: 520px) {
-  .proto-section-heading { align-items: flex-start; flex-direction: column; }
-  .horizontal-accordion { min-height: 0; flex-direction: column; }
-  .accordion-item { min-height: 120px; }
-  .accordion-item:hover { flex: 1; }
-  .quote-slide { padding: 32px 25px; }
+  .prototype-home {
+    padding-top: 12px;
+  }
+
+  .home-hero-copy {
+    min-height: 330px;
+    padding: 25px 22px 20px;
+  }
+
+  .home-hero-gallery {
+    grid-template-columns: 1fr;
+    min-height: 500px;
+  }
+
+  .home-feature-large {
+    min-height: 300px;
+  }
+
+  .home-feature-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: 150px;
+  }
+
+  .home-library-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-continue-grid,
+  .home-admin-list {
+    grid-template-columns: 1fr;
+  }
+
+  .home-admin-link + .home-admin-link,
+  .home-admin-link:nth-child(3),
+  .home-admin-link:nth-child(4) {
+    border-top: 1px solid var(--proto-line);
+    border-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-continue-item,
+  .home-feature-overlay,
+  .home-library-overlay {
+    transition: none;
+  }
 }
 </style>

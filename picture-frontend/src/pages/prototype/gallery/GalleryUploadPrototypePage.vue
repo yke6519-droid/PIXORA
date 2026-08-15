@@ -182,6 +182,83 @@
         </a-form>
       </div>
     </section>
+
+    <!-- 后端返回批量结果后留在当前页，便于用户核对成功与失败项。 -->
+    <section v-if="hasUploadResult" class="upload-result-section proto-section">
+      <div class="upload-result-panel proto-surface proto-rounded">
+        <div class="upload-result-heading">
+          <div>
+            <span class="proto-eyebrow">upload result</span>
+            <h2>本次上传结果</h2>
+          </div>
+          <a-button class="proto-button ghost-button" @click="openPictureManage">
+            查看图片管理
+          </a-button>
+        </div>
+
+        <div class="upload-result-stats" aria-label="图片上传结果统计">
+          <div class="upload-result-stat">
+            <span>总数</span>
+            <strong>{{ uploadTotalCount }}</strong>
+          </div>
+          <div class="upload-result-stat is-success">
+            <span>上传成功</span>
+            <strong>{{ uploadSuccessCount }}</strong>
+          </div>
+          <div class="upload-result-stat is-failed">
+            <span>上传失败</span>
+            <strong>{{ uploadFailCount }}</strong>
+          </div>
+        </div>
+
+        <a-alert
+          v-if="uploadFailCount"
+          class="upload-result-alert"
+          type="warning"
+          show-icon
+          :message="`有 ${uploadFailCount} 张图片未上传成功，请查看失败原因`"
+        />
+
+        <section v-if="uploadedPictures.length" class="upload-success-list">
+          <div class="upload-result-subheading">
+            <h3>上传成功的图片</h3>
+            <span>{{ uploadSuccessCount }} 张</span>
+          </div>
+          <div class="upload-success-grid">
+            <article v-for="picture in uploadedPictures" :key="String(picture.id)" class="upload-success-item">
+              <div class="upload-success-media">
+                <img
+                  v-if="picture.url"
+                  :src="picture.url"
+                  :alt="picture.name || '上传成功的图片'"
+                />
+                <span v-else>暂无预览</span>
+              </div>
+              <div class="upload-success-meta">
+                <strong>{{ picture.name || '未命名图片' }}</strong>
+                <small>{{ formatFileSize(Number(picture.picsize || 0)) }}</small>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section v-if="failedUploads.length" class="upload-failed-list">
+          <div class="upload-result-subheading">
+            <h3>未上传成功的图片</h3>
+            <span>{{ uploadFailCount }} 张</span>
+          </div>
+          <ul>
+            <li v-for="(failed, index) in failedUploads" :key="`${failed.fileName || 'file'}-${index}`">
+              <div>
+                <strong>{{ failed.fileName || '未命名文件' }}</strong>
+                <small>{{ formatFileSize(Number(failed.size || 0)) }}</small>
+              </div>
+              <span>{{ failed.message || '上传失败，请稍后重试' }}</span>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -197,8 +274,8 @@ import {
 } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  listPictureCategoryUsingGet,
-  uploadPicUsingPost,
+  listPictureCategory,
+  uploadPic,
 } from '../../../api/pictureController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 
@@ -224,6 +301,7 @@ const authChecking = ref(true)
 const submitting = ref(false)
 const submitError = ref('')
 const pageNotice = ref('')
+const uploadResult = ref<API.PictureUploadVO | null>(null)
 const categories = ref<string[]>([])
 const tags = ref<string[]>([])
 
@@ -242,6 +320,13 @@ const categoryOptions = computed(() =>
 const tagOptions = computed(() =>
   tags.value.map((item) => ({ label: item, value: item })),
 )
+
+const hasUploadResult = computed(() => uploadResult.value !== null)
+const uploadedPictures = computed(() => uploadResult.value?.successPictureList || [])
+const failedUploads = computed(() => uploadResult.value?.failPictureList || [])
+const uploadTotalCount = computed(() => Number(uploadResult.value?.totalCount || 0))
+const uploadSuccessCount = computed(() => Number(uploadResult.value?.successCount || uploadedPictures.value.length))
+const uploadFailCount = computed(() => Number(uploadResult.value?.failCount || failedUploads.value.length))
 
 const hasPrivateSpace = computed(() => {
   const spaceId = loginUserStore.loginUser?.spaceId
@@ -331,7 +416,7 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
 async function loadCategoryOptions() {
   categoryLoading.value = true
   try {
-    const res = await listPictureCategoryUsingGet()
+    const res = await listPictureCategory()
     if (res.data?.code !== 200) {
       throw new Error(res.data?.message || '分类与标签加载失败')
     }
@@ -358,7 +443,7 @@ async function ensureCurrentUser() {
     }
     if (!loginUserStore.loginUser) {
       await router.replace({
-        path: '/prototype/user/login',
+        path: '/user/login',
         query: { redirect: route.fullPath },
       })
       return
@@ -383,6 +468,7 @@ async function ensureCurrentUser() {
  */
 async function submitUpload() {
   submitError.value = ''
+  uploadResult.value = null
 
   if (!loginUserStore.loginUser) {
     await ensureCurrentUser()
@@ -417,26 +503,30 @@ async function submitUpload() {
     }
 
     const files = sourceMode.value === 'file' ? selectedFiles.value : undefined
-    const res: any = await uploadPicUsingPost({}, metadata, files)
-    const pictures = Array.isArray(res.data?.data) ? res.data.data : []
-
-    if (res.data?.code !== 200 || !pictures.length) {
+    const res = await uploadPic({}, metadata, files)
+    if (res.data?.code !== 200) {
       throw new Error(res.data?.message || '图片上传失败')
     }
 
-    message.success(
-      isAdmin.value
-        ? `成功上传 ${pictures.length} 张，图片已自动通过审核`
-        : `成功上传 ${pictures.length} 张，图片已进入审核队列`,
-    )
+    const result = res.data?.data
+    if (!result) throw new Error(res.data?.message || '上传结果不完整')
 
-    const firstPicture = pictures[0]
-    if (pictures.length === 1 && firstPicture?.id) {
-      await router.push(
-        `/prototype/gallery/detail/${encodeURIComponent(String(firstPicture.id))}`,
+    uploadResult.value = result
+    const pictures = result.successPictureList || []
+    const successCount = Number(result.successCount || pictures.length)
+    const failCount = Number(result.failCount || result.failPictureList?.length || 0)
+    const totalCount = Number(result.totalCount || successCount + failCount)
+
+    if (successCount > 0 && failCount > 0) {
+      message.warning(`上传完成：成功 ${successCount} 张，失败 ${failCount} 张，共处理 ${totalCount} 张`)
+    } else if (successCount > 0) {
+      message.success(
+        isAdmin.value
+          ? `成功上传 ${successCount} 张，图片已自动通过审核`
+          : `成功上传 ${successCount} 张，图片已进入审核队列`,
       )
     } else {
-      await router.push('/prototype/gallery/manage')
+      message.warning(`本次共处理 ${totalCount} 张，但没有图片上传成功`)
     }
   } catch (error: any) {
     submitError.value =
@@ -446,6 +536,10 @@ async function submitUpload() {
   } finally {
     submitting.value = false
   }
+}
+
+function openPictureManage() {
+  void router.push('/gallery/manage')
 }
 
 function createLocalPreview(file: File) {
@@ -545,7 +639,8 @@ onBeforeUnmount(() => {
 
 .upload-layout {
   /* 左侧图片区占主视觉，右侧元信息保留足够宽度并与左侧等高。 */
-  --upload-preview-height: clamp(460px, 58vh, 640px);
+  /* 原型入口保留固定基准；正式前端会由统一画布接管剩余高度。 */
+  --upload-preview-height: 560px;
   display: grid;
   grid-template-columns: minmax(0, 7fr) minmax(320px, 3fr);
   grid-template-rows: auto;
@@ -646,13 +741,25 @@ onBeforeUnmount(() => {
   background: rgba(241, 242, 237, 0.05);
 }
 
+/* 让图标、主提示和容量说明作为一个整体垂直居中，避免说明文字溢出虚线框。 */
+.upload-source-panel :deep(.ant-upload.ant-upload-drag .ant-upload-btn) {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0 !important;
+}
+
 .upload-source-panel :deep(.ant-upload.ant-upload-drag:hover),
 .upload-source-panel :deep(.ant-upload.ant-upload-drag:focus-within) {
   border-color: var(--proto-acid);
 }
 
 .upload-source-panel :deep(.ant-upload-drag-icon) {
-  margin-bottom: 4px;
+  margin: 0 0 4px;
   color: var(--proto-acid);
   font-size: 24px;
 }
@@ -860,6 +967,206 @@ onBeforeUnmount(() => {
   font-size: 10px;
 }
 
+.upload-result-section {
+  margin-top: var(--prototype-layout-gap);
+  padding-top: 0;
+}
+
+.upload-result-panel {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.upload-result-heading,
+.upload-result-subheading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.upload-result-heading h2,
+.upload-result-subheading h3 {
+  margin: 0;
+  color: var(--proto-ink);
+}
+
+.upload-result-heading h2 {
+  font-size: 1.35rem;
+  line-height: 1.15;
+}
+
+.upload-result-subheading {
+  margin-bottom: 10px;
+}
+
+.upload-result-subheading h3 {
+  font-size: 1rem;
+}
+
+.upload-result-subheading > span {
+  color: var(--proto-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.upload-result-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.upload-result-stat {
+  padding: 12px;
+  border: 1px solid var(--proto-line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.upload-result-stat span,
+.upload-result-stat strong {
+  display: block;
+}
+
+.upload-result-stat span {
+  color: var(--proto-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.upload-result-stat strong {
+  margin-top: 3px;
+  color: var(--proto-ink);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.upload-result-stat.is-success strong {
+  color: #4d7800;
+}
+
+.upload-result-stat.is-failed strong {
+  color: #a23d28;
+}
+
+.upload-result-alert {
+  margin-top: 12px;
+}
+
+.upload-success-list,
+.upload-failed-list {
+  margin-top: 18px;
+}
+
+.upload-success-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.upload-success-item {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--proto-line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.upload-success-media {
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #eceee8;
+  color: var(--proto-muted);
+  font-size: 10px;
+}
+
+.upload-success-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.upload-success-meta {
+  min-width: 0;
+  padding: 8px;
+}
+
+.upload-success-meta strong,
+.upload-success-meta small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-success-meta strong {
+  color: var(--proto-ink);
+  font-size: 11px;
+}
+
+.upload-success-meta small {
+  margin-top: 3px;
+  color: var(--proto-muted);
+  font-size: 9px;
+}
+
+.upload-failed-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--proto-line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.upload-failed-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+}
+
+.upload-failed-list li + li {
+  border-top: 1px solid var(--proto-line);
+}
+
+.upload-failed-list li > div {
+  min-width: 0;
+}
+
+.upload-failed-list li strong,
+.upload-failed-list li small,
+.upload-failed-list li > span {
+  display: block;
+}
+
+.upload-failed-list li strong {
+  overflow: hidden;
+  color: var(--proto-ink);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-failed-list li small {
+  margin-top: 3px;
+  color: var(--proto-muted);
+  font-size: 9px;
+}
+
+.upload-failed-list li > span {
+  flex: 0 1 46%;
+  color: #a23d28;
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: right;
+}
+
 /* 100% 缩放下常见的矮桌面视口：压缩留白，但保留完整表单和可点击尺寸。 */
 @media (min-width: 921px) and (max-height: 900px) {
   .upload-layout.proto-section {
@@ -974,6 +1281,29 @@ onBeforeUnmount(() => {
 
   .upload-form-foot :deep(.ant-btn) {
     width: 100%;
+  }
+
+  .upload-result-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .upload-result-heading :deep(.ant-btn) {
+    width: 100%;
+  }
+
+  .upload-result-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .upload-failed-list li {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .upload-failed-list li > span {
+    flex-basis: auto;
+    text-align: left;
   }
 }
 </style>

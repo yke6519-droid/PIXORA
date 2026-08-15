@@ -2,12 +2,12 @@
 /* eslint-disable */
 import request from "../plugin/request";
 
-/** alterLevelById PUT /space/alterLevelById */
-export async function alterLevelByIdUsingPut(
+/** 此处后端没有提供注释 PUT /space/alterLevelById */
+export async function alterLevelById(
   body: API.AlterLevelRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseBoolean_>("/space/alterLevelById", {
+  return request<API.BaseResponseBoolean>("/space/alterLevelById", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -17,12 +17,12 @@ export async function alterLevelByIdUsingPut(
   });
 }
 
-/** createSpace POST /space/createSpace */
-export async function createSpaceUsingPost(
+/** 此处后端没有提供注释 POST /space/createSpace */
+export async function createSpace(
   body: API.CreateSpaceRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseSpace_>("/space/createSpace", {
+  return request<API.BaseResponseSpace>("/space/createSpace", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -32,13 +32,13 @@ export async function createSpaceUsingPost(
   });
 }
 
-/** deleteById DELETE /space/deleteById */
-export async function deleteByIdUsingDelete(
+/** 此处后端没有提供注释 DELETE /space/deleteById */
+export async function deleteById(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.deleteByIdUsingDELETEParams,
+  params: API.deleteByIdParams,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseBoolean_>("/space/deleteById", {
+  return request<API.BaseResponseBoolean>("/space/deleteById", {
     method: "DELETE",
     params: {
       ...params,
@@ -47,13 +47,13 @@ export async function deleteByIdUsingDelete(
   });
 }
 
-/** querySpaceById GET /space/querySpaceById */
-export async function querySpaceByIdUsingGet(
+/** 此处后端没有提供注释 GET /space/querySpaceById */
+export async function querySpaceById(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.querySpaceByIdUsingGETParams,
+  params: API.querySpaceByIdParams,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseSpaceVO_>("/space/querySpaceById", {
+  return request<API.BaseResponseSpaceVO>("/space/querySpaceById", {
     method: "GET",
     params: {
       ...params,
@@ -62,27 +62,29 @@ export async function querySpaceByIdUsingGet(
   });
 }
 
-/** querySpacePage GET /space/querySpacePage */
-export async function querySpacePageUsingGet(
+/** 此处后端没有提供注释 GET /space/querySpacePage */
+export async function querySpacePage(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.querySpacePageUsingGETParams,
+  params: API.querySpacePageParams,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseSpacePageVO_>("/space/querySpacePage", {
+  return request<API.BaseResponseSpacePageVO>("/space/querySpacePage", {
     method: "GET",
     params: {
       ...params,
+      spaceQueryRequest: undefined,
+      ...params["spaceQueryRequest"],
     },
     ...(options || {}),
   });
 }
 
-/** updateById PUT /space/updateById */
-export async function updateByIdUsingPut(
+/** 此处后端没有提供注释 PUT /space/updateById */
+export async function updateById(
   body: API.SpaceUpdateRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseBoolean_>("/space/updateById", {
+  return request<API.BaseResponseBoolean>("/space/updateById", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",

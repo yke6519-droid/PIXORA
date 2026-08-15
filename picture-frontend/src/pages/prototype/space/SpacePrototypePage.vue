@@ -218,16 +218,16 @@ import { computed, onMounted, ref } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import {
-  createSpaceUsingPost,
-  deleteByIdUsingDelete,
-  querySpaceByIdUsingGet,
-  updateByIdUsingPut,
+  createSpace as createSpaceApi,
+  deleteById,
+  querySpaceById,
+  updateById,
 } from '../../../api/spaceController'
 import {
-  deletePictureUsingDelete,
-  queryPicturePageUsingPost,
+  deletePicture,
+  queryPicturePage,
 } from '../../../api/pictureController'
-import { getCurrentUserUsingGet } from '../../../api/userController'
+import { getCurrentUser } from '../../../api/userController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import { formatSpaceLevel, pictureStatusText } from '../prototypeData'
 import SpaceNameModal from './components/SpaceNameModal.vue'
@@ -291,13 +291,13 @@ function hasSpaceId(user?: API.UserVO | null) {
 }
 
 async function refreshCurrentUser() {
-  const res = await getCurrentUserUsingGet()
+  const res = await getCurrentUser()
   if (res.data?.code !== 200 || !res.data.data) {
     if (res.data?.code === 40100) {
       loginUserStore.clearLoginUser()
       await router.replace({
-        path: '/prototype/user/login',
-        query: { redirect: '/prototype/space' },
+        path: '/user/login',
+        query: { redirect: '/space' },
       })
       return null
     }
@@ -308,7 +308,7 @@ async function refreshCurrentUser() {
 }
 
 async function loadSpace(spaceId: number | string) {
-  const res = await querySpaceByIdUsingGet({ spaceId })
+  const res = await querySpaceById({ spaceId })
   if (res.data?.code !== 200 || !res.data.data) {
     throw new Error(res.data?.message || '空间信息加载失败')
   }
@@ -323,7 +323,7 @@ async function loadPictures() {
   pictureLoading.value = true
   pictureError.value = ''
   try {
-    const res = await queryPicturePageUsingPost({
+    const res = await queryPicturePage({
       spaceId: space.value.id,
       pictureCheck: pictureCheck.value,
       current: current.value,
@@ -366,7 +366,7 @@ async function loadPage() {
 async function createSpace(spaceName: string) {
   creating.value = true
   try {
-    const res = await createSpaceUsingPost({ spaceName })
+    const res = await createSpaceApi({ spaceName })
     if (res.data?.code !== 200) throw new Error(res.data?.message || '空间创建失败')
     createOpen.value = false
     message.success('私人空间已创建')
@@ -382,7 +382,7 @@ async function renameSpace(spaceName: string) {
   if (!space.value?.id) return
   renaming.value = true
   try {
-    const res = await updateByIdUsingPut({ spaceId: space.value.id, updatedName: spaceName })
+    const res = await updateById({ spaceId: space.value.id, updatedName: spaceName })
     if (res.data?.code !== 200) throw new Error(res.data?.message || '空间重命名失败')
     renameOpen.value = false
     message.success('空间名称已更新')
@@ -403,7 +403,9 @@ function confirmDeleteSpace() {
     okType: 'danger',
     cancelText: '取消',
     onOk: async () => {
-      const res = await deleteByIdUsingDelete({ spaceId: space.value!.id })
+      const spaceId = space.value?.id
+      if (spaceId == null) return
+      const res = await deleteById({ spaceId })
       if (res.data?.code !== 200) throw new Error(res.data?.message || '空间删除失败')
       await refreshCurrentUser()
       space.value = null
@@ -423,7 +425,7 @@ function confirmDeletePicture(picture: API.PictureVO) {
     okType: 'danger',
     cancelText: '取消',
     onOk: async () => {
-      const res = await deletePictureUsingDelete({ id: picture.id })
+      const res = await deletePicture({ id: picture.id })
       if (res.data?.code !== 200) throw new Error(res.data?.message || '图片删除失败')
       if (pictures.value.length === 1 && current.value > 1) current.value -= 1
       await Promise.all([loadSpace(space.value!.id!), loadPictures()])
@@ -444,11 +446,11 @@ function changePage(page: number) {
 
 function openPicture(id?: number | string) {
   if (!id) return
-  void router.push(`/prototype/gallery/detail/${encodeURIComponent(String(id))}`)
+  void router.push(`/gallery/detail/${encodeURIComponent(String(id))}`)
 }
 
 function openSpaceUpload() {
-  void router.push({ path: '/prototype/gallery/upload', query: { target: 'space' } })
+  void router.push({ path: '/gallery/upload', query: { target: 'space' } })
 }
 
 onMounted(loadPage)
@@ -462,40 +464,50 @@ onMounted(loadPage)
 .space-skeleton-grid > * { min-height: 300px; padding: 20px; border: 1px solid var(--proto-line); background: rgba(255,255,255,.45); }
 .space-empty {
   width: 100%;
-  min-height: 420px;
+  min-height: 340px;
   margin: 18px 0 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  grid-template-columns: minmax(0, 1.16fr) minmax(300px, .84fr);
+  overflow: hidden;
+  border-radius: 10px;
   border: 1px solid var(--proto-line);
+  background: rgba(255, 255, 255, .42);
+  box-shadow: var(--proto-shadow);
 }
 .space-empty-main {
   min-width: 0;
-  padding: 44px 54px 42px 0;
+  padding: 34px 48px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 40px;
+  justify-content: center;
+  gap: 26px;
 }
 .space-empty-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
 .space-empty h1 {
   max-width: none;
   margin: 0;
-  font-size: clamp(38px, 4vw, 56px);
-  line-height: 1;
-  letter-spacing: -.045em;
+  font-size: 48px;
+  line-height: .98;
+  letter-spacing: -.06em;
 }
 .space-empty h1 span { display: block; white-space: nowrap; }
 .space-empty-copy p {
   max-width: 46ch;
   margin: 0;
   color: var(--proto-muted);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.55;
   text-wrap: pretty;
 }
 .space-empty-action { display: flex; align-items: center; gap: 0; }
+.space-empty-action .acid-button {
+  min-width: 136px;
+  height: 44px;
+  padding-inline: 20px;
+  font-size: 14px;
+}
 .space-empty-spec {
-  padding: 32px 36px;
+  padding: 28px 30px;
   display: flex;
   flex-direction: column;
   background: var(--proto-ink);
@@ -510,9 +522,9 @@ onMounted(loadPage)
 }
 .space-empty-spec-head span { font-size: 14px; font-weight: 700; }
 .space-empty-spec-head strong { color: var(--proto-acid); font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .08em; }
-.space-empty-spec dl { margin: 20px 0 0; }
+.space-empty-spec dl { margin: 12px 0 0; }
 .space-empty-spec dl div {
-  min-height: 62px;
+  min-height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -520,7 +532,7 @@ onMounted(loadPage)
   border-bottom: 1px solid rgba(241,242,237,.15);
 }
 .space-empty-spec dt { color: rgba(241,242,237,.58); font-size: 11px; }
-.space-empty-spec dd { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.03em; }
+.space-empty-spec dd { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -.03em; }
 .space-prototype > .proto-page-head { padding-top: 0; padding-bottom: 0; align-items: flex-end; }
 .space-heading-row { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
 .space-heading-main { min-width: 0; display: flex; align-items: flex-end; gap: 16px; }
@@ -617,18 +629,18 @@ onMounted(loadPage)
   .usage-ring { margin: 14px auto 12px; }
   .usage-values { margin-bottom: 12px; }
   .space-empty { min-height: 0; grid-template-columns: 1fr; }
-  .space-empty-main { padding: 38px 0; gap: 32px; }
-  .space-empty-spec { min-height: 320px; }
+  .space-empty-main { padding: 32px 28px; gap: 26px; }
+  .space-empty-spec { min-height: 0; padding: 24px 28px; }
 }
 @media (max-width: 580px) {
   .space-empty { margin-top: 18px; }
-  .space-empty-main { padding: 32px 0; }
+  .space-empty-main { padding: 28px 20px; }
   .space-empty h1 { font-size: 40px; }
   .space-empty h1 span { white-space: normal; }
   .space-heading-main { align-items: flex-start; flex-direction: column; gap: 8px; }
   .space-prototype > .proto-page-head .proto-title { max-width: 100%; white-space: normal; }
   .space-empty-action { align-items: flex-start; flex-direction: column; gap: 12px; }
-  .space-empty-spec { min-height: 300px; padding: 28px 24px; }
+  .space-empty-spec { min-height: 0; padding: 24px 20px; }
   .space-picture-grid { grid-template-columns: 1fr; }
   .usage-foot { align-items: flex-start; flex-direction: column; }
   .space-gallery-actions { align-items: stretch; flex-direction: column; width: 100%; }

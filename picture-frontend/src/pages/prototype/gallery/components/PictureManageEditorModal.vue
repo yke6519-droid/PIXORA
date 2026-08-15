@@ -110,8 +110,8 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { Upload, message } from 'ant-design-vue'
 import type { UploadFile, UploadProps } from 'ant-design-vue'
 import {
-  editPictureUsingPost,
-  reloadPictureUsingPost,
+  editPicture,
+  reloadPicture,
 } from '../../../../api/pictureController'
 
 type EditorMode = 'edit' | 'reupload'
@@ -153,8 +153,8 @@ const tagOptions = computed(() =>
 )
 const previewUrl = computed(() =>
   sourceMode.value === 'file'
-    ? localPreviewUrl.value || props.picture?.thumbnailUrl || props.picture?.url || ''
-    : imageUrl.value.trim() || props.picture?.thumbnailUrl || props.picture?.url || '',
+    ? localPreviewUrl.value || props.picture?.url || ''
+    : imageUrl.value.trim() || props.picture?.url || '',
 )
 
 /**
@@ -267,8 +267,8 @@ async function submit() {
 
   try {
     const res: any = props.mode === 'edit'
-      ? await editPictureUsingPost(metadata)
-      : await reloadPictureUsingPost(
+      ? await editPicture(metadata)
+      : await reloadPicture(
           {},
           {
             ...metadata,

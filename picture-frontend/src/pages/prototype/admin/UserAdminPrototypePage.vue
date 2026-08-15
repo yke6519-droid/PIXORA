@@ -1,14 +1,9 @@
 <template>
   <div class="user-admin-prototype">
-    <section class="proto-page-head">
-      <div>
-        <span class="proto-eyebrow">用户管理 / queryPages</span>
-        <h1 class="proto-title">管理用户，<br />也管理权限边界。</h1>
-        <p class="proto-copy">
-          管理员分页请求严格使用 <span class="proto-mono">current</span>、<span class="proto-mono">size</span>、
-          <span class="proto-mono">queryUsername</span>、<span class="proto-mono">queryUserAccount</span>、
-          <span class="proto-mono">userLevel</span> 和 <span class="proto-mono">gender</span>。
-        </p>
+    <section class="user-admin-heading">
+      <div class="user-admin-heading-copy">
+        <h1 class="user-admin-title">用户管理</h1>
+        <span class="admin-total">{{ total }} 位用户</span>
       </div>
       <a-button class="proto-button acid-button" type="primary" @click="openAdd">
         新增用户
@@ -44,13 +39,13 @@
         <div class="admin-filter-line">
           <a-input
             v-model:value="filters.queryUserAccount"
-            placeholder="账号 queryUserAccount"
+            placeholder="按账号搜索"
             allow-clear
             @press-enter="searchUsers"
           />
           <a-input
             v-model:value="filters.queryUsername"
-            placeholder="用户名 queryUsername"
+            placeholder="按用户名搜索"
             allow-clear
             @press-enter="searchUsers"
           />
@@ -71,7 +66,7 @@
           <a-button class="proto-button ghost-button" :disabled="loading" @click="resetFilters">重置</a-button>
         </div>
         <div class="admin-filter-foot">
-          <span>queryPages / current={{ current }} / size={{ pageSize }}</span>
+          <span>第 {{ current }} 页 · 每页 {{ pageSize }} 位</span>
           <span>共 {{ total }} 位用户</span>
         </div>
       </section>
@@ -240,12 +235,12 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  addUserUsingPut,
-  deleteUserUsingDelete,
-  queryPagesUsingPost,
-  updateUserUsingPost,
+  addUser,
+  deleteUser as deleteUserApi,
+  queryPages,
+  updateUser,
 } from '../../../api/userController'
-import { getCurrentUserUsingGet } from '../../../api/userController'
+import { getCurrentUser } from '../../../api/userController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 
 type UserLevel = 'admin' | 'user' | 'vip'
@@ -329,10 +324,10 @@ async function ensureAdmin() {
   authChecking.value = true
   accessError.value = ''
   try {
-    const res = await getCurrentUserUsingGet()
+    const res = await getCurrentUser()
     if (res.data?.code === 40100 || !res.data?.data) {
       loginUserStore.clearLoginUser()
-      await router.replace({ path: '/prototype/user/login', query: { redirect: route.fullPath } })
+      await router.replace({ path: '/user/login', query: { redirect: route.fullPath } })
       return false
     }
     if (res.data.code !== 200) {
@@ -364,7 +359,7 @@ async function loadUsers() {
   loading.value = true
   loadError.value = ''
   try {
-    const res = await queryPagesUsingPost({
+    const res = await queryPages({
       current: current.value,
       size: pageSize,
       queryUserAccount: filters.queryUserAccount.trim() || undefined,
@@ -444,7 +439,7 @@ async function submitAdd() {
   }
   actionLoading.value = true
   try {
-    const res = await addUserUsingPut({
+    const res = await addUser({
       username: form.username.trim(),
       useraccount: form.useraccount.trim(),
       gender: form.gender,
@@ -472,7 +467,7 @@ async function submitEdit() {
   }
   actionLoading.value = true
   try {
-    const res = await updateUserUsingPost({
+    const res = await updateUser({
       id: editingId.value,
       username: form.username.trim(),
       gender: form.gender,
@@ -497,7 +492,7 @@ async function deleteUser(user: API.UserVO) {
   if (isProtectedUser(user) || user.id == null) return
   actionLoading.value = true
   try {
-    const res = await deleteUserUsingDelete({ id: user.id })
+    const res = await deleteUserApi({ id: user.id })
     if (res.data?.code !== 200 || res.data.data === false) throw new Error(res.data?.message || '删除用户失败')
     message.success('用户已删除')
     if (users.value.length === 1 && current.value > 1) current.value -= 1
@@ -515,24 +510,86 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.user-admin-prototype {
+  min-width: 0;
+  color: var(--proto-ink);
+  font-family: 'Geist', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.user-admin-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 0 16px;
+  border-bottom: 1px solid var(--proto-line);
+}
+
+.user-admin-heading-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+
+.user-admin-title {
+  margin: 0;
+  color: var(--proto-ink);
+  font-size: 42px;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-weight: 800;
+}
+
+.admin-total {
+  color: var(--proto-muted);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .admin-auth-loading { display: block; min-height: 180px; padding-top: 70px; text-align: center; }
 .admin-alert { margin-bottom: 18px; }
 .admin-filter { padding: 0; overflow: hidden; }
-.admin-filter-line { display: flex; gap: 10px; flex-wrap: wrap; padding: 17px; }
-.admin-filter-line .ant-input { width: 210px; }
-.admin-filter-foot { display: flex; justify-content: space-between; gap: 10px; padding: 12px 17px; border-top: 1px solid var(--proto-line); color: var(--proto-muted); font-family: 'DM Mono', monospace; font-size: 10px; }
+.admin-filter-line { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) 150px 120px auto auto; align-items: center; gap: 10px; padding: 15px; }
+.admin-filter-line .ant-input,
+.admin-filter-line .ant-select { width: 100% !important; }
+.admin-filter-line :deep(.ant-input),
+.admin-filter-line :deep(.ant-select-selection-item),
+.admin-filter-line :deep(.ant-select-selection-placeholder) { font-family: inherit; font-size: 13px; }
+.admin-filter-line :deep(.ant-btn) { font-family: inherit; font-size: 13px; font-weight: 700; }
+.admin-filter-line .proto-button { white-space: nowrap; }
+.admin-filter-foot { display: flex; justify-content: space-between; gap: 10px; padding: 11px 15px; border-top: 1px solid var(--proto-line); color: var(--proto-muted); font-size: 12px; line-height: 1.45; }
+.admin-users-table.proto-section { padding-top: 0; }
+.admin-users-table :deep(.ant-table) { color: var(--proto-ink); font-family: inherit; font-size: 13px; }
+.admin-users-table :deep(.ant-table-thead > tr > th) { padding: 11px 8px; font-family: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0; line-height: 1.45; }
+.admin-users-table :deep(.ant-table-tbody > tr > td) { padding: 13px 8px; font-size: 13px; line-height: 1.45; }
 .admin-user-cell { display: flex; align-items: center; gap: 10px; }
 .admin-user-cell strong, .admin-user-cell small { display: block; }
-.admin-user-cell strong { font-size: 12px; }
-.admin-user-cell small { margin-top: 3px; color: var(--proto-muted); font-family: 'DM Mono', monospace; font-size: 9px; }
+.admin-user-cell strong { color: var(--proto-ink); font-size: 14px; font-weight: 800; line-height: 1.45; }
+.admin-user-cell small { margin-top: 3px; color: var(--proto-muted); font-size: 12px; line-height: 1.45; }
 .admin-contact span, .admin-contact small { display: block; }
-.admin-contact span { font-size: 11px; }
-.admin-contact small { margin-top: 4px; color: var(--proto-muted); font-size: 10px; }
+.admin-contact span { color: var(--proto-ink); font-size: 13px; line-height: 1.45; }
+.admin-contact small { margin-top: 4px; color: var(--proto-muted); font-size: 12px; line-height: 1.45; }
+.admin-users-table :deep(.ant-tag) { font-family: inherit; font-size: 12px; line-height: 20px; }
+.admin-users-table :deep(.ant-btn-link) { font-family: inherit; font-size: 13px; line-height: 1.45; }
 .admin-actions { display: flex; align-items: center; }
-.admin-pagination { display: flex; justify-content: flex-end; padding-top: 25px; }
+.admin-pagination { display: flex; justify-content: flex-end; padding-top: 18px; }
 .admin-pagination :deep(.ant-pagination-item-active) { border-color: var(--proto-ink); background: var(--proto-ink); }
 .admin-pagination :deep(.ant-pagination-item-active a) { color: var(--proto-paper); }
 .admin-form-two { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
-.admin-form-hint { margin: -2px 0 0; color: var(--proto-muted); font-size: 11px; line-height: 1.6; }
-@media (max-width: 650px) { .admin-filter-foot { align-items: flex-start; flex-direction: column; } .admin-form-two { grid-template-columns: 1fr; gap: 0; } }
+.admin-form-hint { margin: -2px 0 0; color: var(--proto-muted); font-size: 12px; line-height: 1.6; }
+
+@media (max-width: 1180px) {
+  .admin-filter-line { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-filter-line .proto-button { width: 100%; }
+}
+
+@media (max-width: 650px) {
+  .user-admin-heading { align-items: flex-start; flex-direction: column; gap: 14px; padding-top: 20px; }
+  .user-admin-title { font-size: 36px; }
+  .admin-filter-line { grid-template-columns: 1fr; }
+  .admin-filter-foot { align-items: flex-start; flex-direction: column; }
+  .admin-form-two { grid-template-columns: 1fr; gap: 0; }
+}
 </style>

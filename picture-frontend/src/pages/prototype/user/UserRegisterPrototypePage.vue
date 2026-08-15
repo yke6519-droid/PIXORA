@@ -28,7 +28,7 @@
           <a-form-item name="phone" :rules="phoneRules"><a-input v-model:value="form.phone" aria-label="手机号" placeholder="请输入手机号" size="large" /></a-form-item>
         </div>
         <div class="register-actions">
-          <a-button class="proto-button ghost-button" size="large" @click="router.push('/prototype/user/login')">返回登录</a-button>
+          <a-button class="proto-button ghost-button" size="large" @click="router.push('/user/login')">返回登录</a-button>
           <a-button html-type="submit" :loading="loading" class="proto-button acid-button" type="primary" size="large">创建账号</a-button>
         </div>
       </a-form>
@@ -40,7 +40,7 @@
 import { reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
-import { userRegisterUsingPost } from '../../../api/userController'
+import { userRegister } from '../../../api/userController'
 
 const router = useRouter()
 const loading = ref(false)
@@ -69,7 +69,7 @@ const phoneRules = [
 async function submitRegister() {
   loading.value = true
   try {
-    const res = await userRegisterUsingPost({
+    const res = await userRegister({
       username: form.username,
       useraccount: form.useraccount,
       gender: form.gender,
@@ -82,7 +82,7 @@ async function submitRegister() {
       return
     }
     message.success('注册成功，请登录')
-    await router.replace('/prototype/user/login')
+    await router.replace('/user/login')
   } catch (error: any) {
     message.error(error?.response?.data?.message || '注册失败，请确认后端服务已启动')
   } finally {

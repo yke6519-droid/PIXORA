@@ -1,0 +1,315 @@
+.pixora-app {
+  --prototype-topbar-height: 52px;
+  --prototype-header-content-height: 40px;
+  /* 正式前端统一使用一条桌面画布，不再由各页面自行决定宽度和边距。 */
+  --prototype-page-max-width: 1440px;
+  --prototype-page-gutter: 24px;
+  --prototype-layout-gap: 20px;
+  --prototype-page-bottom-space: 24px;
+  flex-direction: column;
+  /* 仅正式前端预留滚动条位置，原型首页仍保持原样。 */
+  scrollbar-gutter: stable;
+}
+
+.pixora-header {
+  position: sticky;
+  z-index: 30;
+  top: 0;
+  width: 100%;
+  height: var(--prototype-topbar-height) !important;
+  min-height: var(--prototype-topbar-height) !important;
+  padding: 0 !important;
+  border-bottom: 1px solid rgba(241, 242, 237, .14);
+  background: var(--proto-ink) !important;
+  line-height: normal;
+}
+
+.pixora-header-inner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  width: min(100%, var(--prototype-page-max-width));
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 var(--prototype-page-gutter);
+  /* 通过网格和各内容组自身的高度完成真实居中，不再对整条顶栏做位移补偿。 */
+}
+
+.pixora-brand {
+  display: inline-flex;
+  width: 170px;
+  min-width: 170px;
+  height: 34px;
+  align-items: center;
+  align-self: center;
+  gap: 10px;
+  color: var(--proto-paper);
+  text-decoration: none;
+}
+
+.pixora-brand .brand-mark {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 8px;
+  line-height: 1;
+  font-size: 18px;
+  font-weight: 800;
+  transform: none;
+}
+
+.pixora-brand strong {
+  font-family: 'Abril Fatface', Georgia, serif;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 1.2px;
+}
+
+.pixora-primary-nav {
+  display: flex;
+  height: var(--prototype-header-content-height);
+  align-items: stretch;
+  justify-content: center;
+  align-self: center;
+  gap: 4px;
+}
+
+.pixora-nav-link {
+  position: relative;
+  display: inline-flex;
+  height: 100%;
+  align-items: center;
+  min-width: 100px;
+  padding-inline: 0;
+  justify-content: center;
+  color: rgba(241, 242, 237, .72);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color .2s ease, background-color .2s ease;
+}
+
+.pixora-nav-link::after {
+  position: absolute;
+  right: 14px;
+  bottom: 0;
+  left: 14px;
+  height: 2px;
+  background: var(--proto-acid);
+  content: '';
+  opacity: 0;
+  transform: scaleX(.45);
+  transition: opacity .2s ease, transform .2s ease;
+}
+
+.pixora-nav-link:hover,
+.pixora-nav-link.is-active {
+  background: rgba(241, 242, 237, .05);
+  color: var(--proto-paper);
+}
+
+.pixora-nav-link.is-active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.pixora-header-actions {
+  display: flex;
+  width: 180px;
+  min-width: 180px;
+  height: 44px;
+  align-items: center;
+  align-self: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.pixora-header-button.ant-btn,
+.pixora-login-button.ant-btn {
+  min-height: 38px;
+  border-radius: 6px;
+  color: var(--proto-paper);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pixora-header-button.ant-btn:hover {
+  background: rgba(241, 242, 237, .08) !important;
+  color: var(--proto-acid) !important;
+}
+
+.pixora-login-button.ant-btn {
+  width: 58px;
+  height: 38px;
+  padding-inline: 0;
+  border-color: rgba(241, 242, 237, .55);
+  background: transparent;
+}
+
+.pixora-login-button.ant-btn:hover {
+  border-color: var(--proto-acid) !important;
+  color: var(--proto-acid) !important;
+}
+
+.pixora-account {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  gap: 9px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--proto-paper);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pixora-account:hover {
+  background: rgba(241, 242, 237, .08);
+}
+
+.pixora-mobile-menu {
+  display: none;
+}
+
+.pixora-page {
+  flex: 1 1 auto;
+  min-height: calc(100vh - var(--prototype-topbar-height));
+  min-height: calc(100dvh - var(--prototype-topbar-height));
+}
+
+/*
+ * 正式页面只负责在统一画布内排版。
+ * 页面切换时最大宽度、两侧留白和模块间距保持不变，局部调整不会牵动全局。
+ */
+.pixora-page > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.pixora-app .proto-section {
+  padding-top: 24px;
+}
+
+.pixora-app .proto-page-head {
+  padding-top: 20px;
+}
+
+/* 登录、注册共用同一块可用高度，互相切换时画面不再上下跳动。 */
+.pixora-app .auth-prototype,
+.pixora-app .register-prototype {
+  min-height: calc(
+    100dvh - var(--prototype-topbar-height) - var(--prototype-page-bottom-space)
+  );
+}
+
+/*
+ * 上传工作区使用顶部栏以下的剩余高度，不再依赖 58vh。
+ * 大屏会自然放大主视觉，矮屏不足时转为页面滚动，而不是切掉底部操作区。
+ */
+.pixora-app .pixora-page .upload-layout.proto-section {
+  flex: 1 1 auto;
+  min-height: max(
+    620px,
+    calc(100dvh - var(--prototype-topbar-height) - var(--prototype-page-bottom-space) - 8px)
+  );
+  padding-top: 8px;
+  overflow: hidden;
+}
+
+.pixora-app .pixora-page .upload-source-panel,
+.pixora-app .pixora-page .upload-form-panel {
+  height: 100%;
+}
+
+.pixora-app .pixora-page .upload-preview {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 260px;
+  max-height: none;
+}
+
+@media (max-width: 980px) {
+  .pixora-app {
+    --prototype-page-gutter: 20px;
+    --prototype-layout-gap: 16px;
+  }
+
+  .pixora-header {
+    display: block;
+  }
+
+  .pixora-header-inner {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .pixora-brand {
+    width: auto;
+    min-width: 0;
+  }
+
+  .pixora-header-actions {
+    width: auto;
+    min-width: 0;
+  }
+
+  .pixora-primary-nav,
+  .pixora-header-actions > .ant-dropdown-trigger:not(.pixora-mobile-menu),
+  .pixora-header-actions > .pixora-login-button {
+    display: none;
+  }
+
+  .pixora-mobile-menu {
+    display: inline-flex;
+  }
+
+  .pixora-app .pixora-page .upload-layout.proto-section {
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .pixora-app .pixora-page .upload-source-panel,
+  .pixora-app .pixora-page .upload-form-panel {
+    height: auto;
+  }
+
+  .pixora-app .pixora-page .upload-preview {
+    flex: 0 0 280px;
+    height: 280px;
+    min-height: 280px;
+    max-height: 280px;
+  }
+}
+
+@media (max-width: 570px) {
+  .pixora-app {
+    --prototype-page-gutter: 16px;
+    --prototype-topbar-height: 58px;
+  }
+
+  .pixora-header {
+    padding-inline: 0 !important;
+  }
+
+  .pixora-header-inner {
+    padding-inline: var(--prototype-page-gutter);
+  }
+
+  .pixora-brand strong {
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixora-nav-link,
+  .pixora-nav-link::after {
+    transition: none;
+  }
+}

@@ -8,8 +8,8 @@
         </a-tag>
       </div>
       <div class="proto-page-head-actions">
-        <a-button class="proto-button ghost-button" @click="router.push('/prototype/gallery')">返回图库</a-button>
-        <a-button class="proto-button acid-button" type="primary" @click="router.push('/prototype/gallery/manage')">管理我的图片</a-button>
+        <a-button class="proto-button ghost-button" @click="router.push('/gallery')">返回图库</a-button>
+        <a-button class="proto-button acid-button" type="primary" @click="router.push('/gallery/manage')">管理我的图片</a-button>
       </div>
     </section>
 
@@ -25,7 +25,7 @@
     <a-result v-else-if="errorMessage" class="detail-state detail-result" status="warning" title="图片详情暂时无法打开" :sub-title="errorMessage">
       <template #extra>
         <a-button class="proto-button acid-button" type="primary" @click="fetchPictureDetail">重新加载</a-button>
-        <a-button class="proto-button ghost-button" @click="router.push('/prototype/gallery')">返回图库</a-button>
+        <a-button class="proto-button ghost-button" @click="router.push('/gallery')">返回图库</a-button>
       </template>
     </a-result>
 
@@ -34,9 +34,9 @@
         <div class="detail-visual proto-surface proto-rounded">
           <div class="detail-image proto-image-wrap">
             <a-image
-              v-if="picture.url || picture.thumbnailUrl"
+              v-if="picture.url"
               class="detail-image-preview"
-              :src="picture.url || picture.thumbnailUrl"
+              :src="picture.url"
               :alt="picture.name || '图片详情'"
               :preview="true"
             />
@@ -109,7 +109,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getPictureByIdUsingGet } from '../../../api/pictureController'
+import { getPictureById } from '../../../api/pictureController'
 import { pictureStatusText } from '../prototypeData'
 
 const route = useRoute()
@@ -143,7 +143,7 @@ async function fetchPictureDetail() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const res = await getPictureByIdUsingGet({ id })
+    const res = await getPictureById({ id })
     if (res.data?.code !== 200 || !res.data.data) {
       throw new Error(res.data?.message || '图片不存在或已被删除')
     }
@@ -156,11 +156,12 @@ async function fetchPictureDetail() {
   }
 }
 
-function formatPictureSize(bytes?: number) {
-  if (!bytes) return '-'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+function formatPictureSize(bytes?: number | string) {
+  const normalizedBytes = Number(bytes)
+  if (!Number.isFinite(normalizedBytes) || normalizedBytes <= 0) return '-'
+  if (normalizedBytes < 1024) return `${normalizedBytes} B`
+  if (normalizedBytes < 1024 * 1024) return `${(normalizedBytes / 1024).toFixed(1)} KB`
+  return `${(normalizedBytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 function formatRatio(width?: number, height?: number) {

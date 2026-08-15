@@ -2,12 +2,12 @@
 /* eslint-disable */
 import request from "../plugin/request";
 
-/** adminCheckPicture PUT /picture/adminCheckPicture */
-export async function adminCheckPictureUsingPut(
+/** 此处后端没有提供注释 PUT /picture/adminCheckPicture */
+export async function adminCheckPicture(
   body: API.AdminCheckPictureRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseBoolean_>("/picture/adminCheckPicture", {
+  return request<API.BaseResponseBoolean>("/picture/adminCheckPicture", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -17,12 +17,12 @@ export async function adminCheckPictureUsingPut(
   });
 }
 
-/** adminCheckPictureBatch PUT /picture/adminCheckPictureBatch */
-export async function adminCheckPictureBatchUsingPut(
+/** 此处后端没有提供注释 PUT /picture/adminCheckPictureBatch */
+export async function adminCheckPictureBatch(
   body: API.AdminCheckPictureBatchRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseBoolean_>("/picture/adminCheckPictureBatch", {
+  return request<API.BaseResponseBoolean>("/picture/adminCheckPictureBatch", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -32,27 +32,30 @@ export async function adminCheckPictureBatchUsingPut(
   });
 }
 
-/** adminFetchPictureBatch POST /picture/adminFetchPictureBatch */
-export async function adminFetchPictureBatchUsingPost(
+/** 此处后端没有提供注释 POST /picture/adminFetchPictureBatch */
+export async function adminFetchPictureBatch(
   body: API.PictureUploadByBatchRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponsePictureListVO_>("/picture/adminFetchPictureBatch", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    data: body,
-    ...(options || {}),
-  });
+  return request<API.BaseResponsePictureListVO>(
+    "/picture/adminFetchPictureBatch",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: body,
+      ...(options || {}),
+    }
+  );
 }
 
-/** deletePicture DELETE /picture/deletePicture */
-export async function deletePictureUsingDelete(
+/** 此处后端没有提供注释 DELETE /picture/deletePicture */
+export async function deletePicture(
   body: API.PictureUpdateRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseBoolean_>("/picture/deletePicture", {
+  return request<API.BaseResponseBoolean>("/picture/deletePicture", {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
@@ -62,12 +65,12 @@ export async function deletePictureUsingDelete(
   });
 }
 
-/** editPicture POST /picture/editPicture */
-export async function editPictureUsingPost(
+/** 此处后端没有提供注释 POST /picture/editPicture */
+export async function editPicture(
   body: API.PictureUpdateRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseBoolean_>("/picture/editPicture", {
+  return request<API.BaseResponseBoolean>("/picture/editPicture", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -77,13 +80,13 @@ export async function editPictureUsingPost(
   });
 }
 
-/** getPictureById GET /picture/getPictureById */
-export async function getPictureByIdUsingGet(
+/** 此处后端没有提供注释 GET /picture/getPictureById */
+export async function getPictureById(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.getPictureByIdUsingGETParams,
+  params: API.getPictureByIdParams,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponsePictureVO_>("/picture/getPictureById", {
+  return request<API.BaseResponsePictureVO>("/picture/getPictureById", {
     method: "GET",
     params: {
       ...params,
@@ -92,12 +95,12 @@ export async function getPictureByIdUsingGet(
   });
 }
 
-/** queryAll POST /picture/queryAll */
-export async function queryAllUsingPost(
+/** 此处后端没有提供注释 POST /picture/queryAll */
+export async function queryAll(
   body: API.PictureQueryRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseIPagePicture_>("/picture/queryAll", {
+  return request<API.BaseResponseIPagePictureVO>("/picture/queryAll", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -107,12 +110,12 @@ export async function queryAllUsingPost(
   });
 }
 
-/** queryPicturePage POST /picture/queryPicturePage */
-export async function queryPicturePageUsingPost(
+/** 此处后端没有提供注释 POST /picture/queryPicturePage */
+export async function queryPicturePage(
   body: API.PictureQueryRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponsePicturePageVO_>("/picture/queryPicturePage", {
+  return request<API.BaseResponsePicturePageVO>("/picture/queryPicturePage", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -122,12 +125,12 @@ export async function queryPicturePageUsingPost(
   });
 }
 
-/** queryPicturePageCache POST /picture/queryPicturePageCache */
-export async function queryPicturePageCacheUsingPost(
+/** 此处后端没有提供注释 POST /picture/queryPicturePageCache */
+export async function queryPicturePageCache(
   body: API.PictureQueryRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponsePicturePageVO_>(
+  return request<API.BaseResponsePicturePageVO>(
     "/picture/queryPicturePageCache",
     {
       method: "POST",
@@ -140,22 +143,46 @@ export async function queryPicturePageCacheUsingPost(
   );
 }
 
-/** listPictureCategory GET /picture/tag_category */
-export async function listPictureCategoryUsingGet(options?: {
-  [key: string]: any;
-}) {
-  return request<API.BaseResponsePictureTagCategory_>("/picture/tag_category", {
+/** 重新上传：后端通过 multipart 的 file/url 和 RequestParam 元信息接收请求。 */
+export async function reloadPicture(
+  params: API.reloadPictureParams,
+  body: {},
+  file?: File,
+  options?: { [key: string]: any },
+) {
+  const formData = new FormData()
+  if (file) formData.append('file', file)
+
+  Object.entries({ ...params, ...body }).forEach(([key, value]) => {
+    if (value === undefined || value === null) return
+    if (Array.isArray(value)) {
+      value.forEach((item) => formData.append(key, String(item)))
+      return
+    }
+    formData.append(key, String(value))
+  })
+
+  return request<API.BaseResponsePictureVO>('/picture/reloadPicture', {
+    method: 'POST',
+    data: formData,
+    ...(options || {}),
+  })
+}
+
+/** 此处后端没有提供注释 GET /picture/tag_category */
+export async function listPictureCategory(options?: { [key: string]: any }) {
+  return request<API.BaseResponsePictureTagCategory>("/picture/tag_category", {
     method: "GET",
     ...(options || {}),
   });
 }
 
-/** updatePicture POST /picture/updatePicture */
-export async function updatePictureUsingPost(
+/** 此处后端没有提供注释 POST /picture/updatePicture */
+export async function updatePicture(
   body: API.PictureUpdateRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseBoolean_>("/picture/updatePicture", {
+  return request<API.BaseResponseBoolean>("/picture/updatePicture", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -165,64 +192,18 @@ export async function updatePictureUsingPost(
   });
 }
 
-/** uploadPic POST /picture/uploadPic */
-export async function uploadPicUsingPost(
+/** 此处后端没有提供注释 POST /picture/uploadPic */
+export async function uploadPic(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.uploadPicUsingPOSTParams,
+  params: API.uploadPicParams,
   body: {},
-  fileList?: File | File[],
+  fileList?: File[],
   options?: { [key: string]: any }
 ) {
   const formData = new FormData();
 
-  const files = Array.isArray(fileList)
-    ? fileList
-    : fileList
-      ? [fileList]
-      : [];
-  files.forEach((file) => formData.append("fileList", file));
-
-  Object.keys(body).forEach((ele) => {
-    const item = (body as any)[ele];
-
-    if (item !== undefined && item !== null) {
-      if (typeof item === "object" && !(item instanceof File)) {
-        if (item instanceof Array) {
-          item.forEach((f) => formData.append(ele, f || ""));
-        } else {
-          formData.append(
-            ele,
-            new Blob([JSON.stringify(item)], { type: "application/json" })
-          );
-        }
-      } else {
-        formData.append(ele, item);
-      }
-    }
-  });
-
-  return request<API.BaseResponseListPictureVO_>("/picture/uploadPic", {
-    method: "POST",
-    params: {
-      ...params,
-    },
-    data: formData,
-    ...(options || {}),
-  });
-}
-
-/** reloadPicture POST /picture/reloadPicture */
-export async function reloadPictureUsingPost(
-  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: {},
-  body: {},
-  file?: File,
-  options?: { [key: string]: any }
-) {
-  const formData = new FormData();
-
-  if (file) {
-    formData.append("file", file);
+  if (fileList) {
+    fileList.forEach((f) => formData.append("fileList", f || ""));
   }
 
   Object.keys(body).forEach((ele) => {
@@ -244,7 +225,7 @@ export async function reloadPictureUsingPost(
     }
   });
 
-  return request<API.BaseResponsePictureVO_>("/picture/reloadPicture", {
+  return request<API.BaseResponsePictureUploadVO>("/picture/uploadPic", {
     method: "POST",
     params: {
       ...params,

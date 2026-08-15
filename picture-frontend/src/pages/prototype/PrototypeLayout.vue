@@ -112,7 +112,7 @@ const routeLabel = computed(() => {
   if (path.includes('/admin/pictures/review')) return '图片审核'
   if (path.includes('/admin/pictures/import')) return '批量抓图'
   if (path.includes('/admin/spaces')) return '空间运营'
-  return '项目总览'
+  return '首页'
 })
 </script>
 

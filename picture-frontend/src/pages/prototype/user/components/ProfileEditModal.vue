@@ -77,8 +77,8 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import type { FormInstance, UploadProps } from 'ant-design-vue'
-import { avatarUploadUsingPost } from '../../../../api/fileController'
-import { updateSelfUsingPost } from '../../../../api/userController'
+import { avatarUpload } from '../../../../api/fileController'
+import { updateSelf } from '../../../../api/userController'
 
 const props = defineProps<{
   open: boolean
@@ -153,14 +153,14 @@ async function saveProfile() {
 
     // 现有后端采用“先上传文件、再更新用户资料”的两步接口。
     if (avatarFile.value) {
-      const uploadRes = await avatarUploadUsingPost({}, avatarFile.value)
+      const uploadRes = await avatarUpload(avatarFile.value)
       if (uploadRes.data?.code !== 200 || !uploadRes.data.data) {
         throw new Error(uploadRes.data?.message || '头像上传失败')
       }
       avatarurl = uploadRes.data.data
     }
 
-    const updateRes = await updateSelfUsingPost({
+    const updateRes = await updateSelf({
       username: editForm.username?.trim(),
       avatarurl,
       gender: editForm.gender,

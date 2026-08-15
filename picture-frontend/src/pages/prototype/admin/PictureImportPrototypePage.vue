@@ -1,14 +1,15 @@
 <template>
   <div class="import-prototype">
-    <section class="proto-page-head">
+    <section class="import-page-heading">
       <div>
-        <span class="proto-eyebrow">批量抓图 / adminFetchPictureBatch</span>
-        <h1 class="proto-title">让管理员的<br />批量动作更有节奏。</h1>
-        <p class="proto-copy">
-          后端从 Bing 图片结果中抓取图片并逐张上传。任务完成后返回本次成功落库的图片列表；数量上限为 20。
-        </p>
+        <h1>批量抓图</h1>
+        <a-tag class="import-role-tag">管理员功能</a-tag>
       </div>
-      <div class="import-limit"><span>单次上限</span><strong>20</strong><small>count</small></div>
+      <div class="import-limit">
+        <span>单次最多</span>
+        <strong>20</strong>
+        <small>张图片</small>
+      </div>
     </section>
 
     <a-spin v-if="authChecking" class="import-auth-loading" tip="正在确认管理员权限..." />
@@ -35,26 +36,26 @@
         @close="loadError = ''"
       />
 
-      <section class="import-layout proto-section">
-        <div class="import-form-card proto-surface proto-rounded">
-          <div class="form-card-heading">
-            <span class="proto-eyebrow">batch request</span>
+      <section class="import-layout">
+        <section class="import-form-card proto-rounded">
+          <div class="import-section-heading">
             <h2>配置抓取任务</h2>
+            <span class="import-section-note">填写搜索条件</span>
           </div>
           <!-- 绑定表单模型后，Ant Design Vue 才会在点击提交时触发 finish 回调。 -->
           <a-form :model="form" layout="vertical" class="proto-form" @finish="submitImport">
-            <a-form-item label="搜索词 searchText" required>
+            <a-form-item label="搜索词" required>
               <a-input v-model:value="form.searchText" placeholder="例如：minimal architecture" />
             </a-form-item>
             <div class="import-two-col">
-              <a-form-item label="数量 count" required>
+              <a-form-item label="抓取数量" required>
                 <a-input-number v-model:value="form.count" :min="1" :max="20" style="width: 100%" />
               </a-form-item>
-              <a-form-item label="默认名称 name">
+              <a-form-item label="图片名称（可选）">
                 <a-input v-model:value="form.name" placeholder="为空时使用 searchText" />
               </a-form-item>
             </div>
-            <a-form-item label="分类 category">
+            <a-form-item label="分类（可选）">
               <a-select
                 v-model:value="form.category"
                 allow-clear
@@ -67,7 +68,7 @@
                 </a-select-option>
               </a-select>
             </a-form-item>
-            <a-form-item label="标签 tags">
+            <a-form-item label="标签（可选）">
               <div class="import-tags">
                 <a-checkable-tag
                   v-for="tag in tags"
@@ -80,53 +81,57 @@
                 <span v-if="!tags.length" class="import-no-options">暂无可选标签</span>
               </div>
             </a-form-item>
-            <div class="import-contract">
-              <span>后端实际写入</span>
-              <strong>name / category / tags / introduction</strong>
-              <small>introduction 由后端固定为「搜索词 + 相关图片」</small>
+            <div class="import-submit-row">
+              <span>提交后，成功图片会显示在右侧</span>
+              <a-button
+                html-type="submit"
+                class="proto-button acid-button import-submit"
+                type="primary"
+                :loading="submitting"
+              >
+                开始抓取
+              </a-button>
             </div>
-            <a-button
-              html-type="submit"
-              class="proto-button acid-button import-submit"
-              type="primary"
-              :loading="submitting"
-            >
-              开始批量抓取
-            </a-button>
           </a-form>
-        </div>
+        </section>
 
-        <div class="import-result-panel">
-          <div class="import-preview-head">
-            <span class="proto-eyebrow">response / real</span>
+        <section class="import-result-panel">
+          <div class="import-section-heading">
             <h2>任务结果</h2>
+            <a-button class="proto-button ghost-button" @click="openPictureManage">图片管理</a-button>
           </div>
           <div class="import-result-main proto-surface proto-rounded">
-            <span class="import-result-kicker">最近一次执行</span>
-            <strong>{{ importedMessage }}</strong>
-            <small v-if="lastExecutedAt">{{ lastExecutedAt }} · 关键词：{{ lastSearchText }}</small>
-            <small v-else>尚未提交抓取任务</small>
-            <div v-if="hasImportResult" class="import-result-stats" aria-label="批量抓图结果统计">
-              <div class="import-result-stat">
-                <span>本次处理</span>
-                <strong>{{ targetCount }}</strong>
-              </div>
-              <div class="import-result-stat">
-                <span>成功入库</span>
-                <strong>{{ successCount }}</strong>
-              </div>
-              <div class="import-result-stat">
-                <span>未成功</span>
-                <strong>{{ pendingCount }}</strong>
+            <div v-if="submitting" class="import-result-empty">
+              <a-spin tip="正在抓取并上传图片..." />
+            </div>
+            <a-empty
+              v-else-if="!hasImportResult"
+              class="import-result-empty"
+              description="提交任务后，结果会显示在这里"
+            />
+            <div v-else class="import-result-complete">
+              <a-tag class="import-status-tag">执行完成</a-tag>
+              <strong>{{ importedMessage }}</strong>
+              <small>{{ lastExecutedAt }} · 关键词：{{ lastSearchText }}</small>
+              <div class="import-result-stats" aria-label="批量抓图结果统计">
+                <div class="import-result-stat">
+                  <span>目标数量</span>
+                  <strong>{{ targetCount }}</strong>
+                </div>
+                <div class="import-result-stat">
+                  <span>成功入库</span>
+                  <strong>{{ successCount }}</strong>
+                </div>
+                <div class="import-result-stat">
+                  <span>未成功</span>
+                  <strong>{{ pendingCount }}</strong>
+                </div>
               </div>
             </div>
           </div>
           <section v-if="importedPictures.length" class="import-picture-results proto-surface proto-rounded">
             <div class="import-picture-results-head">
-              <div>
-                <span class="proto-eyebrow">本次成功图片</span>
-                <h3>成功落库的图片</h3>
-              </div>
+              <h3>已入库图片</h3>
               <strong>{{ successCount }} 张</strong>
             </div>
             <div class="import-picture-grid">
@@ -163,12 +168,7 @@
             class="import-picture-empty proto-surface proto-rounded"
             description="本次没有返回可展示的图片"
           />
-          <div class="import-boundary">
-            <span class="proto-eyebrow">结果说明</span>
-            <p>接口会同时返回本次处理数量、成功入库数量和图片详情；任务完成后仍可到图片管理继续编辑和审核。</p>
-            <a-button class="proto-button ghost-button" @click="openPictureManage">查看图片管理</a-button>
-          </div>
-        </div>
+        </section>
       </section>
     </template>
   </div>
@@ -178,9 +178,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { adminFetchPictureBatchUsingPost } from '../../../api/pictureController'
-import { listPictureCategoryUsingGet } from '../../../api/pictureController'
-import { getCurrentUserUsingGet } from '../../../api/userController'
+import { adminFetchPictureBatch, listPictureCategory } from '../../../api/pictureController'
+import { getCurrentUser } from '../../../api/userController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 
 const route = useRoute()
@@ -214,10 +213,10 @@ async function ensureAdmin() {
   authChecking.value = true
   accessError.value = ''
   try {
-    const res = await getCurrentUserUsingGet()
+    const res = await getCurrentUser()
     if (res.data?.code === 40100 || !res.data?.data) {
       loginUserStore.clearLoginUser()
-      await router.replace({ path: '/prototype/user/login', query: { redirect: route.fullPath } })
+      await router.replace({ path: '/user/login', query: { redirect: route.fullPath } })
       return false
     }
     if (res.data.code !== 200) {
@@ -246,7 +245,7 @@ async function ensureAdmin() {
 async function loadOptions() {
   optionsLoading.value = true
   try {
-    const res = await listPictureCategoryUsingGet()
+    const res = await listPictureCategory()
     if (res.data?.code === 200) {
       categories.value = res.data.data?.categorys || []
       tags.value = res.data.data?.tags || []
@@ -268,18 +267,19 @@ function toggleTag(tag: string, checked: boolean) {
 }
 
 /** 将后端返回的字节数转换为适合列表展示的文件大小。 */
-function formatPictureSize(size?: number) {
-  if (!size || size <= 0) return '大小未知'
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  return `${(size / 1024 / 1024).toFixed(1)} MB`
+function formatPictureSize(size?: number | string) {
+  const normalizedSize = Number(size)
+  if (!Number.isFinite(normalizedSize) || normalizedSize <= 0) return '大小未知'
+  if (normalizedSize < 1024) return `${normalizedSize} B`
+  if (normalizedSize < 1024 * 1024) return `${(normalizedSize / 1024).toFixed(1)} KB`
+  return `${(normalizedSize / 1024 / 1024).toFixed(1)} MB`
 }
 
 /** 使用字符串保留 Long 图片 ID 的完整精度，再进入原型详情页。 */
 function openPictureDetail(id?: number | string) {
   const normalizedId = String(id || '').trim()
   if (!normalizedId) return
-  void router.push(`/prototype/gallery/detail/${encodeURIComponent(normalizedId)}`)
+  void router.push(`/gallery/detail/${encodeURIComponent(normalizedId)}`)
 }
 
 async function submitImport() {
@@ -303,7 +303,7 @@ async function submitImport() {
   hasImportResult.value = false
   importedMessage.value = '正在执行抓取任务'
   try {
-    const res = await adminFetchPictureBatchUsingPost({
+    const res = await adminFetchPictureBatch({
       searchText,
       count,
       name: form.name?.trim() || undefined,
@@ -338,7 +338,7 @@ async function submitImport() {
 }
 
 function openPictureManage() {
-  void router.push('/prototype/gallery/manage')
+  void router.push('/gallery/manage')
 }
 
 onMounted(() => {
@@ -349,54 +349,63 @@ onMounted(() => {
 <style scoped>
 .import-auth-loading { display: block; min-height: 180px; padding-top: 70px; text-align: center; }
 .import-alert { margin-bottom: 18px; }
-.import-prototype > .proto-page-head { padding-top: 0; gap: 14px; }
-.import-prototype > .proto-page-head .proto-title { margin-top: 7px; font-size: clamp(30px, 3.5vw, 50px); }
-.import-prototype > .proto-page-head .proto-copy { max-width: 560px; font-size: 11px; line-height: 1.45; }
-.import-limit { min-width: 130px; padding: 15px; background: var(--proto-acid); }
+.import-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 24px 0 16px; border-bottom: 1px solid var(--proto-line); }
+.import-page-heading > div:first-child { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.import-page-heading h1 { margin: 0; font-size: 42px; line-height: 1; letter-spacing: -.06em; }
+.import-role-tag.ant-tag { margin: 0; border: 0; border-radius: 4px; background: rgba(255,137,106,.18); color: var(--proto-ink); font-size: 11px; font-weight: 700; }
+.import-limit { width: 150px; min-width: 150px; min-height: 68px; padding: 11px 13px; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr; column-gap: 10px; background: var(--proto-acid); }
 .import-limit span, .import-limit strong, .import-limit small { display: block; }
-.import-limit span { font-family: 'DM Mono', monospace; font-size: 10px; }
-.import-limit strong { margin-top: 14px; font-size: 49px; line-height: .8; letter-spacing: -.1em; }
-.import-limit small { margin-top: 11px; font-family: 'DM Mono', monospace; font-size: 10px; opacity: .55; }
-.import-layout.proto-section { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: var(--prototype-layout-gap); padding-top: 10px; }
-.import-form-card { padding: clamp(14px, 2.1vw, 23px); }
-.import-form-card :deep(.ant-form-item) { margin-bottom: 11px; }
-.form-card-heading { margin-bottom: 14px; }
-.form-card-heading h2, .import-preview-head h2 { margin: 6px 0 10px; font-size: 27px; letter-spacing: -.07em; }
+.import-limit span { font-size: 10px; }
+.import-limit strong { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 40px; line-height: .8; letter-spacing: -.08em; }
+.import-limit small { grid-column: 1; align-self: end; font-size: 10px; opacity: .65; }
+.import-layout { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(0, 1.1fr); gap: var(--prototype-layout-gap); align-items: start; padding-top: 18px; }
+.import-form-card { padding: 20px; background: var(--proto-ink); color: var(--proto-paper); box-shadow: var(--proto-shadow); }
+.import-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 17px; }
+.import-section-heading h2 { margin: 0; color: inherit; font-size: 23px; line-height: 1.1; letter-spacing: -.05em; }
+.import-section-note { color: rgba(241,242,237,.55); font-size: 11px; }
+.import-form-card :deep(.ant-form-item) { margin-bottom: 12px; }
+.import-form-card :deep(.ant-form-item-label) { padding-bottom: 5px; }
+.import-form-card :deep(.ant-form-item-label > label) { color: var(--proto-paper); font-size: 12px; }
+.import-form-card :deep(.ant-form-item-required > label::before) { color: var(--proto-orange); }
 .import-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
-.import-tags :deep(.ant-tag-checkable) { padding: 4px 9px; border-radius: 3px; font-size: 11px; }
+.import-form-card :deep(.ant-input), .import-form-card :deep(.ant-input-number), .import-form-card :deep(.ant-input-affix-wrapper), .import-form-card :deep(.ant-select-selector), .import-form-card :deep(textarea.ant-input) { border-color: rgba(241,242,237,.25) !important; background: rgba(241,242,237,.09) !important; color: var(--proto-paper) !important; }
+.import-form-card :deep(.ant-input::placeholder), .import-form-card :deep(.ant-input-number-input::placeholder) { color: rgba(241,242,237,.48); }
+.import-form-card :deep(.ant-input-number-input) { color: var(--proto-paper); }
+.import-form-card :deep(.ant-select-selection-placeholder), .import-form-card :deep(.ant-select-arrow) { color: rgba(241,242,237,.5); }
+.import-tags { display: flex; flex-wrap: wrap; gap: 7px; min-height: 26px; }
+.import-tags :deep(.ant-tag-checkable) { padding: 4px 9px; border-radius: 3px; color: rgba(241,242,237,.72); font-size: 11px; }
 .import-tags :deep(.ant-tag-checkable-checked) { background: var(--proto-acid); color: var(--proto-ink); }
-.import-no-options { color: var(--proto-muted); font-size: 11px; }
-.import-contract { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; padding: 10px; border-left: 2px solid var(--proto-orange); background: rgba(255,137,106,.12); color: var(--proto-muted); font-family: 'DM Mono', monospace; font-size: 9px; }
-.import-contract strong { color: var(--proto-ink); font-weight: 500; }
-.import-contract small { line-height: 1.5; }
-.import-submit { width: 100%; }
-.import-result-panel { min-width: 0; padding: 2px 0; }
-.import-preview-head h2 { margin-bottom: 14px; }
-.import-result-main { min-height: 220px; padding: 25px; display: flex; flex-direction: column; justify-content: center; }
-.import-result-kicker { color: var(--proto-orange); font-family: 'DM Mono', monospace; font-size: 10px; }
-.import-result-main > strong { margin-top: 18px; font-size: clamp(22px, 3vw, 38px); line-height: 1.1; letter-spacing: -.06em; }
-.import-result-main small { margin-top: 16px; color: var(--proto-muted); font-size: 11px; line-height: 1.6; }
+.import-no-options { color: rgba(241,242,237,.55); font-size: 11px; }
+.import-submit-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 17px; padding-top: 14px; border-top: 1px solid rgba(241,242,237,.18); }
+.import-submit-row > span { color: rgba(241,242,237,.55); font-size: 10px; line-height: 1.4; }
+.import-submit { min-width: 128px; }
+.import-result-panel { min-width: 0; }
+.import-result-panel > .import-section-heading { margin-bottom: 12px; }
+.import-result-main { min-height: 204px; padding: 20px; display: flex; flex-direction: column; justify-content: center; }
+.import-result-empty { min-height: 160px; display: grid; place-items: center; }
+.import-result-empty :deep(.ant-empty) { margin: 0; }
+.import-result-complete > strong { display: block; margin-top: 10px; font-size: 27px; line-height: 1.1; letter-spacing: -.05em; }
+.import-result-complete > small { display: block; margin-top: 10px; color: var(--proto-muted); font-size: 11px; line-height: 1.6; }
+.import-status-tag.ant-tag { margin: 0; border: 0; border-radius: 4px; background: rgba(186,255,61,.35); color: var(--proto-ink); font-size: 10px; font-weight: 700; }
 .import-result-stats { margin-top: 22px; padding-top: 13px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; border-top: 1px solid var(--proto-line); }
 .import-result-stat { min-width: 0; }
 .import-result-stat span { display: block; color: var(--proto-muted); font-size: 10px; }
 .import-result-stat strong { display: block; margin-top: 4px; color: var(--proto-ink); font-size: 22px; line-height: 1; }
 .import-picture-results { margin-top: 12px; padding: 16px; }
-.import-picture-results-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.import-picture-results-head h3 { margin: 6px 0 0; font-size: 20px; letter-spacing: -.05em; }
+.import-picture-results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.import-picture-results-head h3 { margin: 0; font-size: 18px; letter-spacing: -.04em; }
 .import-picture-results-head > strong { color: var(--proto-orange); font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; white-space: nowrap; }
-.import-picture-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-height: 360px; overflow: auto; }
+.import-picture-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; max-height: 326px; overflow: auto; }
 .import-picture-card { min-width: 0; border: 1px solid var(--proto-line); background: rgba(255,255,255,.55); cursor: pointer; transition: border-color 160ms ease, background-color 160ms ease; }
 .import-picture-card:hover { border-color: var(--proto-orange); background: rgba(255,255,255,.85); }
 .import-picture-card:focus-visible { outline: 2px solid var(--proto-orange); outline-offset: 3px; }
-.import-picture-media { aspect-ratio: 16 / 10; display: grid; place-items: center; overflow: hidden; background: rgba(20,24,27,.08); color: var(--proto-muted); font-size: 10px; }
+.import-picture-media { aspect-ratio: 4 / 3; display: grid; place-items: center; overflow: hidden; background: rgba(20,24,27,.08); color: var(--proto-muted); font-size: 10px; }
 .import-picture-media img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .import-picture-meta { min-width: 0; padding: 9px 10px 10px; }
 .import-picture-meta strong, .import-picture-meta small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .import-picture-meta strong { color: var(--proto-ink); font-size: 12px; font-weight: 600; }
 .import-picture-meta small { margin-top: 5px; color: var(--proto-muted); font-family: 'DM Mono', monospace; font-size: 9px; }
 .import-picture-empty { margin: 12px 0 0; padding: 22px 16px; }
-.import-boundary { margin-top: 12px; padding: 18px; border: 1px solid var(--proto-line); background: rgba(255,255,255,.45); }
-.import-boundary p { max-width: 500px; margin: 10px 0 17px; color: var(--proto-muted); font-size: 11px; line-height: 1.7; }
-@media (max-width: 980px) { .import-layout.proto-section { grid-template-columns: 1fr; } }
-@media (max-width: 520px) { .import-two-col, .import-picture-grid, .import-result-stats { grid-template-columns: 1fr; gap: 0; } .import-picture-card + .import-picture-card, .import-result-stat + .import-result-stat { margin-top: 10px; } }
+@media (max-width: 980px) { .import-layout { grid-template-columns: 1fr; } .import-picture-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .import-page-heading { align-items: flex-start; flex-direction: column; } .import-limit { width: 100%; } .import-two-col, .import-picture-grid, .import-result-stats { grid-template-columns: 1fr; gap: 0; } .import-picture-card + .import-picture-card, .import-result-stat + .import-result-stat { margin-top: 10px; } .import-submit-row { align-items: stretch; flex-direction: column; } .import-submit { width: 100%; } }
 </style>

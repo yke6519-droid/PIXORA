@@ -18,7 +18,7 @@
         <a-form-item name="useraccount" :rules="accountRules"><a-input v-model:value="form.useraccount" aria-label="账号" size="large" placeholder="输入账号" /></a-form-item>
         <a-form-item name="userpassword" :rules="passwordRules"><a-input-password v-model:value="form.userpassword" aria-label="密码" size="large" placeholder="输入密码" /></a-form-item>
         <a-space class="auth-help" :size="0" align="center">
-          <a-button type="link" @click="router.push('/prototype/user/register')">还没有账号？注册</a-button>
+          <a-button type="link" @click="router.push('/user/register')">还没有账号？注册</a-button>
         </a-space>
         <a-button html-type="submit" :loading="loading" class="proto-button acid-button auth-submit" type="primary" size="large">登录</a-button>
       </a-form>
@@ -30,7 +30,7 @@
 import { reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { userLoginUsingPost } from '../../../api/userController'
+import { userLogin } from '../../../api/userController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 
 const router = useRouter()
@@ -50,7 +50,7 @@ const passwordRules = [
 async function submitLogin() {
   loading.value = true
   try {
-    const res = await userLoginUsingPost({
+    const res = await userLogin({
       useraccount: form.useraccount,
       userpassword: form.userpassword,
     })
@@ -62,7 +62,7 @@ async function submitLogin() {
     message.success('登录成功')
     const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
       ? route.query.redirect
-      : '/prototype/gallery'
+      : '/gallery'
     await router.replace(redirect)
   } catch (error: any) {
     message.error(error?.response?.data?.message || '登录失败，请确认后端服务已启动')

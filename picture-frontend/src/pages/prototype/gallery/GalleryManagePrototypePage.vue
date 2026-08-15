@@ -16,7 +16,7 @@
         <a-button
           class="proto-button acid-button"
           type="primary"
-          @click="router.push('/prototype/gallery/upload')"
+          @click="router.push('/gallery/upload')"
         >
           上传图片
         </a-button>
@@ -128,7 +128,7 @@
         <a-button
           class="proto-button acid-button"
           type="primary"
-          @click="router.push('/prototype/gallery/upload')"
+          @click="router.push('/gallery/upload')"
         >
           上传第一张图片
         </a-button>
@@ -248,9 +248,9 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  deletePictureUsingDelete,
-  listPictureCategoryUsingGet,
-  queryPicturePageUsingPost,
+  deletePicture,
+  listPictureCategory,
+  queryPicturePage,
 } from '../../../api/pictureController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import PictureManageEditorModal from './components/PictureManageEditorModal.vue'
@@ -321,7 +321,7 @@ async function ensureCurrentUser() {
     }
     if (!loginUserStore.loginUser) {
       await router.replace({
-        path: '/prototype/user/login',
+        path: '/user/login',
         query: { redirect: route.fullPath },
       })
       return false
@@ -347,7 +347,7 @@ async function loadPictures() {
   loadError.value = ''
   selectedIds.value = []
   try {
-    const res = await queryPicturePageUsingPost({
+    const res = await queryPicturePage({
       current: current.value,
       pageSize,
       userId: currentUser.id,
@@ -383,7 +383,7 @@ async function loadPictures() {
 async function loadOptions() {
   optionLoading.value = true
   try {
-    const res = await listPictureCategoryUsingGet()
+    const res = await listPictureCategory()
     if (res.data?.code === 200) {
       categories.value = res.data.data?.categorys || []
       tags.value = res.data.data?.tags || []
@@ -446,7 +446,7 @@ function toggleAll(event: any) {
 function openDetail(id?: number | string) {
   const value = normalizeId(id)
   if (value) {
-    void router.push(`/prototype/gallery/detail/${encodeURIComponent(value)}`)
+    void router.push(`/gallery/detail/${encodeURIComponent(value)}`)
   }
 }
 
@@ -465,7 +465,7 @@ async function deleteOne(id?: number | string) {
   if (!value) return
 
   try {
-    const res = await deletePictureUsingDelete({ id: value })
+    const res = await deletePicture({ id: value })
     if (res.data?.code !== 200) {
       throw new Error(res.data?.message || '删除失败')
     }
@@ -492,7 +492,7 @@ function confirmBatchDelete() {
       let failedCount = 0
       for (const id of [...selectedIds.value]) {
         try {
-          const res = await deletePictureUsingDelete({ id })
+          const res = await deletePicture({ id })
           if (res.data?.code === 200) successCount += 1
           else failedCount += 1
         } catch {
@@ -508,10 +508,11 @@ function confirmBatchDelete() {
   })
 }
 
-function formatFileSize(size?: number) {
-  if (!size) return '大小未知'
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  return `${(size / 1024 / 1024).toFixed(2)} MB`
+function formatFileSize(size?: number | string) {
+  const normalizedSize = Number(size)
+  if (!Number.isFinite(normalizedSize) || normalizedSize <= 0) return '大小未知'
+  if (normalizedSize < 1024 * 1024) return `${(normalizedSize / 1024).toFixed(1)} KB`
+  return `${(normalizedSize / 1024 / 1024).toFixed(2)} MB`
 }
 
 function formatDate(value?: string) {

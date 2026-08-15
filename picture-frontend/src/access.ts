@@ -2,51 +2,40 @@
  * 全局检测
  * 检验当前登录用户是否有权限进入该页面
  */
-import router from "./config/router";
-import { useLoginUserStore } from "./stores/useLoginUserStore";
-import { message } from "ant-design-vue";
+import router from './config/router'
+import { useLoginUserStore } from './stores/useLoginUserStore'
+import { message } from 'ant-design-vue'
 
 let firstLoginFlag = true
 
 /**
  * 全局权限校验功能
  */
-router.beforeEach(async(to, from, next)=>{
-    console.log('路由跳转:', to.fullPath)
+router.beforeEach(async (to) => {
+  const loginUserStore = useLoginUserStore()
 
-    const loginUserStore = useLoginUserStore()
+  // 首次进入应用时等待 Session 校验完成，避免管理员刷新页面后被误判为未登录。
+  if (firstLoginFlag) {
+    firstLoginFlag = false
+    await loginUserStore.fetchLoginUser()
+  }
 
-    // 只在首次加载时获取用户信息，不阻塞路由跳转
-    if(firstLoginFlag){
-        firstLoginFlag = false
-        // 异步获取用户信息，不等待
-        loginUserStore.fetchLoginUser().catch(() => {
-            // 忽略错误，继续跳转
-        })
+  const loginUser = loginUserStore.loginUser
+  const requiresAdmin = Boolean(to.meta.requiresAdmin)
+  const requiresAuth = Boolean(to.meta.requiresAuth || requiresAdmin)
+
+  if (requiresAuth && !loginUser) {
+    message.error('请先登录')
+    return {
+      path: '/user/login',
+      query: { redirect: to.fullPath },
     }
+  }
 
-    const loginUser = loginUserStore.loginUser;
-    console.log('当前用户:', loginUser)
+  if (requiresAdmin && loginUser?.userLevel !== 'admin') {
+    message.error('当前用户没有管理员权限')
+    return '/gallery'
+  }
 
-    const toURL = to.fullPath
-    /**
-     * 根据你的业务校验逻辑，来限制跳转
-     * 比如：某些页面只有管理员才能访问
-     */
-    if(toURL.startsWith("/admin")){
-        console.log('需要管理员权限')
-        // 判断是否有权限
-        if(!loginUser){
-            message.error("用户未登录")
-            next(`/user/login?redirect=${to.fullPath}`)
-            return
-        }
-        if(loginUser.userLevel!='admin'){
-            message.error("当前用户没有权限")
-            next('/')
-            return
-        }
-    }
-    // 没有被阻拦 则直接跳转即可
-    next()
+  return true
 })

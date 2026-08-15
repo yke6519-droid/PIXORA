@@ -1,14 +1,14 @@
 <template>
   <div class="space-admin-prototype">
-    <section class="proto-page-head">
+    <section class="proto-page-head space-admin-page-head">
       <div>
-        <span class="proto-eyebrow">空间运营 / querySpacePage + alterLevelById</span>
-        <h1 class="proto-title">空间不是黑盒，<br />容量与等级都可读。</h1>
-        <p class="proto-copy">
-          管理员通过真实空间分页接口查看持有人、容量和图片数量，并使用 <span class="proto-mono">alterLevelById</span> 调整空间等级。
-        </p>
+        <h1 class="proto-title">空间运营</h1>
       </div>
-      <div class="space-admin-summary"><span>空间总数</span><strong>{{ total }}</strong><small>querySpacePage</small></div>
+      <div class="space-admin-summary">
+        <span>空间总数</span>
+        <strong>{{ total }}</strong>
+        <small>私人空间</small>
+      </div>
     </section>
 
     <a-spin v-if="authChecking" class="space-auth-loading" tip="正在确认管理员权限..." />
@@ -38,29 +38,29 @@
 
       <section class="space-admin-metrics proto-section">
         <div class="admin-metric proto-surface">
-          <span>当前页图片数量</span>
+          <span>本页图片数</span>
           <strong>{{ currentPictureCount }}</strong>
-          <small>usedCount</small>
+          <small>分页合计</small>
         </div>
         <div class="admin-metric proto-surface">
-          <span>当前页容量占用</span>
+          <span>本页占用空间</span>
           <strong>{{ formatSize(currentUsedSize) }}</strong>
-          <small>usedSize</small>
+          <small>容量合计</small>
         </div>
         <div class="admin-metric proto-surface">
-          <span>需要关注</span>
+          <span>高使用率空间</span>
           <strong>{{ attentionCount }}</strong>
-          <small>容量使用率 ≥ 75%</small>
+          <small>使用率 ≥ 75%</small>
         </div>
       </section>
 
       <section class="space-admin-table proto-section">
         <div class="space-admin-table-head">
           <div>
-            <span class="proto-eyebrow">spaces / real data</span>
-            <h2 class="proto-subtitle">私人空间清单</h2>
+            <h2 class="proto-subtitle">私人空间</h2>
+            <span class="space-admin-table-count">共 {{ total }} 个空间</span>
           </div>
-          <a-select v-model:value="levelFilter" style="width: 140px" @change="changeLevel">
+          <a-select v-model:value="levelFilter" class="space-admin-filter" @change="changeLevel">
             <a-select-option value="all">全部等级</a-select-option>
             <a-select-option :value="0">基础空间</a-select-option>
             <a-select-option :value="1">专业空间</a-select-option>
@@ -75,17 +75,17 @@
         <div v-else-if="spaces.length" class="space-admin-list">
           <article v-for="space in spaces" :key="normalizeId(space.id)" class="space-admin-row">
             <div class="space-admin-name">
-              <span class="space-id">#{{ normalizeId(space.id) }}</span>
               <strong>{{ space.spaceName || '未命名空间' }}</strong>
               <small>{{ holderName(space) }} · {{ formatDate(space.createTime) }}</small>
             </div>
             <div class="space-admin-usage">
+              <span class="space-admin-field-label">容量使用</span>
               <div class="usage-bar"><i :style="{ width: `${usagePercent(space.usedSize, space.maxSize)}%` }"></i></div>
               <span>{{ formatSize(space.usedSize) }} / {{ formatSize(space.maxSize) }}</span>
             </div>
             <div class="space-admin-level">
               <a-tag class="proto-tag acid-tag">{{ levelText(space.spaceLevel) }}</a-tag>
-              <small>level {{ space.spaceLevel ?? '—' }}</small>
+              <small>空间等级</small>
             </div>
             <div class="space-admin-count">
               <strong>{{ toNumber(space.usedCount) }}</strong>
@@ -123,14 +123,14 @@
       @ok="saveLevel"
     >
       <a-form layout="vertical" class="proto-form">
-        <a-form-item label="spaceId">
+        <a-form-item label="空间编号">
           <a-input :value="normalizeId(selectedSpace?.id)" disabled />
         </a-form-item>
-        <a-form-item label="alterLevel">
+        <a-form-item label="空间等级">
           <a-select v-model:value="selectedLevel" style="width: 100%">
-            <a-select-option :value="0">0 / 基础空间 · 100MB · 50张</a-select-option>
-            <a-select-option :value="1">1 / 专业空间 · 500MB · 100张</a-select-option>
-            <a-select-option :value="2">2 / 专家空间 · 1000MB · 200张</a-select-option>
+            <a-select-option :value="0">基础空间 · 100MB · 50 张</a-select-option>
+            <a-select-option :value="1">专业空间 · 500MB · 100 张</a-select-option>
+            <a-select-option :value="2">专家空间 · 1000MB · 200 张</a-select-option>
           </a-select>
         </a-form-item>
       </a-form>
@@ -142,8 +142,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { alterLevelByIdUsingPut, querySpacePageUsingGet } from '../../../api/spaceController'
-import { getCurrentUserUsingGet } from '../../../api/userController'
+import { alterLevelById, querySpacePage } from '../../../api/spaceController'
+import { getCurrentUser } from '../../../api/userController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import { formatSpaceLevel } from '../prototypeData'
 
@@ -211,10 +211,10 @@ async function ensureAdmin() {
   authChecking.value = true
   accessError.value = ''
   try {
-    const res = await getCurrentUserUsingGet()
+    const res = await getCurrentUser()
     if (res.data?.code === 40100 || !res.data?.data) {
       loginUserStore.clearLoginUser()
-      await router.replace({ path: '/prototype/user/login', query: { redirect: route.fullPath } })
+      await router.replace({ path: '/user/login', query: { redirect: route.fullPath } })
       return false
     }
     if (res.data.code !== 200) {
@@ -245,12 +245,14 @@ async function loadSpaces() {
   loading.value = true
   loadError.value = ''
   try {
-    const res = await querySpacePageUsingGet({
-      current: current.value,
-      pageSize,
-      spaceLevel: levelFilter.value === 'all' ? undefined : levelFilter.value,
-      sortFiled: 'createTime',
-      sortOrder: 'descend',
+    const res = await querySpacePage({
+      spaceQueryRequest: {
+        current: current.value,
+        pageSize,
+        spaceLevel: levelFilter.value === 'all' ? undefined : levelFilter.value,
+        sortFiled: 'createTime',
+        sortOrder: 'descend',
+      },
     })
     if (res.data?.code !== 200) throw new Error(res.data?.message || '空间列表加载失败')
     spaces.value = res.data.data?.spaceVOList || []
@@ -290,7 +292,7 @@ async function saveLevel() {
   if (!selectedSpace.value?.id) return
   actionLoading.value = true
   try {
-    const res = await alterLevelByIdUsingPut({
+    const res = await alterLevelById({
       spaceId: selectedSpace.value.id,
       alterLevel: selectedLevel.value,
     })
@@ -311,36 +313,40 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.space-admin-page-head { padding-top: 14px; }
+.space-admin-page-head .proto-title { margin: 0; font-size: clamp(36px, 4vw, 54px); }
 .space-auth-loading { display: block; min-height: 180px; padding-top: 70px; text-align: center; }
-.space-alert { margin-bottom: 18px; }
-.space-admin-summary { min-width: 160px; padding: 18px; background: var(--proto-blue); }
+.space-alert { margin-bottom: 12px; }
+.space-admin-summary { min-width: 154px; padding: 14px 17px; border-radius: 7px; background: var(--proto-ink); color: var(--proto-paper); }
 .space-admin-summary span, .space-admin-summary strong, .space-admin-summary small { display: block; }
-.space-admin-summary span { font-family: 'DM Mono', monospace; font-size: 10px; }
-.space-admin-summary strong { margin-top: 20px; font-size: 55px; line-height: .8; letter-spacing: -.1em; }
-.space-admin-summary small { margin-top: 15px; font-family: 'DM Mono', monospace; font-size: 9px; opacity: .52; }
-.space-admin-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.admin-metric { min-height: 122px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between; }
-.admin-metric span { color: var(--proto-muted); font-size: 11px; }
-.admin-metric strong { font-size: 35px; letter-spacing: -.08em; }
-.admin-metric small { color: var(--proto-orange); font-family: 'DM Mono', monospace; font-size: 9px; }
-.space-admin-table-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 15px; margin-bottom: 25px; }
-.space-admin-table-head h2 { margin-top: 9px; }
+.space-admin-summary span { color: rgba(255,255,255,.72); font-size: 11px; }
+.space-admin-summary strong { margin-top: 10px; font-size: 43px; line-height: .9; letter-spacing: -.08em; }
+.space-admin-summary small { margin-top: 9px; color: rgba(255,255,255,.56); font-size: 10px; }
+.space-admin-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding-top: 18px; }
+.admin-metric { min-height: 102px; padding: 15px 17px; display: flex; flex-direction: column; justify-content: space-between; border-radius: 7px; }
+.admin-metric span { color: var(--proto-muted); font-size: 12px; }
+.admin-metric strong { font-size: 34px; line-height: 1; letter-spacing: -.08em; }
+.admin-metric small { color: var(--proto-orange); font-size: 10px; }
+.space-admin-table-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 15px; margin-bottom: 14px; }
+.space-admin-table-head h2 { margin: 0 0 5px; font-size: clamp(24px, 3vw, 36px); }
+.space-admin-table-count { color: var(--proto-muted); font-size: 12px; }
+.space-admin-filter { width: 148px; }
 .space-admin-loading { padding: 22px; }
 .space-admin-list { border-top: 2px solid var(--proto-ink); }
-.space-admin-row { min-height: 111px; padding: 17px 0; display: grid; grid-template-columns: 1.2fr 1fr .7fr .6fr 118px; gap: 18px; align-items: center; border-bottom: 1px solid var(--proto-line); }
-.space-id { display: block; color: var(--proto-orange); font-family: 'DM Mono', monospace; font-size: 10px; }
+.space-admin-row { min-height: 96px; padding: 14px 0; display: grid; grid-template-columns: 1.2fr 1.05fr .75fr .55fr 105px; gap: 16px; align-items: center; border-bottom: 1px solid var(--proto-line); }
 .space-admin-name strong, .space-admin-name small { display: block; }
-.space-admin-name strong { margin-top: 7px; font-size: 16px; letter-spacing: -.04em; }
-.space-admin-name small { margin-top: 6px; color: var(--proto-muted); font-size: 10px; }
-.space-admin-usage span { display: block; margin-top: 7px; color: var(--proto-muted); font-family: 'DM Mono', monospace; font-size: 9px; }
-.usage-bar { height: 5px; overflow: hidden; background: var(--proto-paper-deep); }
+.space-admin-name strong { font-size: 16px; letter-spacing: -.04em; }
+.space-admin-name small { margin-top: 6px; color: var(--proto-muted); font-size: 11px; }
+.space-admin-field-label { display: block; margin-bottom: 7px; color: var(--proto-muted); font-size: 11px; }
+.space-admin-usage > span:last-child { display: block; margin-top: 7px; color: var(--proto-muted); font-size: 10px; }
+.usage-bar { height: 6px; overflow: hidden; background: var(--proto-paper-deep); border-radius: 99px; }
 .usage-bar i { display: block; height: 100%; background: var(--proto-acid); }
-.space-admin-level small { display: block; margin-top: 5px; color: var(--proto-muted); font-family: 'DM Mono', monospace; font-size: 9px; }
-.space-admin-count strong { font-size: 25px; letter-spacing: -.08em; }
-.space-admin-count span { color: var(--proto-muted); font-size: 10px; }
-.space-admin-pagination { display: flex; justify-content: flex-end; padding-top: 25px; }
+.space-admin-level small { display: block; margin-top: 4px; color: var(--proto-muted); font-size: 10px; }
+.space-admin-count strong { font-size: 24px; line-height: 1; letter-spacing: -.08em; }
+.space-admin-count span { color: var(--proto-muted); font-size: 11px; }
+.space-admin-pagination { display: flex; justify-content: flex-end; padding-top: 18px; }
 .space-admin-pagination :deep(.ant-pagination-item-active) { border-color: var(--proto-ink); background: var(--proto-ink); }
 .space-admin-pagination :deep(.ant-pagination-item-active a) { color: var(--proto-paper); }
-@media (max-width: 950px) { .space-admin-row { grid-template-columns: 1fr 1fr .7fr 95px; } .space-admin-row > .proto-button { grid-column: 4; grid-row: 1 / span 2; } }
-@media (max-width: 650px) { .space-admin-metrics { grid-template-columns: 1fr; } .space-admin-table-head { align-items: flex-start; flex-direction: column; } .space-admin-row { grid-template-columns: 1fr 1fr; gap: 12px; } .space-admin-row > .proto-button { grid-column: 2; grid-row: auto; } }
+@media (max-width: 950px) { .space-admin-row { grid-template-columns: 1.15fr 1fr .75fr 95px; } .space-admin-row > .proto-button { grid-column: 4; grid-row: 1 / span 2; } }
+@media (max-width: 650px) { .space-admin-metrics { grid-template-columns: 1fr; } .space-admin-table-head { align-items: flex-start; flex-direction: column; } .space-admin-filter { width: 100%; } .space-admin-row { grid-template-columns: 1fr 1fr; gap: 12px; } .space-admin-row > .proto-button { grid-column: 2; grid-row: auto; } }
 </style>

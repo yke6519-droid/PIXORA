@@ -1,18 +1,12 @@
 <template>
   <div class="review-prototype">
-    <section class="proto-page-head">
-      <div>
-        <span class="proto-eyebrow">图片审核 / queryAll + adminCheckPicture</span>
-        <h1 class="proto-title">先看清内容，<br />再做审核决定。</h1>
-        <p class="proto-copy">
-          审核页使用管理员专用 <span class="proto-mono">queryAll</span> 分页获取原始图片，
-          通过 <span class="proto-mono">adminCheckPicture</span> 与批量接口更新审核状态。
-        </p>
+    <section class="review-heading">
+      <div class="review-heading-copy">
+        <h1 class="review-title">图片审核</h1>
       </div>
       <div class="review-counter" aria-label="待审核图片数量">
-        <span>待处理</span>
+        <span>待处理图片</span>
         <strong>{{ pendingTotal }}</strong>
-        <small>pictureCheck = 0</small>
       </div>
     </section>
 
@@ -118,16 +112,18 @@
             </div>
             <p class="review-introduction">{{ picture.introduction || '上传者未填写图片简介。' }}</p>
             <div class="review-meta">
-              <span>上传者 #{{ picture.userid ?? '未知' }}</span>
+              <span class="review-uploader" :title="uploaderLabel(picture)">
+                上传者 {{ uploaderLabel(picture) }}
+              </span>
               <span>{{ formatDate(picture.createtime) }}</span>
             </div>
             <div class="review-meta review-meta-secondary">
               <span>{{ formatSize(picture.picsize) }} · {{ picture.picwidth || '—' }}×{{ picture.picheight || '—' }}</span>
-              <span>ID {{ normalizeId(picture.id) || '—' }}</span>
+              <span>{{ picture.category || '未分类' }}</span>
             </div>
             <div class="review-card-actions">
-              <a-button class="proto-button ghost-button" @click="openReview(picture)">查看审核</a-button>
-              <a-button class="proto-button ghost-button" @click="openDetail(picture.id)">图片详情</a-button>
+              <a-button class="proto-button ghost-button" @click="openReview(picture)">审核</a-button>
+              <a-button class="proto-button ghost-button" @click="openDetail(picture.id)">详情</a-button>
               <a-button
                 v-if="picture.pictureCheck === 0"
                 class="proto-button acid-button"
@@ -135,7 +131,7 @@
                 :loading="actionLoading"
                 @click="passOne(picture)"
               >
-                快速通过
+                通过
               </a-button>
             </div>
             <div v-if="picture.pictureCheck === 2 && picture.checkMessage" class="review-message">
@@ -176,7 +172,7 @@
       @ok="submitReview"
     >
       <div v-if="reviewPicture" class="review-modal-preview">
-        <img :src="reviewPicture.url || reviewPicture.thumbnailUrl" :alt="reviewPicture.name || '图片预览'" />
+        <img :src="reviewPicture.url" :alt="reviewPicture.name || '图片预览'" />
         <div>
           <strong>{{ reviewPicture.name || '未命名图片' }}</strong>
           <p>{{ reviewPicture.introduction || '上传者未填写图片简介。' }}</p>
@@ -215,11 +211,11 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  adminCheckPictureBatchUsingPut,
-  adminCheckPictureUsingPut,
-  queryAllUsingPost,
+  adminCheckPictureBatch,
+  adminCheckPicture,
+  queryAll,
 } from '../../../api/pictureController'
-import { getCurrentUserUsingGet } from '../../../api/userController'
+import { getCurrentUser } from '../../../api/userController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import { pictureStatusText } from '../prototypeData'
 
@@ -248,7 +244,7 @@ const accessError = ref('')
 const loading = ref(false)
 const actionLoading = ref(false)
 const loadError = ref('')
-const pictures = ref<API.Picture[]>([])
+const pictures = ref<API.PictureVO[]>([])
 const selectedIds = ref<string[]>([])
 const activeTab = ref<ReviewTab>('pending')
 const current = ref(1)
@@ -258,7 +254,7 @@ const statusCounts = reactive<Record<ReviewTab, number>>({ all: 0, pending: 0, p
 
 const reviewOpen = ref(false)
 const reviewingBatch = ref(false)
-const reviewPicture = ref<API.Picture | null>(null)
+const reviewPicture = ref<API.PictureVO | null>(null)
 const batchTargetIds = ref<string[]>([])
 const reviewResult = ref<1 | 2>(1)
 const checkMessage = ref('')
@@ -293,8 +289,9 @@ function formatSize(value?: number | string) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
-function parseTags(value?: string) {
+function parseTags(value?: string | string[]) {
   if (!value) return []
+  if (Array.isArray(value)) return value.map(String).filter(Boolean)
   try {
     const parsed = JSON.parse(value)
     if (Array.isArray(parsed)) return parsed.map(String)
@@ -302,6 +299,14 @@ function parseTags(value?: string) {
     // 兼容历史数据：标签字段不是合法 JSON 时，仍允许按逗号展示。
   }
   return value.split(/[,，]/).map((item) => item.trim()).filter(Boolean)
+}
+
+/** 优先展示后端脱敏后的用户名和账号，只有旧数据缺字段时才回退到用户 ID。 */
+function uploaderLabel(picture: API.PictureVO) {
+  const username = picture.createdUser?.username?.trim()
+  const useraccount = picture.createdUser?.useraccount?.trim()
+  if (username && useraccount) return `${username} · ${useraccount}`
+  return username || useraccount || (picture.userId != null ? `用户 ${picture.userId}` : '未知用户')
 }
 
 function tabCount(tab: ReviewTab) {
@@ -325,10 +330,10 @@ async function ensureAdmin() {
   authChecking.value = true
   accessError.value = ''
   try {
-    const res = await getCurrentUserUsingGet()
+    const res = await getCurrentUser()
     if (res.data?.code === 40100 || !res.data?.data) {
       loginUserStore.clearLoginUser()
-      await router.replace({ path: '/prototype/user/login', query: { redirect: route.fullPath } })
+      await router.replace({ path: '/user/login', query: { redirect: route.fullPath } })
       return false
     }
     if (res.data.code !== 200) {
@@ -360,7 +365,7 @@ async function loadPage() {
   loading.value = true
   loadError.value = ''
   try {
-    const res = await queryAllUsingPost({
+    const res = await queryAll({
       ...queryBody(statusByTab[activeTab.value], pageSize),
       current: current.value,
     })
@@ -381,9 +386,9 @@ async function loadCounts() {
   if (!authorized.value) return
   try {
     const results = await Promise.all([
-      queryAllUsingPost(queryBody(0, 1)),
-      queryAllUsingPost(queryBody(1, 1)),
-      queryAllUsingPost(queryBody(2, 1)),
+      queryAll(queryBody(0, 1)),
+      queryAll(queryBody(1, 1)),
+      queryAll(queryBody(2, 1)),
     ])
     statusCounts.pending = results[0].data?.code === 200 ? numberValue(results[0].data.data?.total) : 0
     statusCounts.pass = results[1].data?.code === 200 ? numberValue(results[1].data.data?.total) : 0
@@ -422,7 +427,7 @@ function toggleAll(event: any) {
     : []
 }
 
-function openReview(picture: API.Picture) {
+function openReview(picture: API.PictureVO) {
   reviewPicture.value = picture
   reviewingBatch.value = false
   batchTargetIds.value = []
@@ -441,7 +446,7 @@ function batchRefuse() {
   reviewOpen.value = true
 }
 
-function passOne(picture: API.Picture) {
+function passOne(picture: API.PictureVO) {
   const id = normalizeId(picture.id)
   if (!id) return
   Modal.confirm({
@@ -467,7 +472,7 @@ function batchPass() {
 async function submitSingle(id: string, result: 1 | 2, reason?: string) {
   actionLoading.value = true
   try {
-    const res = await adminCheckPictureUsingPut({
+    const res = await adminCheckPicture({
       picId: id,
       checkResult: result,
       ...(result === 2 ? { checkMessage: reason?.trim() } : {}),
@@ -490,7 +495,7 @@ async function submitBatch(ids: string[], result: 1 | 2, reason?: string) {
   if (!ids.length) return false
   actionLoading.value = true
   try {
-    const res = await adminCheckPictureBatchUsingPut({
+    const res = await adminCheckPictureBatch({
       picIds: ids,
       checkResult: result,
       ...(result === 2 ? { checkMessage: reason?.trim() } : {}),
@@ -532,7 +537,7 @@ async function submitReview() {
 async function openDetail(id?: number | string) {
   const normalizedId = normalizeId(id)
   if (!normalizedId) return
-  await router.push(`/prototype/gallery/detail/${encodeURIComponent(normalizedId)}`)
+  await router.push(`/gallery/detail/${encodeURIComponent(normalizedId)}`)
 }
 
 onMounted(() => {
@@ -541,48 +546,56 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.review-counter { min-width: 160px; padding: 17px; background: var(--proto-ink); color: var(--proto-paper); }
-.review-counter span, .review-counter strong, .review-counter small { display: block; }
-.review-counter span { color: var(--proto-orange); font-family: 'DM Mono', monospace; font-size: 10px; }
-.review-counter strong { margin-top: 24px; color: var(--proto-acid); font-size: 47px; line-height: .8; letter-spacing: -.1em; }
-.review-counter small { margin-top: 15px; color: rgba(241,242,237,.5); font-family: 'DM Mono', monospace; font-size: 9px; }
+.review-prototype { color: var(--proto-ink); font-family: 'Geist', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+.review-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 14px; padding: 14px 0 15px; border-bottom: 1px solid var(--proto-line); }
+.review-heading-copy { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+.review-title { margin: 0; color: var(--proto-ink); font-size: clamp(32px, 3.5vw, 42px); font-weight: 800; letter-spacing: -.055em; line-height: 1; text-wrap: balance; }
+.review-counter { min-width: 138px; padding: 11px 13px; background: var(--proto-ink); color: var(--proto-paper); }
+.review-counter span, .review-counter strong { display: block; }
+.review-counter span { color: var(--proto-orange); font-size: 11px; font-weight: 700; }
+.review-counter strong { margin-top: 7px; color: var(--proto-acid); font-size: 32px; font-weight: 800; line-height: 1; letter-spacing: -.04em; }
 .review-auth-loading { display: block; min-height: 180px; padding-top: 70px; text-align: center; }
-.review-alert { margin-bottom: 18px; }
-.review-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
-.review-tabs { display: flex; gap: 3px; flex-wrap: wrap; }
-.review-tabs button { min-height: 52px; padding: 0 16px; border: 1px solid var(--proto-line); background: transparent; color: var(--proto-muted); cursor: pointer; font-family: 'Manrope', sans-serif; font-size: 11px; }
-.review-tabs button b { margin-left: 8px; color: var(--proto-orange); font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 400; }
+.review-alert { margin-bottom: 14px; }
+.review-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.review-toolbar.proto-section { padding-top: 0; }
+.review-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.review-tabs button { min-height: 42px; padding: 0 14px; border: 1px solid var(--proto-line); background: transparent; color: var(--proto-muted); cursor: pointer; font: inherit; font-size: 13px; font-weight: 650; }
+.review-tabs button b { margin-left: 7px; color: var(--proto-orange); font-size: 12px; font-weight: 700; }
+.review-tabs button:hover { border-color: var(--proto-ink); color: var(--proto-ink); }
+.review-tabs button:focus-visible { outline: 2px solid var(--proto-orange); outline-offset: 2px; }
 .review-tabs button.active { border-color: var(--proto-ink); background: var(--proto-ink); color: var(--proto-paper); }
-.review-batch { display: flex; align-items: center; gap: 14px; padding: 10px 12px; }
-.review-batch-actions { display: flex; gap: 7px; }
-.review-selected-count { color: var(--proto-orange); font-family: 'DM Mono', monospace; font-size: 10px; }
+.review-batch { display: flex; align-items: center; gap: 12px; padding: 7px 9px; }
+.review-batch-actions { display: flex; gap: 6px; }
+.review-selected-count { color: var(--proto-orange); font-size: 12px; font-weight: 700; }
 .danger-button:not(:disabled) { color: var(--proto-orange); }
-.review-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.review-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .review-card { overflow: hidden; }
-.review-skeleton-card { min-height: 420px; padding: 18px; }
-.review-card-image { position: relative; height: 218px; }
-.review-image-check { position: absolute; top: 13px; left: 13px; padding: 4px; background: rgba(241,242,237,.86); }
-.review-image-format { position: absolute; right: 12px; bottom: 10px; padding: 4px 6px; background: rgba(11,15,17,.78); color: var(--proto-acid); font-family: 'DM Mono', monospace; font-size: 9px; }
-.review-card-body { padding: 16px; }
+.review-skeleton-card { min-height: 370px; padding: 15px; }
+.review-card-image { position: relative; height: 205px; }
+.review-card-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.review-image-check { position: absolute; top: 11px; left: 11px; padding: 4px; background: rgba(241,242,237,.9); }
+.review-image-format { position: absolute; right: 11px; bottom: 10px; padding: 4px 6px; background: rgba(11,15,17,.78); color: var(--proto-acid); font-size: 10px; font-weight: 700; }
+.review-card-body { padding: 14px; }
 .review-card-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.review-card-title strong { overflow: hidden; font-size: 16px; letter-spacing: -.04em; text-overflow: ellipsis; white-space: nowrap; }
-.review-introduction { display: -webkit-box; min-height: 35px; margin: 9px 0 12px; overflow: hidden; color: var(--proto-muted); font-size: 11px; line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.review-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--proto-muted); font-family: 'DM Mono', monospace; font-size: 9px; }
+.review-card-title strong { overflow: hidden; font-size: 16px; font-weight: 800; letter-spacing: -.035em; text-overflow: ellipsis; white-space: nowrap; }
+.review-introduction { display: -webkit-box; min-height: 36px; margin: 8px 0 11px; overflow: hidden; color: var(--proto-muted); font-size: 12px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.review-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--proto-muted); font-size: 11px; line-height: 1.4; }
 .review-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.review-meta-secondary { margin-top: 6px; color: color-mix(in srgb, var(--proto-muted) 76%, transparent); }
-.review-card-actions { display: flex; gap: 6px; margin-top: 16px; }
-.review-card-actions .proto-button { flex: 1; min-width: 0; padding-inline: 6px; font-size: 10px; }
-.review-message { margin-top: 13px; padding: 8px 10px; border-left: 2px solid var(--proto-orange); background: rgba(255,137,106,.12); color: var(--proto-muted); font-size: 10px; line-height: 1.5; }
-.review-message span { margin-right: 5px; color: var(--proto-orange); font-family: 'DM Mono', monospace; }
-.review-empty-mark { display: grid; width: 58px; height: 58px; place-items: center; border: 1px solid var(--proto-line); color: var(--proto-orange); font-family: 'DM Mono', monospace; font-size: 20px; }
-.review-pagination { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 24px; }
+.review-uploader { min-width: 0; }
+.review-meta-secondary { margin-top: 5px; color: color-mix(in srgb, var(--proto-muted) 84%, transparent); font-size: 11px; }
+.review-card-actions { display: flex; gap: 6px; margin-top: 14px; }
+.review-card-actions .proto-button { flex: 1; min-width: 0; padding-inline: 6px; font-size: 12px; }
+.review-message { margin-top: 12px; padding: 8px 10px; border: 1px solid rgba(255,137,106,.35); border-radius: 4px; background: rgba(255,137,106,.12); color: var(--proto-muted); font-size: 11px; line-height: 1.5; }
+.review-message span { margin-right: 5px; color: var(--proto-orange); font-weight: 700; }
+.review-empty-mark { display: grid; width: 58px; height: 58px; place-items: center; border: 1px solid var(--proto-line); color: var(--proto-orange); font-size: 20px; font-weight: 700; }
+.review-pagination { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 18px; }
 .review-pagination .ant-pagination { margin: 0; }
 .review-modal-preview { display: grid; grid-template-columns: 135px 1fr; gap: 13px; margin-bottom: 22px; }
 .review-modal-preview img { width: 135px; height: 105px; object-fit: cover; }
-.review-modal-preview strong { font-size: 15px; }
-.review-modal-preview p { margin: 8px 0; color: var(--proto-muted); font-size: 11px; line-height: 1.5; }
-.review-modal-preview span { color: var(--proto-orange); font-size: 9px; }
-.review-batch-note { margin-bottom: 20px; padding: 12px 14px; border-left: 2px solid var(--proto-acid); background: rgba(186,255,61,.1); color: var(--proto-muted); font-size: 12px; line-height: 1.6; }
+.review-modal-preview strong { font-size: 15px; font-weight: 800; }
+.review-modal-preview p { margin: 8px 0; color: var(--proto-muted); font-size: 12px; line-height: 1.5; }
+.review-modal-preview span { color: var(--proto-orange); font-size: 11px; }
+.review-batch-note { margin-bottom: 20px; padding: 12px 14px; border: 1px solid rgba(186,255,61,.42); border-radius: 4px; background: rgba(186,255,61,.1); color: var(--proto-muted); font-size: 12px; line-height: 1.6; }
 @media (max-width: 1100px) { .review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .review-toolbar { align-items: flex-start; flex-direction: column; } }
-@media (max-width: 650px) { .review-grid { grid-template-columns: 1fr; } .review-tabs button { padding-inline: 10px; } .review-batch, .review-pagination { align-items: flex-start; flex-direction: column; } .review-card-actions { flex-wrap: wrap; } .review-card-actions .proto-button { flex-basis: calc(50% - 4px); } }
+@media (max-width: 650px) { .review-heading { align-items: flex-start; flex-direction: column; } .review-grid { grid-template-columns: 1fr; } .review-tabs button { padding-inline: 10px; } .review-batch, .review-pagination { align-items: flex-start; flex-direction: column; } .review-card-actions { flex-wrap: wrap; } .review-card-actions .proto-button { flex-basis: calc(50% - 4px); } }
 </style>

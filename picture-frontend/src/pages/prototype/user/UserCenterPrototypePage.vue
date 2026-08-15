@@ -73,13 +73,13 @@
           </div>
 
           <div class="center-actions">
-            <RouterLink to="/prototype/gallery/manage" class="center-action-card dark proto-surface bento-link">
+            <RouterLink to="/gallery/manage" class="center-action-card dark proto-surface bento-link">
               <div>
                 <h3>管理我的图片</h3>
               </div>
               <span class="center-action-arrow" aria-hidden="true">↗</span>
             </RouterLink>
-            <RouterLink to="/prototype/space" class="center-action-card acid proto-surface bento-link">
+            <RouterLink to="/space" class="center-action-card acid proto-surface bento-link">
               <div>
                 <h3>打开个人空间</h3>
               </div>
@@ -113,7 +113,7 @@
                   v-if="panel.key === 'private' && !hasPrivateSpace"
                   class="proto-button acid-button"
                   type="primary"
-                  @click="router.push('/prototype/space')"
+                  @click="router.push('/space')"
                 >
                   创建空间
                 </a-button>
@@ -121,14 +121,14 @@
                   v-else
                   class="proto-button acid-button"
                   type="primary"
-                  @click="router.push('/prototype/gallery/upload')"
+                  @click="router.push('/gallery/upload')"
                 >
                   上传图片
                 </a-button>
               </a-empty>
               <div v-else class="recent-list">
                 <div v-for="picture in panel.pictures" :key="String(picture.id)" class="recent-row">
-                  <img :src="picture.thumbnailUrl || picture.url" :alt="picture.name || '图片缩略图'" />
+                  <img :src="picture.thumbnailUrl || picture.url" :alt="picture.name || '图片预览'" />
                   <div>
                     <strong>{{ picture.name || '未命名图片' }}</strong>
                     <span>{{ formatDate(picture.createtime) }}</span>
@@ -156,8 +156,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
-import { getCurrentUserUsingGet, userLogoutUsingGet } from '../../../api/userController'
-import { queryPicturePageUsingPost } from '../../../api/pictureController'
+import { getCurrentUser, userLogout } from '../../../api/userController'
+import { queryPicturePage } from '../../../api/pictureController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import { pictureStatusText } from '../prototypeData'
 import ProfileEditModal from './components/ProfileEditModal.vue'
@@ -240,7 +240,7 @@ async function loadPictureSummary(userId?: number | string, spaceId?: number | s
     const responses = await Promise.all(
       requests.map(async ({ scopeId, pictureCheck }) => ({
         pictureCheck,
-        response: await queryPicturePageUsingPost({
+        response: await queryPicturePage({
           userId,
           // 公共图库必须显式传0，私人空间只传当前用户的空间id。
           spaceId: scopeId,
@@ -304,7 +304,7 @@ async function loadRecentPictures(spaceId?: number | string, userId?: number | s
       })
     }
 
-    const responses = await Promise.all(queryBodies.map((body) => queryPicturePageUsingPost(body)))
+    const responses = await Promise.all(queryBodies.map((body) => queryPicturePage(body)))
     responses.forEach((response) => {
       if (response.data?.code !== 200) {
         throw new Error(response.data?.message || '最近上传加载失败')
@@ -323,19 +323,19 @@ async function loadRecentPictures(spaceId?: number | string, userId?: number | s
 }
 
 function openRecentPanel(scope: RecentPanelKey) {
-  void router.push(scope === 'public' ? '/prototype/gallery' : '/prototype/space')
+  void router.push(scope === 'public' ? '/gallery' : '/space')
 }
 
 async function loadCenter(showSkeleton = true) {
   if (showSkeleton) loading.value = true
   centerError.value = ''
   try {
-    const res = await getCurrentUserUsingGet()
+    const res = await getCurrentUser()
     const currentUser = res.data?.code === 200 ? res.data.data : undefined
     if (!currentUser) {
       if (res.data?.code === 40100) {
         loginUserStore.clearLoginUser()
-        await router.replace({ path: '/prototype/user/login', query: { redirect: '/prototype/user/center' } })
+        await router.replace({ path: '/user/login', query: { redirect: '/user/center' } })
       } else {
         centerError.value = res.data?.message || '未能获取当前用户信息'
       }
@@ -350,7 +350,7 @@ async function loadCenter(showSkeleton = true) {
     const unauthorized = error?.response?.status === 401 || error?.response?.data?.code === 40100
     if (unauthorized) {
       loginUserStore.clearLoginUser()
-      await router.replace({ path: '/prototype/user/login', query: { redirect: '/prototype/user/center' } })
+      await router.replace({ path: '/user/login', query: { redirect: '/user/center' } })
     } else {
       centerError.value = error?.response?.data?.message || '获取当前用户失败，请确认后端服务已启动'
     }
@@ -367,14 +367,14 @@ async function handleProfileSaved() {
 async function logout() {
   logoutLoading.value = true
   try {
-    const res = await userLogoutUsingGet()
+    const res = await userLogout()
     if (res.data?.code !== 200) {
       message.error(res.data?.message || '退出登录失败')
       return
     }
     loginUserStore.clearLoginUser()
     message.success('已退出登录')
-    await router.replace('/prototype/user/login')
+    await router.replace('/user/login')
   } catch (error: any) {
     message.error(error?.response?.data?.message || '退出登录请求失败')
   } finally {
