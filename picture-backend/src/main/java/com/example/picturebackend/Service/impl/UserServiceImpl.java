@@ -9,10 +9,12 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.constant.UserConstant;
+import com.example.picturebackend.Service.AvatarCheckService;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.Mapper.UserMapper;
 import com.example.picturebackend.domain.MyEnums.UserLevel;
 import com.example.picturebackend.domain.MyEnums.UserStatus;
+import com.example.picturebackend.domain.po.AvatarCheck;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.user.*;
 import com.example.picturebackend.domain.vo.user.UserVO;
@@ -38,6 +40,8 @@ import java.time.LocalDateTime;
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService{
     @Resource
     private RedisTemplate redisTemplate;
+    @Resource
+    private AvatarCheckService avatarCheckService;
 
     /**
      * 用户注册
@@ -307,6 +311,43 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return saftyUser;
     }
 
+    @Override
+    public Boolean adminCheckAvatar(AdminCheckAvatarRequest adminCheckAvatarRequest, User currentUser){
+        
+        String checkMessage = adminCheckAvatarRequest.getCheckMessage();
+        Integer checkResult = adminCheckAvatarRequest.getCheckResult();
+        Long userId = adminCheckAvatarRequest.getUserId();
+
+        // 拿到该用户对应的审核记录 - 最近一次的
+        AvatarCheck avatarCheck = avatarCheckService.getOne(new QueryWrapper<AvatarCheck>()
+                        .eq("userId", userId)
+                        .orderByDesc("updateTime")
+                        .last("LIMIT 1"));
+        ThrowExceptionUtils.throwIF(!avatarCheck.getStatus().equals(0), 
+                ErrorCode.PARAMS_ERROR,"仅能修改待审核头像"
+            );
+
+        if (checkResult == 1) {
+            
+            // 审核通过，修改状态并更新
+            avatarCheck.setStatus(checkResult);
+            avatarCheck.setCheckMessage("审核通过~");
+            avatarCheckService.updateById(avatarCheck);
+            // 修改用户头像
+            User user = this.getById(userId);
+            user.setAvatarurl(avatarCheck.getUrl());
+            this.updateById(user);
+
+        }else if (checkResult == 2) {
+            // 审核不通过
+            avatarCheck.setStatus(checkResult);
+            avatarCheck.setCheckMessage(checkMessage);
+            avatarCheckService.updateById(avatarCheck);
+            // 用户头像保持原样
+        }
+
+        return true;
+    }
 }
 
 

@@ -36,4 +36,7 @@ public interface UserService extends IService<User> {
      * 定义一个查询类，用于快速根据request生成queryWrapper
      */
     QueryWrapper<User> getQueryWrapper(QueryPageRequest queryPageRequest);
+
+    Boolean adminCheckAvatar(AdminCheckAvatarRequest adminCheckAvatarRequest, User currentUser);
+
 }

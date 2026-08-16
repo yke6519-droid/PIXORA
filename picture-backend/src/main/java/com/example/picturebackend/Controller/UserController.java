@@ -1,16 +1,20 @@
 package com.example.picturebackend.Controller;
+import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
+import com.example.picturebackend.Service.AvatarCheckService;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.Utils.ResponseUtils;
 import com.example.picturebackend.annotation.AuthCheck;
 import com.example.picturebackend.constant.UserConstant;
 import com.example.picturebackend.domain.MyEnums.UserLevel;
 import com.example.picturebackend.domain.MyEnums.UserStatus;
+
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.BaseResponse;
+import com.example.picturebackend.domain.request.picture.AdminCheckPictureRequest;
 import com.example.picturebackend.domain.request.user.*;
 import com.example.picturebackend.domain.vo.user.UserPagesVO;
 import com.example.picturebackend.domain.vo.user.UserVO;
@@ -224,7 +228,8 @@ public class UserController {
      * @return Boolean
      */
     @PostMapping("/updateSelf")
-    public BaseResponse<Boolean> updateSelf(@RequestBody UpdateSelfRequest updateSelfRequest,HttpServletRequest request){
+    public BaseResponse<Boolean> updateSelf(@RequestBody UpdateSelfRequest updateSelfRequest,
+                                                HttpServletRequest request){
         // 不从前端接收用户id，从当前Session中获取更安全
         User currentUser = userService.getCurrentUser(request);
 
@@ -239,7 +244,7 @@ public class UserController {
                 ErrorCode.PARAMS_ERROR,
                 "更新请求体为空"
         );
-
+        
         final String Username = updateSelfRequest.getUsername();
         final String AvatarURL = updateSelfRequest.getAvatarurl();
         final Integer gender = updateSelfRequest.getGender();
@@ -313,4 +318,24 @@ public class UserController {
         return ResponseUtils.success(b);
     }
 
+    /**
+     * 管理员审核功能 根据UserId进行新头像的审核
+     */
+    @PutMapping("/adminCheckAvatar")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Boolean> adminCheckAvatar(@RequestBody AdminCheckAvatarRequest adminCheckAvatarRequest, HttpServletRequest request) {
+        // 参数校验
+        ThrowExceptionUtils.throwIF(
+                ObjectUtil.isNull(adminCheckAvatarRequest),
+                ErrorCode.PARAMS_ERROR
+        );
+        ThrowExceptionUtils.throwIF(adminCheckAvatarRequest.getCheckResult()<0 || adminCheckAvatarRequest.getCheckResult()>2,
+                ErrorCode.PARAMS_ERROR, "审核结果不合法" );
+        
+        User currentUser = userService.getCurrentUser(request);
+
+        Boolean checkResult = userService.adminCheckAvatar(adminCheckAvatarRequest, currentUser);
+
+        return ResponseUtils.success(checkResult);
+    }
 }

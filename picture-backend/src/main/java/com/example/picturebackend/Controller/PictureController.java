@@ -25,7 +25,6 @@ import com.example.picturebackend.domain.vo.picture.PictureUploadFailVO;
 import com.example.picturebackend.domain.vo.picture.PictureUploadVO;
 import com.example.picturebackend.domain.vo.picture.PictureVO;
 import com.example.picturebackend.domain.vo.user.UserVO;
-import com.example.picturebackend.manager.MultiCacheManager;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
@@ -59,9 +58,6 @@ public class PictureController {
     private UserService userService;
     @Resource
     private StringRedisTemplate stringRedisTemplate;
-    @Resource
-    private MultiCacheManager multiCacheManager;
-
     /**
      * 构造本地缓存
      */
@@ -332,9 +328,8 @@ public class PictureController {
     public BaseResponse<PicturePageVO> queryPicturePageCache(
             @RequestBody PictureQueryRequest pictureQueryRequest,
             HttpServletRequest request) {
-                
-        // 参数校验
-        ThrowExceptionUtils.throwIF(pictureQueryRequest == null, ErrorCode.PARAMS_ERROR);
+        // 先拦截空请求体，避免归一化spaceId时发生空指针；真正的空间权限校验仍由Service负责。
+        ThrowExceptionUtils.throwIF(pictureQueryRequest == null, ErrorCode.PARAMS_ERROR, "请求体为空");
         normalizePublicSpaceId(pictureQueryRequest);
 
         UserVO currentUser = (UserVO)request.getSession().getAttribute(UserConstant.CURRENT_USER_SESSION_KEY);
@@ -342,11 +337,9 @@ public class PictureController {
         User user= new User();
         BeanUtil.copyProperties(currentUser, user);
         
-        //todo： 这里未登录用户要做额外的适配。
-
-        // 将多级缓存封装到一个工具类中，传入查询函数避免循环依赖
-        PicturePageVO picturePageVO = multiCacheManager.getPicturePage(
-                pictureQueryRequest, user, pictureService::queryPicturePage);
+        // 重要：缓存入口必须交给 Service 处理，由 Service 先校验私有空间权限，再读取缓存。
+        // 如果 Controller 直接读取缓存，命中缓存时就会跳过原本只在数据库查询前执行的权限校验。
+        PicturePageVO picturePageVO = pictureService.queryPicturePageCache(pictureQueryRequest, user);
 
         return ResponseUtils.success(picturePageVO);
     }

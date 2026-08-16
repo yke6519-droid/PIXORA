@@ -1,13 +1,17 @@
 package com.example.picturebackend.Controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.example.picturebackend.Config.CosClientConfig;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
+import com.example.picturebackend.Service.AvatarCheckService;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.Utils.ResponseUtils;
 import com.example.picturebackend.annotation.AuthCheck;
+import com.example.picturebackend.domain.po.AvatarCheck;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.BaseResponse;
+import com.example.picturebackend.domain.vo.user.UploadAvatarVO;
 import com.example.picturebackend.manager.CosManager;
 import com.qcloud.cos.model.COSObject;
 import com.qcloud.cos.model.COSObjectInputStream;
@@ -17,16 +21,22 @@ import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import cn.hutool.core.date.DateTime;
+import cn.hutool.core.date.DateUnit;
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.io.FileUtil;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.File;
 import com.example.picturebackend.constant.PictureConstant;
+import com.example.picturebackend.constant.UserConstant;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Arrays;
+import java.util.Date;
 
 @Slf4j
 @RestController
@@ -41,7 +51,8 @@ public class FileController {
     private CosManager cosManager;
     @Resource
     private CosClientConfig cosClientConfig;
-
+    @Resource
+    private AvatarCheckService avatarCheckService;
 
     /**
      * 接收并保存上传的头像 并返回图片url
@@ -52,7 +63,7 @@ public class FileController {
      */
     @PostMapping("/avatarUpload")
     // @AuthCheck(mustRole = "admin")
-    public BaseResponse<String> avatarUpload(@RequestParam("avatar")MultipartFile file, HttpServletRequest request) throws IOException {
+    public BaseResponse<UploadAvatarVO> avatarUpload(@RequestParam("avatar")MultipartFile file, HttpServletRequest request) throws IOException {
         // 判空处理
         ThrowExceptionUtils.throwIF(
                 file == null || file.isEmpty(),
@@ -102,8 +113,73 @@ public class FileController {
         String url = "http://localhost" +
                 ":" + environment.getProperty("server.port") + //用environment动态获取服务器的端口号
                 "/files/"+newFileName;
-                
-        return ResponseUtils.success(url);
+
+        UploadAvatarVO uploadAvatarVO = new UploadAvatarVO();
+
+        // 每次拿到该用户最新的一个
+        AvatarCheck oldAvatarCheck = avatarCheckService.getOne(
+            new QueryWrapper<AvatarCheck>()
+                .eq("userId", user.getId())
+                .orderByDesc("updateTime")
+                .last("LIMIT 1"));
+        
+        System.out.println("之前审核头像记录为："+oldAvatarCheck);
+        
+        // 判断该用户目前是否已经有待审核头像
+        Boolean hasCheck = false;
+        // 若审核表中已经有了该记录，且是待审核状态 - 则后续进行更新，而不是新插入
+
+        if (oldAvatarCheck!=null && oldAvatarCheck.getStatus().equals(0)) {
+            hasCheck = true;
+        }
+
+        System.out.println("当前有待审核的头像"+hasCheck);
+
+        // 审核头像
+        if (user.getUserLevel().equals(UserConstant.ADMIN_ROLE)) {
+            // 管理员自动审核通过
+            // 构造AvatarCheck
+            AvatarCheck avatarCheck = new AvatarCheck();
+            avatarCheck.setUrl(url);
+            avatarCheck.setUserId(user.getId());
+            avatarCheck.setStatus(1);
+            avatarCheck.setCreatetime(DateTime.now());
+            avatarCheck.setUpdatetime(DateTime.now());
+            avatarCheck.setCheckMessage("管理员上传自动审核通过");
+
+            // 将审核信息入库 avatarCheck
+            if(hasCheck){
+                avatarCheck.setId(oldAvatarCheck.getId());
+                avatarCheckService.updateById(avatarCheck);
+            }else{
+                avatarCheckService.save(avatarCheck);
+            }
+
+            // 构造VO
+            uploadAvatarVO.setMessage("管理员上传自动审核通过");
+            uploadAvatarVO.setStatus(1);
+            uploadAvatarVO.setNewURL(url);
+            return ResponseUtils.success(uploadAvatarVO);
+            
+        } else{
+            // 普通用户返回先入库正常入库，但是status为0
+            AvatarCheck avatarCheck = new AvatarCheck();
+            avatarCheck.setUrl(url);
+            avatarCheck.setUserId(user.getId());
+            avatarCheck.setStatus(0);
+            avatarCheck.setCreatetime(DateTime.now());
+            avatarCheck.setUpdatetime(DateTime.now());
+            avatarCheck.setCheckMessage("待管理员审核");
+            // 将审核信息入库 avatarCheck
+            if(hasCheck){
+                // 若为更新则输入旧记录的id
+                avatarCheck.setId(oldAvatarCheck.getId());
+                avatarCheckService.updateById(avatarCheck);
+            }else{
+                avatarCheckService.save(avatarCheck);
+            }
+            return ResponseUtils.success(uploadAvatarVO);
+        }
     }
 
     @PostMapping("testUpload")
