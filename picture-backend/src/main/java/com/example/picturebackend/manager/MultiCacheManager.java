@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.DigestUtils;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -35,8 +36,8 @@ public class MultiCacheManager {
             .expireAfterWrite(Duration.ofMinutes(1))
             .build();
 
-    // 缓存Key前缀
-    private static final String CACHE_KEY_PREFIX = "picture:query:";
+    // 缓存键版本前缀。旧版本缓存键没有用户范围，切换版本可以避免继续读取历史的不安全缓存数据。
+    private static final String CACHE_KEY_PREFIX = "picture:query:v2:";
 
     // Spring 自动注入
     private final StringRedisTemplate stringRedisTemplate;
@@ -50,9 +51,12 @@ public class MultiCacheManager {
      */
     public PicturePageVO getPicturePage(PictureQueryRequest queryRequest, User loginUser,
                                         BiFunction<PictureQueryRequest, User, PicturePageVO> queryFunction) {
-        // 1. 构造缓存 Key
+        // 1. 构造带访问范围的缓存键。
+        // 注意：权限校验必须由 Service 在调用本方法前完成，这里的用户范围只是缓存隔离的第二道防线。
         String jsonQuery = JSONUtil.toJsonStr(queryRequest);
-        String hashKey = DigestUtils.md5DigestAsHex(jsonQuery.getBytes());
+        String cacheScope = buildCacheScope(queryRequest, loginUser);
+        String hashInput = cacheScope + ":" + jsonQuery;
+        String hashKey = DigestUtils.md5DigestAsHex(hashInput.getBytes(StandardCharsets.UTF_8));
         String cacheKey = CACHE_KEY_PREFIX + hashKey;
 
         // 2. 查本地缓存
@@ -85,13 +89,34 @@ public class MultiCacheManager {
     }
 
     /**
+     * 构造缓存访问范围。
+     *
+     * 私有空间必须绑定用户ID和角色，防止一个用户预热的结果被另一个用户复用；
+     * 公共图库也绑定角色，因为管理员和普通用户的分页上限可能不同。
+     */
+    private String buildCacheScope(PictureQueryRequest queryRequest, User loginUser) {
+        String role = loginUser == null || StrUtil.isBlank(loginUser.getUserLevel())
+                ? "anonymous"
+                : loginUser.getUserLevel();
+
+        if (queryRequest.getSpaceId() != null && queryRequest.getSpaceId() > 0L) {
+            String userId = loginUser == null || loginUser.getId() == null
+                    ? "anonymous"
+                    : loginUser.getId().toString();
+            return "private:user:" + userId + ":role:" + role;
+        }
+
+        return "public:role:" + role;
+    }
+
+    /**
      * 清除所有图片分页缓存
      * 在写操作（上传、更新、删除、审核）后调用，保证数据一致性
      * 采用Cache Aside模式：先更新DB，再清除缓存
      */
     public void invalidatePicturePageCache() {
         try {
-            // 1. 清除Redis缓存 - 删除所有以 picture:query: 开头的key
+            // 1. 清除Redis缓存 - 删除当前版本所有图片分页缓存。
             Set<String> keys = stringRedisTemplate.keys(CACHE_KEY_PREFIX + "*");
             if (CollUtil.isNotEmpty(keys)) {
                 Long deletedCount = stringRedisTemplate.delete(keys);

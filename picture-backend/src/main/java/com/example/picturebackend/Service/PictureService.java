@@ -79,6 +79,14 @@ public interface PictureService extends IService<Picture> {
     PicturePageVO queryPicturePage(PictureQueryRequest pictureQueryRequest, User loginUser);
 
     /**
+     * 使用多级缓存分页获取图片列表。
+     *
+     * 私有空间权限必须在读取缓存之前完成校验，缓存只能加速已经通过权限校验的查询，
+     * 不能成为权限判断的替代品。
+     */
+    PicturePageVO queryPicturePageCache(PictureQueryRequest pictureQueryRequest, User loginUser);
+
+    /**
      * 管理员根据id获取图片（不脱敏）
      */
     PictureVO getPictureById(Long id, User loginUser);

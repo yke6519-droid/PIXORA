@@ -48,7 +48,6 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.util.*;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 /**
@@ -489,51 +488,78 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     }
 
     /**
-     * 分页获取图片列表
-     * spaceId传入0查询公共图库；历史请求未传spaceId时由Controller按0兜底
-     * spaceId传入loginUser.spaceId 查询对应用户的图库
+     * 通过多级缓存分页获取图片列表。
+     * 权限校验在读取缓存之前完成，避免缓存命中绕过私有空间权限。
+     */
+    @Override
+    public PicturePageVO queryPicturePageCache(PictureQueryRequest pictureQueryRequest, User loginUser) {
+        // 先鉴权，再读缓存：缓存命中时不会执行 queryPicturePage，因此权限校验必须放在缓存之前。
+        checkPicturePageAccess(pictureQueryRequest, loginUser);
+
+        // 缓存组件只负责缓存读写；具体的空间权限规则仍由当前 Service 统一维护。
+        return multiCacheManager.getPicturePage(
+                pictureQueryRequest, loginUser, this::queryPicturePage);
+    }
+
+    /**
+     * 校验图片分页查询权限。
+     *
+     * 公共图库（spaceId=0）允许未登录用户访问；私有空间只能由空间持有者或管理员访问。
+     * 该方法既被缓存入口调用，也被数据库查询入口调用，避免未来新增调用路径时漏掉权限校验。
+     */
+    private void checkPicturePageAccess(PictureQueryRequest pictureQueryRequest, User loginUser) {
+        ThrowExceptionUtils.throwIF(
+                ObjectUtil.isNull(pictureQueryRequest),
+                ErrorCode.PARAMS_ERROR,
+                "请求体为空");
+
+        Long spaceId = pictureQueryRequest.getSpaceId();
+        if (ObjectUtil.isNotNull(spaceId)) {
+            ThrowExceptionUtils.throwIF(
+                    spaceId < 0L,
+                    ErrorCode.PARAMS_ERROR,
+                    "空间ID不合法");
+        }
+
+        // 未传空间或传入0都表示公共图库，不要求登录；Controller 会把未传值归一化为0。
+        if (spaceId == null || spaceId == 0L) {
+            return;
+        }
+
+        // 私有空间必须先确认用户身份，避免下面访问用户属性时出现空指针，也避免匿名访问私有数据。
+        ThrowExceptionUtils.throwIF(
+                loginUser == null || loginUser.getId() == null,
+                ErrorCode.NOT_LOGIN_ERROR);
+
+        Space space = spaceService.getById(spaceId);
+        ThrowExceptionUtils.throwIF(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
+
+        // 只有空间持有者和管理员可以查看私有空间图片；其他用户即使命中缓存也必须被拒绝。
+        boolean isOwner = Objects.equals(space.getUserId(), loginUser.getId());
+        boolean isAdmin = UserConstant.ADMIN_ROLE.equals(loginUser.getUserLevel());
+        ThrowExceptionUtils.throwIF(
+                !isOwner && !isAdmin,
+                ErrorCode.NO_AUTH_ERROR,
+                "无法查看他人空间中的内容");
+    }
+
+    /**
+     * 分页获取图片列表。
+     * spaceId传入0查询公共图库；历史请求未传spaceId时由Controller按0兜底。
+     * 该方法是数据库查询入口，即使绕过缓存也必须保留权限校验。
      */
     @Override
     public PicturePageVO queryPicturePage(PictureQueryRequest pictureQueryRequest, User loginUser) {
-
-        // 参数校验
-        ThrowExceptionUtils.throwIF(
-            ObjectUtil.isNull(pictureQueryRequest),
-                ErrorCode.PARAMS_ERROR,
-                "请求体为空");
-    
-        final Long spaceId = pictureQueryRequest.getSpaceId();
-        // System.out.println("----------------------------pictureQueryRequest = " + pictureQueryRequest.getSpaceId());
-
-        // 不为空表示，现在在访问私人空间的图片列表，因此需要不为为负
-        if (ObjectUtil.isNotNull(spaceId)) {
-            ThrowExceptionUtils.throwIF(
-            spaceId < 0L,
-            ErrorCode.PARAMS_ERROR,
-            "空间ID不合法");
-        }
-
-        if (spaceId != null && spaceId != 0L) { // 若请求体中传入的空间id
-            // 校验当前登录用户是否是空间持有人
-            Space space = spaceService.getById(spaceId);
-
-            ThrowExceptionUtils.throwIF(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
-
-            // ThrowExceptionUtils.throwIF(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
-
-            // 仅空间持有者和管理员可查
-            ThrowExceptionUtils.throwIF(!space.getUserId().equals(loginUser.getId()) 
-                                    && !loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE),
-                    ErrorCode.NO_AUTH_ERROR, "无法查看他人空间中的内容");
-        }
+        // 即使调用方绕过缓存直接访问数据库查询方法，也必须再次执行权限校验。
+        checkPicturePageAccess(pictureQueryRequest, loginUser);
 
         long current = pictureQueryRequest.getCurrent();
         long size = pictureQueryRequest.getPageSize();
 
         // 限制普通用户和未登录用户的分页上限
         // 若等级为空，则肯定是未登录
-        if (ObjectUtil.isNull(loginUser.getUserLevel()) ||
-            loginUser.getUserLevel().equals(UserConstant.DEFAULT_ROLE)){
+        String userLevel = loginUser == null ? null : loginUser.getUserLevel();
+        if (ObjectUtil.isNull(userLevel) || UserConstant.DEFAULT_ROLE.equals(userLevel)){
             if (size > 5){
                 size = 5;
             }
