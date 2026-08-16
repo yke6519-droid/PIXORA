@@ -2,18 +2,15 @@ package com.example.picturebackend.Controller;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
-import com.example.picturebackend.Service.AvatarCheckService;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.Utils.ResponseUtils;
 import com.example.picturebackend.annotation.AuthCheck;
 import com.example.picturebackend.constant.UserConstant;
 import com.example.picturebackend.domain.MyEnums.UserLevel;
 import com.example.picturebackend.domain.MyEnums.UserStatus;
-import com.example.picturebackend.domain.po.AvatarCheck;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.BaseResponse;
 import com.example.picturebackend.domain.request.picture.AdminCheckPictureRequest;
@@ -34,8 +31,6 @@ import java.util.List;
 public class UserController {
     @Resource
     private UserService userService;
-    @Resource
-    private AvatarCheckService avatarCheckService;
 
     /**
      * 用户注册
@@ -246,48 +241,14 @@ public class UserController {
                 "更新请求体为空"
         );
 
-        // 防止用户不走前端，直接传入url更改头像，因此该接口不能完全相信请求体中的url
-        // 因此要结合AvatarCheck库中的记录来完成
-        String requestURL = updateSelfRequest.getAvatarurl();
-        String oldURL = currentUser.getAvatarurl();
-        // 若为空，则不拦截
-        // 若等于原头像url不拦截
-        // 若为新头像，且AvatarCheck中不是通过的，则拦截
-        // 或和审核表中最新一条不相同，也拦截
-        if (StrUtil.isNotEmpty(requestURL)&&StrUtil.isNotBlank(requestURL)&&!oldURL.equals(requestURL)) {
-                // 拿到最新且唯一一条头像审核记录
-                AvatarCheck avatarCheck = avatarCheckService.getOne(new QueryWrapper<AvatarCheck>()
-                .eq("userId", currentUser.getId())
-                .orderByDesc("updateTime")
-                .last("limit 1"));
-                ThrowExceptionUtils.throwIF(avatarCheck==null, 
-                        ErrorCode.NOT_FOUND_ERROR,
-                        "当前用户没有待审核头像，拦截！"
-                );
-                // 和审核表中最新一条的url不相同，拦截
-                ThrowExceptionUtils.throwIF(
-                        !avatarCheck.getUrl().equals(requestURL),
-                        ErrorCode.PARAMS_ERROR,
-                        "当前传入url非法，未进入审核区"
-                );
-                // 目前url相等，校验状态
-                ThrowExceptionUtils.throwIF(
-                        avatarCheck.getStatus() != 1,
-                        ErrorCode.PARAMS_ERROR,
-                        "当前传入url非法，未审核通过"
-                );
-        }
-        
-
         final String Username = updateSelfRequest.getUsername();
-        final String AvatarURL = updateSelfRequest.getAvatarurl();
         final Integer gender = updateSelfRequest.getGender();
         final String Phone = updateSelfRequest.getPhone();
         final String Email = updateSelfRequest.getEmail();
         final String Profile = updateSelfRequest.getProfile();
         
         ThrowExceptionUtils.throwIF(
-                StrUtil.isAllBlank(Username,AvatarURL,Phone,Email,Profile) && gender==null,
+                StrUtil.isAllBlank(Username,Phone,Email,Profile) && gender==null,
                 ErrorCode.PARAMS_ERROR,
                 "更新信息全为空！"
         );

@@ -17,9 +17,9 @@ import com.qcloud.cos.model.COSObject;
 import com.qcloud.cos.model.COSObjectInputStream;
 import com.qcloud.cos.utils.IOUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.transaction.annotation.Transactional;
 
 import cn.hutool.core.date.DateTime;
 import cn.hutool.core.date.DateUnit;
@@ -37,16 +37,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.UUID;
 
 @Slf4j
 @RestController
 @RequestMapping("/file")
 public class FileController {
-    private static final String file_upload_dir = "D:\\AAA项目学习\\spring项目\\智能云图库项目\\picture-backend\\avatarSave\\";
     @Resource
     private UserService userService;
-    @Resource
-    private Environment environment;
     @Resource
     private CosManager cosManager;
     @Resource
@@ -63,6 +61,7 @@ public class FileController {
      */
     @PostMapping("/avatarUpload")
     // @AuthCheck(mustRole = "admin")
+    @Transactional(rollbackFor = Exception.class)
     public BaseResponse<UploadAvatarVO> avatarUpload(@RequestParam("avatar")MultipartFile file, HttpServletRequest request) throws IOException {
         // 判空处理
         ThrowExceptionUtils.throwIF(
@@ -76,7 +75,7 @@ public class FileController {
             "文件名不能为空"
         );
 
-        //1. 获取原始文件名
+        // 1. 获取原始文件名，仅用于校验文件后缀，不再直接作为存储文件名。
         String originalFileName = file.getOriginalFilename();
 
         // 判断格式是否合法
@@ -95,90 +94,113 @@ public class FileController {
             "头像大小不得超过超过5MB"
         );
 
-        //2. 生成唯一文件名，放在在文件夹中重复 利用当前用户id作为分别点
+        // 2. 获取当前用户，并为头像生成独立且唯一的 COS 对象 Key。
         User user = userService.getCurrentUser(request);
+        String objectKey = String.format(
+                "public/avatar/%s/%s.%s",
+                user.getId(),
+                UUID.randomUUID(),
+                fileSuffix
+        );
 
-        String newFileName= user.getId()+"-"+originalFileName;
+        String host = cosClientConfig.getHost();
+        String url = (host.endsWith("/") ? host : host + "/") + objectKey;
+        File temporaryFile = null;
+        boolean uploadAttempted = false;
 
-        //3. 如果目录不存在，则创建目录
-        File dir = new File(file_upload_dir);
-        if (!dir.exists()){
-            dir.mkdirs();
-        }
+        try {
+            // COS 轮子目前接收 File，因此沿用已有 testUpload 的临时文件上传方式。
+            temporaryFile = File.createTempFile("avatar_", "." + fileSuffix);
+            file.transferTo(temporaryFile);
+            uploadAttempted = true;
+            cosManager.putObject(objectKey, temporaryFile);
 
-        //4. 将图片保存下来
-        file.transferTo(new File(file_upload_dir + newFileName));
+            UploadAvatarVO uploadAvatarVO = new UploadAvatarVO();
 
-        //5. 返回可以访问的URL地址
-        String url = "http://localhost" +
-                ":" + environment.getProperty("server.port") + //用environment动态获取服务器的端口号
-                "/files/"+newFileName;
+            // 每次拿到该用户最新的一个
+            AvatarCheck oldAvatarCheck = avatarCheckService.getOne(
+                new QueryWrapper<AvatarCheck>()
+                    .eq("userId", user.getId())
+                    .orderByDesc("updateTime")
+                    .last("LIMIT 1"));
 
-        UploadAvatarVO uploadAvatarVO = new UploadAvatarVO();
-
-        // 每次拿到该用户最新的一个
-        AvatarCheck oldAvatarCheck = avatarCheckService.getOne(
-            new QueryWrapper<AvatarCheck>()
-                .eq("userId", user.getId())
-                .orderByDesc("updateTime")
-                .last("LIMIT 1"));
-        
-        System.out.println("之前审核头像记录为："+oldAvatarCheck);
-        
-        // 判断该用户目前是否已经有待审核头像
-        Boolean hasCheck = false;
-        // 若审核表中已经有了该记录，且是待审核状态 - 则后续进行更新，而不是新插入
-
-        if (oldAvatarCheck!=null && oldAvatarCheck.getStatus().equals(0)) {
-            hasCheck = true;
-        }
-
-        System.out.println("当前有待审核的头像"+hasCheck);
-
-        // 审核头像
-        if (user.getUserLevel().equals(UserConstant.ADMIN_ROLE)) {
-            // 管理员自动审核通过
-            // 构造AvatarCheck
-            AvatarCheck avatarCheck = new AvatarCheck();
-            avatarCheck.setUrl(url);
-            avatarCheck.setUserId(user.getId());
-            avatarCheck.setStatus(1);
-            avatarCheck.setCreatetime(DateTime.now());
-            avatarCheck.setUpdatetime(DateTime.now());
-            avatarCheck.setCheckMessage("管理员上传自动审核通过");
-
-            // 将审核信息入库 avatarCheck
-            if(hasCheck){
-                avatarCheck.setId(oldAvatarCheck.getId());
-                avatarCheckService.updateById(avatarCheck);
-            }else{
-                avatarCheckService.save(avatarCheck);
+            // 判断该用户目前是否已经有待审核头像
+            Boolean hasCheck = false;
+            // 若审核表中已经有了该记录，且是待审核状态 - 则后续进行更新，而不是新插入
+            if (oldAvatarCheck != null && oldAvatarCheck.getStatus().equals(0)) {
+                hasCheck = true;
             }
 
-            // 构造VO
-            uploadAvatarVO.setMessage("管理员上传自动审核通过");
-            uploadAvatarVO.setStatus(1);
-            uploadAvatarVO.setNewURL(url);
-            return ResponseUtils.success(uploadAvatarVO);
-            
-        } else{
-            // 普通用户返回先入库正常入库，但是status为0
-            AvatarCheck avatarCheck = new AvatarCheck();
-            avatarCheck.setUrl(url);
-            avatarCheck.setUserId(user.getId());
-            avatarCheck.setStatus(0);
-            avatarCheck.setCreatetime(DateTime.now());
-            avatarCheck.setUpdatetime(DateTime.now());
-            avatarCheck.setCheckMessage("待管理员审核");
-            // 将审核信息入库 avatarCheck
-            if(hasCheck){
-                // 若为更新则输入旧记录的id
-                avatarCheck.setId(oldAvatarCheck.getId());
-                avatarCheckService.updateById(avatarCheck);
-            }else{
-                avatarCheckService.save(avatarCheck);
+            // 审核头像
+            if (user.getUserLevel().equals(UserConstant.ADMIN_ROLE)) {
+                // 管理员自动审核通过
+                AvatarCheck avatarCheck = new AvatarCheck();
+                avatarCheck.setUrl(url);
+                avatarCheck.setUserId(user.getId());
+                avatarCheck.setStatus(1);
+                avatarCheck.setCreatetime(DateTime.now());
+                avatarCheck.setUpdatetime(DateTime.now());
+                avatarCheck.setCheckMessage("管理员上传自动审核通过");
+
+                // 将审核信息入库 avatarCheck
+                boolean saved;
+                if (hasCheck) {
+                    avatarCheck.setId(oldAvatarCheck.getId());
+                    saved = avatarCheckService.updateById(avatarCheck);
+                } else {
+                    saved = avatarCheckService.save(avatarCheck);
+                }
+                ThrowExceptionUtils.throwIF(!saved, ErrorCode.OPERATION_ERROR, "头像审核记录保存失败");
+
+                // 管理员上传已经自动通过，当前头像必须在本次接口内完成更新，不能依赖资料接口补写。
+                User avatarUser = new User();
+                avatarUser.setId(user.getId());
+                avatarUser.setAvatarurl(url);
+                boolean userUpdated = userService.updateById(avatarUser);
+                ThrowExceptionUtils.throwIF(!userUpdated, ErrorCode.OPERATION_ERROR, "当前头像更新失败");
+
+                // 构造 VO
+                uploadAvatarVO.setMessage("管理员上传自动审核通过");
+                uploadAvatarVO.setStatus(1);
+                uploadAvatarVO.setNewURL(url);
+                return ResponseUtils.success(uploadAvatarVO);
+
+            } else {
+                // 普通用户先入库，状态为待审核，用户当前头像保持不变。
+                AvatarCheck avatarCheck = new AvatarCheck();
+                avatarCheck.setUrl(url);
+                avatarCheck.setUserId(user.getId());
+                avatarCheck.setStatus(0);
+                avatarCheck.setCreatetime(DateTime.now());
+                avatarCheck.setUpdatetime(DateTime.now());
+                avatarCheck.setCheckMessage("待管理员审核");
+
+                // 将审核信息入库 avatarCheck
+                boolean saved;
+                if (hasCheck) {
+                    // 若为更新则输入旧记录的 id
+                    avatarCheck.setId(oldAvatarCheck.getId());
+                    saved = avatarCheckService.updateById(avatarCheck);
+                } else {
+                    saved = avatarCheckService.save(avatarCheck);
+                }
+                ThrowExceptionUtils.throwIF(!saved, ErrorCode.OPERATION_ERROR, "头像审核记录保存失败");
+                return ResponseUtils.success(uploadAvatarVO);
             }
-            return ResponseUtils.success(uploadAvatarVO);
+        } catch (IOException | RuntimeException e) {
+            // COS 上传或审核记录落库失败时，尽量删除本次上传的 COS 对象，避免留下孤儿文件。
+            if (uploadAttempted) {
+                try {
+                    cosManager.deleteObject(objectKey);
+                } catch (RuntimeException cleanupException) {
+                    log.error("头像 COS 对象清理失败, objectKey = {}", objectKey, cleanupException);
+                }
+            }
+            throw e;
+        } finally {
+            if (temporaryFile != null && !temporaryFile.delete()) {
+                log.error("头像临时文件删除失败, filePath = {}", temporaryFile.getAbsolutePath());
+            }
         }
     }
 

@@ -18,15 +18,18 @@ import com.example.picturebackend.domain.po.AvatarCheck;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.user.*;
 import com.example.picturebackend.domain.vo.user.UserVO;
+import com.example.picturebackend.manager.CosManager;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.DigestUtils;
 
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.URI;
 import java.time.LocalDateTime;
 
 
@@ -42,6 +45,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private RedisTemplate redisTemplate;
     @Resource
     private AvatarCheckService avatarCheckService;
+    @Resource
+    private CosManager cosManager;
 
     /**
      * 用户注册
@@ -208,10 +213,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public boolean updateSelf(Long id, HttpServletRequest request, UpdateSelfRequest updateSelfRequest) {
-        // copy到user实体类中并设置id
+        // 资料接口只允许更新资料字段，头像由独立的头像上传/审核流程维护。
         User user = new User();
-        BeanUtils.copyProperties(updateSelfRequest,user);
         user.setId(id);
+        user.setUsername(updateSelfRequest.getUsername());
+        user.setGender(updateSelfRequest.getGender());
+        user.setPhone(updateSelfRequest.getPhone());
+        user.setEmail(updateSelfRequest.getEmail());
+        user.setProfile(updateSelfRequest.getProfile());
         // 更新数据库
         boolean b = this.updateById(user);
         // 更新后 将最新的当前用户数据(脱敏后)存入Session中
@@ -312,6 +321,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Boolean adminCheckAvatar(AdminCheckAvatarRequest adminCheckAvatarRequest, User currentUser){
         
         String checkMessage = adminCheckAvatarRequest.getCheckMessage();
@@ -323,7 +333,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                         .eq("userId", userId)
                         .orderByDesc("updateTime")
                         .last("LIMIT 1"));
-        ThrowExceptionUtils.throwIF(!avatarCheck.getStatus().equals(0), 
+        ThrowExceptionUtils.throwIF(avatarCheck == null,
+                ErrorCode.NOT_FOUND_ERROR, "当前用户没有待审核头像");
+        ThrowExceptionUtils.throwIF(!Integer.valueOf(0).equals(avatarCheck.getStatus()),
                 ErrorCode.PARAMS_ERROR,"仅能修改待审核头像"
             );
 
@@ -332,21 +344,57 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             // 审核通过，修改状态并更新
             avatarCheck.setStatus(checkResult);
             avatarCheck.setCheckMessage("审核通过~");
-            avatarCheckService.updateById(avatarCheck);
+            boolean reviewUpdated = avatarCheckService.updateById(avatarCheck);
+            ThrowExceptionUtils.throwIF(!reviewUpdated,
+                    ErrorCode.OPERATION_ERROR, "头像审核状态更新失败");
             // 修改用户头像
             User user = this.getById(userId);
+            ThrowExceptionUtils.throwIF(user == null,
+                    ErrorCode.NOT_FOUND_ERROR, "用户不存在");
             user.setAvatarurl(avatarCheck.getUrl());
-            this.updateById(user);
+            boolean userUpdated = this.updateById(user);
+            ThrowExceptionUtils.throwIF(!userUpdated,
+                    ErrorCode.OPERATION_ERROR, "用户头像更新失败");
 
         }else if (checkResult == 2) {
             // 审核不通过
             avatarCheck.setStatus(checkResult);
             avatarCheck.setCheckMessage(checkMessage);
-            avatarCheckService.updateById(avatarCheck);
+            boolean reviewUpdated = avatarCheckService.updateById(avatarCheck);
+            ThrowExceptionUtils.throwIF(!reviewUpdated,
+                    ErrorCode.OPERATION_ERROR, "头像审核状态更新失败");
             // 用户头像保持原样
+            deleteRejectedAvatar(avatarCheck.getUrl());
+        } else {
+            ThrowExceptionUtils.throwIF(true,
+                    ErrorCode.PARAMS_ERROR, "审核结果只能是通过或拒绝");
         }
 
         return true;
+    }
+
+    /**
+     * 拒绝审核后删除候选头像，当前 COS URL 由上传接口按“域名 + objectKey”生成。
+     */
+    private void deleteRejectedAvatar(String avatarUrl) {
+        if (StrUtil.isBlank(avatarUrl)) {
+            log.warn("拒绝头像缺少 COS URL，跳过对象清理");
+            return;
+        }
+
+        try {
+            String path = URI.create(avatarUrl).getPath();
+            String objectKey = path != null && path.startsWith("/")
+                    ? path.substring(1)
+                    : path;
+            if (StrUtil.isBlank(objectKey)) {
+                log.warn("无法从头像 URL 提取 COS Key，url = {}", avatarUrl);
+                return;
+            }
+            cosManager.deleteObject(objectKey);
+        } catch (IllegalArgumentException exception) {
+            log.warn("头像 URL 格式异常，跳过 COS 对象清理，url = {}", avatarUrl, exception);
+        }
     }
 }
 

@@ -14,11 +14,6 @@ public class UpdateSelfRequest implements Serializable {
     private String username;
 
     /**
-     * 头像
-     */
-    private String avatarurl;
-
-    /**
      * 性别
      */
     private Integer gender;
