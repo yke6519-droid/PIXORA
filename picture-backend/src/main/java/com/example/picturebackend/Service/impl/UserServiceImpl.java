@@ -31,6 +31,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.time.LocalDateTime;
+import java.util.Date;
 
 
 /**
@@ -328,6 +329,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         Integer checkResult = adminCheckAvatarRequest.getCheckResult();
         Long userId = adminCheckAvatarRequest.getUserId();
 
+        ThrowExceptionUtils.throwIF(userId == null,
+                ErrorCode.PARAMS_ERROR, "用户ID不能为空");
+        ThrowExceptionUtils.throwIF(checkResult == null || (checkResult != 1 && checkResult != 2),
+                ErrorCode.PARAMS_ERROR, "审核结果只能是通过或拒绝");
+        ThrowExceptionUtils.throwIF(checkResult == 2 && StrUtil.isBlank(checkMessage),
+                ErrorCode.PARAMS_ERROR, "审核拒绝原因不能为空");
+
         // 拿到该用户对应的审核记录 - 最近一次的
         AvatarCheck avatarCheck = avatarCheckService.getOne(new QueryWrapper<AvatarCheck>()
                         .eq("userId", userId)
@@ -343,7 +351,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             
             // 审核通过，修改状态并更新
             avatarCheck.setStatus(checkResult);
-            avatarCheck.setCheckMessage("审核通过~");
+            avatarCheck.setCheckMessage("审核通过");
+            avatarCheck.setUpdatetime(new Date());
             boolean reviewUpdated = avatarCheckService.updateById(avatarCheck);
             ThrowExceptionUtils.throwIF(!reviewUpdated,
                     ErrorCode.OPERATION_ERROR, "头像审核状态更新失败");
@@ -359,15 +368,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }else if (checkResult == 2) {
             // 审核不通过
             avatarCheck.setStatus(checkResult);
-            avatarCheck.setCheckMessage(checkMessage);
+            avatarCheck.setCheckMessage(checkMessage.trim());
+            avatarCheck.setUpdatetime(new Date());
             boolean reviewUpdated = avatarCheckService.updateById(avatarCheck);
             ThrowExceptionUtils.throwIF(!reviewUpdated,
                     ErrorCode.OPERATION_ERROR, "头像审核状态更新失败");
             // 用户头像保持原样
             deleteRejectedAvatar(avatarCheck.getUrl());
-        } else {
-            ThrowExceptionUtils.throwIF(true,
-                    ErrorCode.PARAMS_ERROR, "审核结果只能是通过或拒绝");
         }
 
         return true;

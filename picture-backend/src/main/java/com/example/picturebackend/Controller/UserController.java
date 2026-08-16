@@ -2,7 +2,9 @@ package com.example.picturebackend.Controller;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.example.picturebackend.Service.AvatarCheckService;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.Service.UserService;
@@ -15,6 +17,8 @@ import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.BaseResponse;
 import com.example.picturebackend.domain.request.picture.AdminCheckPictureRequest;
 import com.example.picturebackend.domain.request.user.*;
+import com.example.picturebackend.domain.po.AvatarCheck;
+import com.example.picturebackend.domain.vo.user.AvatarReviewVO;
 import com.example.picturebackend.domain.vo.user.UserPagesVO;
 import com.example.picturebackend.domain.vo.user.UserVO;
 
@@ -24,13 +28,20 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/user")
 public class UserController {
     @Resource
     private UserService userService;
+
+    @Resource
+    private AvatarCheckService avatarCheckService;
 
     /**
      * 用户注册
@@ -118,6 +129,61 @@ public class UserController {
         }).collect(java.util.stream.Collectors.toList());
 
         return ResponseUtils.success(UserList);
+    }
+
+    /**
+     * 管理员查询头像审核列表。
+     * 通过记录按用户只保留最新一条，失败记录保留全部历史，前端按 status 分栏。
+     */
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @GetMapping("/queryAvatarReviews")
+    public BaseResponse<List<AvatarReviewVO>> queryAvatarReviews(){
+        List<AvatarCheck> avatarChecks = avatarCheckService.list(
+                new QueryWrapper<AvatarCheck>()
+                        .orderByDesc("updateTime")
+                        .orderByDesc("id")
+        );
+
+        Set<Long> approvedUserIds = new HashSet<>();
+        List<AvatarCheck> visibleAvatarChecks = avatarChecks.stream()
+                // 查询已经按更新时间倒序，首次遇到的通过记录就是该用户最新的一条。
+                .filter(avatarCheck ->
+                        !Integer.valueOf(1).equals(avatarCheck.getStatus())
+                                || avatarCheck.getUserId() == null
+                                || approvedUserIds.add(avatarCheck.getUserId()))
+                .toList();
+
+        List<Long> userIds = visibleAvatarChecks.stream()
+                .map(AvatarCheck::getUserId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, User> users = userIds.isEmpty()
+                ? Map.of()
+                : userService.listByIds(userIds).stream()
+                .collect(Collectors.toMap(User::getId, user -> user, (left, right) -> left));
+
+        List<AvatarReviewVO> result = visibleAvatarChecks.stream()
+                .map(avatarCheck -> toAvatarReviewVO(avatarCheck, users.get(avatarCheck.getUserId())))
+                .toList();
+        return ResponseUtils.success(result);
+    }
+
+    /** 将数据库审核记录转换为管理员页面所需的脱敏字段。 */
+    private AvatarReviewVO toAvatarReviewVO(AvatarCheck avatarCheck, User user) {
+        AvatarReviewVO reviewVO = new AvatarReviewVO();
+        reviewVO.setId(avatarCheck.getId());
+        reviewVO.setUserId(avatarCheck.getUserId());
+        reviewVO.setUsername(user == null ? "用户已不存在" : user.getUsername());
+        reviewVO.setUseraccount(user == null ? String.valueOf(avatarCheck.getUserId()) : user.getUseraccount());
+        reviewVO.setAvatarUrl(avatarCheck.getUrl());
+        reviewVO.setStatus(avatarCheck.getStatus());
+        reviewVO.setSubmittedAt(avatarCheck.getCreatetime());
+        reviewVO.setReviewedAt(Integer.valueOf(0).equals(avatarCheck.getStatus())
+                ? null
+                : avatarCheck.getUpdatetime());
+        reviewVO.setCheckMessage(avatarCheck.getCheckMessage());
+        return reviewVO;
     }
 
     /**
@@ -324,13 +390,14 @@ public class UserController {
                 ObjectUtil.isNull(adminCheckAvatarRequest),
                 ErrorCode.PARAMS_ERROR
         );
-        ThrowExceptionUtils.throwIF(adminCheckAvatarRequest.getCheckResult()<0 || adminCheckAvatarRequest.getCheckResult()>2,
+        Integer checkResult = adminCheckAvatarRequest.getCheckResult();
+        ThrowExceptionUtils.throwIF(checkResult == null || (checkResult != 1 && checkResult != 2),
                 ErrorCode.PARAMS_ERROR, "审核结果不合法" );
         
         User currentUser = userService.getCurrentUser(request);
 
-        Boolean checkResult = userService.adminCheckAvatar(adminCheckAvatarRequest, currentUser);
+        Boolean result = userService.adminCheckAvatar(adminCheckAvatarRequest, currentUser);
 
-        return ResponseUtils.success(checkResult);
+        return ResponseUtils.success(result);
     }
 }
