@@ -28,3 +28,20 @@ logs/
 **/.env.*
 !**/.env.example
 
+picture-backend/src/test/java/com/example/picturebackend/Service/impl/PictureServiceImplTest.java
+picture-backend/src/test/java/com/example/picturebackend/Service/impl/SpaceServiceImplTest.java
+picture-backend/src/test/java/com/example/picturebackend/manager/upload/FilePictureUploadTest.java
+picture-backend/src/test/java/com/example/picturebackend/domain/po/UserFieldAlignmentTest.java
+HANDOFF.md
+PRODUCT.md
+.gitignore
+picture-backend/src/test/java/com/example/picturebackend/PicturePageCacheAuthorizationTest.java
+picture-backend/src/test
+src/main/java/generator/mapper/AvatarCheckMapper.java
+src/main/java/generator/service/AvatarCheckService.java
+src/main/java/generator/service/impl/AvatarCheckServiceImpl.java
+src/main/resources/generator/mapper/AvatarCheckMapper.xml
+docs/research/user-notification-benchmark.md
+BUG_BACKLOG.md
+gallery.html
+缓存权限与常见问题复盘.md

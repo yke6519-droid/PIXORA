@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.picturebackend.Mapper.UserNotificationMapper">
+
+    <resultMap id="BaseResultMap" type="com.example.picturebackend.domain.po.UserNotification">
+        <id property="id" column="id" />
+        <result property="userId" column="userId" />
+        <result property="type" column="type" />
+        <result property="title" column="title" />
+        <result property="content" column="content" />
+        <result property="bizType" column="bizType" />
+        <result property="bizId" column="bizId" />
+        <result property="readTime" column="readTime" />
+        <result property="isDelete" column="isDelete" />
+        <result property="createTime" column="createTime" />
+        <result property="updateTime" column="updateTime" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,userId,type,title,content,bizType,bizId,readTime,isDelete,createTime,updateTime
+    </sql>
+</mapper>
