@@ -9,14 +9,17 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.constant.UserConstant;
+import com.example.picturebackend.constant.NotificationConstant;
 import com.example.picturebackend.Service.AvatarCheckService;
 import com.example.picturebackend.Service.UserService;
+import com.example.picturebackend.Service.UserNotificationService;
 import com.example.picturebackend.Mapper.UserMapper;
 import com.example.picturebackend.domain.MyEnums.UserLevel;
 import com.example.picturebackend.domain.MyEnums.UserStatus;
 import com.example.picturebackend.domain.po.AvatarCheck;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.user.*;
+import com.example.picturebackend.domain.request.notification.NotificationCreateRequest;
 import com.example.picturebackend.domain.vo.user.UserVO;
 import com.example.picturebackend.manager.CosManager;
 
@@ -48,6 +51,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private AvatarCheckService avatarCheckService;
     @Resource
     private CosManager cosManager;
+    @Resource
+    private UserNotificationService userNotificationService;
 
     /**
      * 用户注册
@@ -364,6 +369,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             boolean userUpdated = this.updateById(user);
             ThrowExceptionUtils.throwIF(!userUpdated,
                     ErrorCode.OPERATION_ERROR, "用户头像更新失败");
+            NotificationCreateRequest notificationRequest = new NotificationCreateRequest();
+            notificationRequest.setType(NotificationConstant.TYPE_AVATAR_REVIEW_RESULT);
+            notificationRequest.setUserId(avatarCheck.getUserId());
+            notificationRequest.setBizId(avatarCheck.getId());
+            notificationRequest.setTitle(NotificationConstant.AVATAR_REVIEW_APPROVED_TITLE);
+            notificationRequest.setContent(NotificationConstant.AVATAR_REVIEW_APPROVED_CONTENT);
+            userNotificationService.createNotification(notificationRequest);
 
         }else if (checkResult == 2) {
             // 审核不通过
@@ -373,6 +385,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             boolean reviewUpdated = avatarCheckService.updateById(avatarCheck);
             ThrowExceptionUtils.throwIF(!reviewUpdated,
                     ErrorCode.OPERATION_ERROR, "头像审核状态更新失败");
+            NotificationCreateRequest notificationRequest = new NotificationCreateRequest();
+            notificationRequest.setType(NotificationConstant.TYPE_AVATAR_REVIEW_RESULT);
+            notificationRequest.setUserId(avatarCheck.getUserId());
+            notificationRequest.setBizId(avatarCheck.getId());
+            notificationRequest.setTitle(NotificationConstant.AVATAR_REVIEW_REJECTED_TITLE);
+            notificationRequest.setContent(NotificationConstant.AVATAR_REVIEW_REJECTED_CONTENT_PREFIX
+                    + avatarCheck.getCheckMessage());
+            userNotificationService.createNotification(notificationRequest);
             // 用户头像保持原样
             deleteRejectedAvatar(avatarCheck.getUrl());
         }

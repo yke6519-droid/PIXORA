@@ -32,6 +32,9 @@ public class NotificationVO implements Serializable {
     /** 关联业务 id。 */
     private Long bizId;
 
+    /** 关联业务名称；图片审核通知中表示图片名称。 */
+    private String bizName;
+
     /** 已读时间。 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Shanghai")
     private Date readTime;

@@ -12,7 +12,7 @@ import java.util.Date;
 /**
  * 用户通知表。
  *
- * <p>当前仅承载头像审核结果通知，后续可通过 type、bizType 和 bizId 扩展其他通知来源。</p>
+ * <p>通过 type、bizType 和 bizId 承载系统公告、头像审核和图片审核等用户通知。</p>
  */
 @Data
 @TableName("user_notification")

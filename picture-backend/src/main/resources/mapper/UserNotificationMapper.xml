@@ -21,4 +21,30 @@
     <sql id="Base_Column_List">
         id,userId,type,title,content,bizType,bizId,readTime,isDelete,createTime,updateTime
     </sql>
+
+    <select id="selectOneIncludingDeleted" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List" />
+        FROM user_notification
+        WHERE userId = #{userId}
+          AND type = #{type}
+          AND bizType = #{bizType}
+          AND bizId = #{bizId}
+        ORDER BY updateTime DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <update id="updateIncludingDeleted" parameterType="com.example.picturebackend.domain.po.UserNotification">
+        UPDATE user_notification
+        SET userId = #{userId},
+            type = #{type},
+            title = #{title},
+            content = #{content},
+            bizType = #{bizType},
+            bizId = #{bizId},
+            readTime = #{readTime},
+            isDelete = #{isDelete},
+            createTime = #{createTime},
+            updateTime = #{updateTime}
+        WHERE id = #{id}
+    </update>
 </mapper>

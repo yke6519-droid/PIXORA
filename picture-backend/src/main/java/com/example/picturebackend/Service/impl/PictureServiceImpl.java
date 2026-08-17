@@ -6,6 +6,7 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
@@ -15,14 +16,17 @@ import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.Service.PictureService;
 import com.example.picturebackend.Service.SpaceService;
 import com.example.picturebackend.Service.UserService;
+import com.example.picturebackend.Service.UserNotificationService;
 import com.example.picturebackend.Mapper.PictureMapper;
 import com.example.picturebackend.constant.PictureConstant;
 import com.example.picturebackend.constant.UserConstant;
+import com.example.picturebackend.constant.NotificationConstant;
 import com.example.picturebackend.domain.dto.file.UploadPictureResult;
 import com.example.picturebackend.domain.po.Picture;
 import com.example.picturebackend.domain.po.Space;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.picture.*;
+import com.example.picturebackend.domain.request.notification.NotificationCreateRequest;
 import com.example.picturebackend.domain.vo.picture.PictureListVO;
 import com.example.picturebackend.domain.vo.picture.PicturePageVO;
 import com.example.picturebackend.domain.vo.picture.PictureVO;
@@ -66,6 +70,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private UserNotificationService userNotificationService;
 
     @Resource
     private MultiCacheManager multiCacheManager;
@@ -362,6 +369,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         boolean result = this.removeById(id);
         // 清除缓存，保证数据一致性
         if (result) {
+            // 公共图片由图片所属用户或管理员主动删除时，同步清理 COS 对象。
+            this.deleteCosPicture(picture);
             multiCacheManager.invalidatePicturePageCache();
         }
         return result;
@@ -760,6 +769,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
      * @return
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Boolean adminCheck(@RequestBody AdminCheckPictureRequest adminCheckPictureRequest, User loginUser) {
         Long picId = adminCheckPictureRequest.getPicId();
         Integer checkResult = adminCheckPictureRequest.getCheckResult();
@@ -771,28 +781,25 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         );
         Picture oldPicture = this.getById(picId);
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(oldPicture),ErrorCode.PARAMS_ERROR,"待审核图片不存在");
-        ThrowExceptionUtils.throwIF(oldPicture.getPictureCheck().equals(checkResult),ErrorCode.PARAMS_ERROR,"请勿重复审核");
-        ThrowExceptionUtils.throwIF(
-                ObjectUtil.isNull(checkResult),
-                ErrorCode.PARAMS_ERROR,
-                "审核状态异常"
-        );
+        validatePictureCheckResult(checkResult);
+        Integer previousCheckResult = oldPicture.getPictureCheck();
+        ThrowExceptionUtils.throwIF(Objects.equals(oldPicture.getPictureCheck(), checkResult),ErrorCode.PARAMS_ERROR,"请勿重复审核");
         if (Objects.equals(checkResult, PictureConstant.CHECK_REFUSE) && StrUtil.isBlank(checkMessage)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "审核人未提供审核拒绝原因");
         }
         if (checkResult.equals(PictureConstant.CHECK_PASS)) {
             checkMessage = "审核通过";
         }
-        Picture picture = this.getById(adminCheckPictureRequest.getPicId());
+        Picture picture = oldPicture;
         picture.setPictureCheck(checkResult);
         picture.setCheckMessage(checkMessage);
         picture.setCheckAdminId(loginUser.getId());
         picture.setCheckTime(DateTime.now());
-        boolean result = this.updateById(picture);
+        boolean result = updatePictureCheckIfExpectedState(picture, previousCheckResult);
+        ThrowExceptionUtils.throwIF(!result, ErrorCode.OPERATION_ERROR, "图片审核状态更新失败");
         // 清除缓存，保证数据一致性
-        if (result) {
-            multiCacheManager.invalidatePicturePageCache();
-        }
+        multiCacheManager.invalidatePicturePageCache();
+        userNotificationService.createNotification(buildPictureReviewNotification(picture));
         return result;
     }
 
@@ -804,6 +811,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
      * @return
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Boolean adminCheckBatch(@RequestBody AdminCheckPictureBatchRequest adminCheckPictureBatchRequest, User loginUser) {
         List<Long> picIds = adminCheckPictureBatchRequest.getPicIds();
         Integer checkResult = adminCheckPictureBatchRequest.getCheckResult();
@@ -813,37 +821,71 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "审核人未提供审核拒绝原因");
         }
         ThrowExceptionUtils.throwIF(
-                ObjectUtil.isNull(picIds),
+                picIds == null || picIds.isEmpty(),
                 ErrorCode.PARAMS_ERROR,
                 "审核图片Ids为空"
         );
+        validatePictureCheckResult(checkResult);
         //1. 根据batch中的ids进行循环处理
         for(Long picId : picIds){
             //1.1 图片校验 = 是否存在 是否已审核 是否提交拒绝原因
             Picture oldPicture = this.getById(picId);
             ThrowExceptionUtils.throwIF(ObjectUtil.isNull(oldPicture), ErrorCode.PARAMS_ERROR, "待审核图片不存在");
-            ThrowExceptionUtils.throwIF(oldPicture.getPictureCheck().equals(checkResult), ErrorCode.PARAMS_ERROR, "请勿重复审核");
-            ThrowExceptionUtils.throwIF(
-                    ObjectUtil.isNull(checkResult),
-                    ErrorCode.PARAMS_ERROR,
-                    "审核状态异常"
-            );
+            Integer previousCheckResult = oldPicture.getPictureCheck();
+            ThrowExceptionUtils.throwIF(Objects.equals(oldPicture.getPictureCheck(), checkResult), ErrorCode.PARAMS_ERROR, "请勿重复审核");
             if (checkResult.equals(PictureConstant.CHECK_PASS)) {
                 checkMessage = "审核通过";
             }
             //2. DB操作
-            Picture picture = this.getById(picId);
+            Picture picture = oldPicture;
             picture.setPictureCheck(checkResult);
             picture.setCheckMessage(checkMessage);
             picture.setCheckAdminId(loginUser.getId());
             picture.setCheckTime(DateTime.now());
-            boolean result = this.updateById(picture);
+            boolean result = updatePictureCheckIfExpectedState(picture, previousCheckResult);
+            ThrowExceptionUtils.throwIF(!result, ErrorCode.OPERATION_ERROR, "图片审核状态更新失败");
             // 清除缓存，保证数据一致性
-            if (result) {
-                multiCacheManager.invalidatePicturePageCache();
-            }
+            multiCacheManager.invalidatePicturePageCache();
+            userNotificationService.createNotification(buildPictureReviewNotification(picture));
         }
         return true;
+    }
+
+    private void validatePictureCheckResult(Integer checkResult) {
+        ThrowExceptionUtils.throwIF(
+                !Objects.equals(checkResult, PictureConstant.CHECK_PASS)
+                        && !Objects.equals(checkResult, PictureConstant.CHECK_REFUSE),
+                ErrorCode.PARAMS_ERROR,
+                "审核状态异常"
+        );
+    }
+
+    /** 仅允许基于审核前状态原子更新审核结果，避免并发复审互相覆盖。 */
+    private boolean updatePictureCheckIfExpectedState(Picture picture, Integer previousCheckResult) {
+        UpdateWrapper<Picture> updateWrapper = new UpdateWrapper<>();
+        updateWrapper.eq("id", picture.getId())
+                .eq("pictureCheck", previousCheckResult)
+                .set("pictureCheck", picture.getPictureCheck())
+                .set("checkMessage", picture.getCheckMessage())
+                .set("checkAdminId", picture.getCheckAdminId())
+                .set("checkTime", picture.getCheckTime());
+        return this.update(updateWrapper);
+    }
+
+    /** 构造图片审核结果通知；bizId 使用 picture.id 以复用同一图片的最新通知。 */
+    private NotificationCreateRequest buildPictureReviewNotification(Picture picture) {
+        NotificationCreateRequest request = new NotificationCreateRequest();
+        request.setType(NotificationConstant.TYPE_PICTURE_REVIEW_RESULT);
+        request.setUserId(picture.getUserid());
+        request.setBizId(picture.getId());
+        if (Objects.equals(picture.getPictureCheck(), PictureConstant.CHECK_PASS)) {
+            request.setTitle(NotificationConstant.PICTURE_REVIEW_APPROVED_TITLE);
+            request.setContent(NotificationConstant.PICTURE_REVIEW_APPROVED_CONTENT);
+        } else {
+            request.setTitle(NotificationConstant.PICTURE_REVIEW_REJECTED_TITLE);
+            request.setContent(NotificationConstant.PICTURE_REVIEW_REJECTED_CONTENT_PREFIX + picture.getCheckMessage());
+        }
+        return request;
     }
 
     /**
