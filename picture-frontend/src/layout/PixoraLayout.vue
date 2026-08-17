@@ -24,6 +24,7 @@
               <a-menu @click="handleAdminMenuClick">
                 <a-menu-item key="/admin/users">用户管理</a-menu-item>
                 <a-menu-item key="/admin/pictures/review">图片审核</a-menu-item>
+                <a-menu-item key="/admin/avatars/review">头像审核</a-menu-item>
                 <a-menu-item key="/admin/pictures/import">批量抓图</a-menu-item>
                 <a-menu-item key="/admin/spaces">空间运营</a-menu-item>
               </a-menu>
@@ -67,6 +68,7 @@
                   <a-menu-divider />
                   <a-menu-item key="/admin/users">用户管理</a-menu-item>
                   <a-menu-item key="/admin/pictures/review">图片审核</a-menu-item>
+                  <a-menu-item key="/admin/avatars/review">头像审核</a-menu-item>
                   <a-menu-item key="/admin/pictures/import">批量抓图</a-menu-item>
                   <a-menu-item key="/admin/spaces">空间运营</a-menu-item>
                 </template>

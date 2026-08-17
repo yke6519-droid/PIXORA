@@ -55,6 +55,14 @@ export async function getCurrentUser(options?: { [key: string]: any }) {
   });
 }
 
+/** 管理员查询头像审核列表。 */
+export async function queryAvatarReviews(options?: { [key: string]: any }) {
+  return request<API.BaseResponseListAvatarReviewVO>("/user/queryAvatarReviews", {
+    method: "GET",
+    ...(options || {}),
+  });
+}
+
 /** 此处后端没有提供注释 POST /user/queryPages */
 export async function queryPages(
   body: API.QueryPageRequest,
@@ -132,6 +140,21 @@ export async function updateSelf(
 ) {
   return request<API.BaseResponseBoolean>("/user/updateSelf", {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 管理员提交单条头像审核结果。 */
+export async function adminCheckAvatar(
+  body: API.AdminCheckAvatarRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseBoolean>("/user/adminCheckAvatar", {
+    method: "PUT",
     headers: {
       "Content-Type": "application/json",
     },

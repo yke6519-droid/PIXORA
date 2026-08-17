@@ -28,9 +28,10 @@
       <section class="center-layout proto-section">
         <aside class="profile-panel">
           <div class="profile-identity">
-            <div class="profile-avatar-wrap">
+            <button type="button" class="profile-avatar-wrap" aria-label="更新头像" @click="avatarOpen = true">
               <a-avatar :size="160" :src="user.avatarurl">{{ displayName.charAt(0) }}</a-avatar>
-            </div>
+              <span class="profile-avatar-hint">点击更新头像</span>
+            </button>
             <h2>{{ displayName }}</h2>
             <p class="profile-account">{{ user.useraccount || '未填写账号' }}</p>
             <p class="profile-bio">{{ user.profile || '还没有填写个人简介。' }}</p>
@@ -147,7 +148,12 @@
     <ProfileEditModal
       v-model:open="editOpen"
       :user="user"
-      @saved="handleProfileSaved"
+      @saved="refreshCenter"
+    />
+    <AvatarUpdateModal
+      v-model:open="avatarOpen"
+      :user="user"
+      @saved="refreshCenter"
     />
   </div>
 </template>
@@ -160,6 +166,7 @@ import { getCurrentUser, userLogout } from '../../../api/userController'
 import { queryPicturePage } from '../../../api/pictureController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import { pictureStatusText } from '../prototypeData'
+import AvatarUpdateModal from './components/AvatarUpdateModal.vue'
 import ProfileEditModal from './components/ProfileEditModal.vue'
 
 const router = useRouter()
@@ -168,6 +175,7 @@ const loading = ref(true)
 const summaryLoading = ref(false)
 const logoutLoading = ref(false)
 const editOpen = ref(false)
+const avatarOpen = ref(false)
 const centerError = ref('')
 const summaryError = ref('')
 const pictureTotal = ref(0)
@@ -359,8 +367,8 @@ async function loadCenter(showSkeleton = true) {
   }
 }
 
-async function handleProfileSaved() {
-  // 重新读取后端用户，确保头像、资料和全局登录态同步更新。
+async function refreshCenter() {
+  // 任一独立更新接口成功后重新读取用户，确保页面和全局登录态同步更新。
   await loadCenter(false)
 }
 
@@ -398,8 +406,11 @@ onMounted(loadCenter)
 /* 左侧只承担身份识别，避免把资料和统计信息挤在同一张大卡片里。 */
 .profile-panel { min-width: 0; padding: 4px 10px 0 0; }
 .profile-identity { text-align: center; }
-.profile-avatar-wrap { display: flex; justify-content: center; margin-bottom: 12px; }
+.profile-avatar-wrap { position: relative; width: fit-content; display: flex; justify-content: center; margin: 0 auto 12px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; }
 .profile-avatar-wrap :deep(.ant-avatar) { border: 1px solid var(--proto-line-strong); background: rgba(255,255,255,.68); color: var(--proto-ink); font-size: 48px; }
+.profile-avatar-hint { position: absolute; right: 4px; bottom: 2px; padding: 4px 7px; border: 1px solid var(--proto-line); border-radius: 4px; background: var(--proto-paper); color: var(--proto-ink); font-size: 10px; opacity: 0; transform: translateY(4px); transition: opacity .2s ease, transform .2s ease; }
+.profile-avatar-wrap:hover .profile-avatar-hint, .profile-avatar-wrap:focus-visible .profile-avatar-hint { opacity: 1; transform: translateY(0); }
+.profile-avatar-wrap:focus-visible { outline: 2px solid var(--proto-ink); outline-offset: 5px; border-radius: 50%; }
 .profile-panel h2 { margin: 0; font-size: 32px; font-weight: 800; line-height: 1.15; letter-spacing: -.06em; }
 .profile-account { margin: 7px 0 0; color: var(--proto-muted); font-family: inherit; font-size: 15px; font-weight: 400; line-height: 1.35; }
 .profile-bio { max-width: 28ch; min-height: 32px; margin: 14px auto 0; color: var(--proto-muted); font-size: 12px; line-height: 1.55; }
@@ -462,5 +473,8 @@ onMounted(loadCenter)
 @media (max-width: 520px) {
   .center-stat-row, .center-actions { grid-template-columns: 1fr; }
   .profile-details { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .profile-avatar-hint { transition: none; }
 }
 </style>

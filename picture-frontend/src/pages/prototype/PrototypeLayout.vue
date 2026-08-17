@@ -51,6 +51,9 @@
           <RouterLink to="/prototype/admin/pictures/review" class="prototype-nav-item">
             <span>图片审核</span>
           </RouterLink>
+          <RouterLink to="/prototype/admin/avatars/review" class="prototype-nav-item">
+            <span>头像审核</span>
+          </RouterLink>
           <RouterLink to="/prototype/admin/pictures/import" class="prototype-nav-item">
             <span>批量抓图</span>
           </RouterLink>
@@ -110,6 +113,7 @@ const routeLabel = computed(() => {
   if (path.includes('/space')) return '个人空间'
   if (path.includes('/admin/users')) return '用户管理'
   if (path.includes('/admin/pictures/review')) return '图片审核'
+  if (path.includes('/admin/avatars/review')) return '头像审核'
   if (path.includes('/admin/pictures/import')) return '批量抓图'
   if (path.includes('/admin/spaces')) return '空间运营'
   return '首页'

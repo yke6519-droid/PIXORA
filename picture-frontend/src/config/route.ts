@@ -69,6 +69,12 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true, requiresAdmin: true },
       },
       {
+        path: 'admin/avatars/review',
+        name: 'admin-avatar-review',
+        component: () => import('../pages/prototype/admin/AvatarReviewPrototypePage.vue'),
+        meta: { requiresAuth: true, requiresAdmin: true },
+      },
+      {
         path: 'admin/pictures/import',
         name: 'admin-picture-import',
         component: () => import('../pages/prototype/admin/PictureImportPrototypePage.vue'),
@@ -100,6 +106,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'space', component: () => import('../pages/prototype/space/SpacePrototypePage.vue') },
       { path: 'admin/users', component: () => import('../pages/prototype/admin/UserAdminPrototypePage.vue') },
       { path: 'admin/pictures/review', component: () => import('../pages/prototype/admin/PictureReviewPrototypePage.vue') },
+      { path: 'admin/avatars/review', component: () => import('../pages/prototype/admin/AvatarReviewPrototypePage.vue') },
       { path: 'admin/pictures/import', component: () => import('../pages/prototype/admin/PictureImportPrototypePage.vue') },
       { path: 'admin/spaces', component: () => import('../pages/prototype/admin/SpaceAdminPrototypePage.vue') },
     ],

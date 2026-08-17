@@ -7,7 +7,7 @@ export async function avatarUpload(file: File, options?: { [key: string]: any })
   const formData = new FormData()
   formData.append('avatar', file)
 
-  return request<API.BaseResponseString>('/file/avatarUpload', {
+  return request<API.BaseResponseUploadAvatarVO>('/file/avatarUpload', {
     method: 'POST',
     data: formData,
     ...(options || {}),

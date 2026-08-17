@@ -51,33 +51,14 @@
         />
       </a-form-item>
 
-      <a-form-item label="头像">
-        <div class="avatar-edit-row">
-          <a-avatar :size="56" :src="avatarPreview || editForm.avatarurl">
-            {{ avatarFallback }}
-          </a-avatar>
-          <div class="avatar-edit-action">
-            <a-upload
-              :before-upload="selectAvatar"
-              :show-upload-list="false"
-              accept=".jpg,.jpeg,.png,.webp"
-            >
-              <a-button class="proto-button ghost-button">选择新头像</a-button>
-            </a-upload>
-            <span>{{ avatarFile?.name || '支持 JPG、PNG、WEBP，最大 5MB' }}</span>
-          </div>
-        </div>
-        <p class="avatar-permission-note">选择后会在保存资料时上传，头像无需审核并立即生效。</p>
-      </a-form-item>
     </a-form>
   </a-modal>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import type { FormInstance, UploadProps } from 'ant-design-vue'
-import { avatarUpload } from '../../../../api/fileController'
+import type { FormInstance } from 'ant-design-vue'
 import { updateSelf } from '../../../../api/userController'
 
 const props = defineProps<{
@@ -92,51 +73,27 @@ const emit = defineEmits<{
 
 const formRef = ref<FormInstance>()
 const saving = ref(false)
-const avatarFile = ref<File>()
-const avatarPreview = ref('')
 const editForm = reactive<API.UpdateSelfRequest>({
   username: '',
-  avatarurl: '',
   gender: 0,
   phone: '',
   email: '',
   profile: '',
 })
 
-const avatarFallback = computed(() => (editForm.username || props.user.username || '用').charAt(0))
-
 /**
  * 每次打开弹窗都以服务端最新用户资料为准，避免上次取消的内容残留。
  */
 function resetForm() {
   editForm.username = props.user.username || ''
-  editForm.avatarurl = props.user.avatarurl || ''
   editForm.gender = props.user.gender ?? 0
   editForm.phone = props.user.phone || ''
   editForm.email = props.user.email || ''
   editForm.profile = props.user.profile || ''
-  clearAvatarSelection()
-}
-
-function clearAvatarSelection() {
-  if (avatarPreview.value) URL.revokeObjectURL(avatarPreview.value)
-  avatarPreview.value = ''
-  avatarFile.value = undefined
-}
-
-/**
- * 文件格式和大小由后端统一校验；前端这里只负责暂存文件并提供即时预览。
- */
-const selectAvatar: UploadProps['beforeUpload'] = (file) => {
-  clearAvatarSelection()
-  avatarFile.value = file
-  avatarPreview.value = URL.createObjectURL(file)
-  return false
 }
 
 function closeModal() {
   if (saving.value) return
-  clearAvatarSelection()
   emit('update:open', false)
 }
 
@@ -149,20 +106,8 @@ async function saveProfile() {
 
   saving.value = true
   try {
-    let avatarurl = editForm.avatarurl?.trim() || undefined
-
-    // 现有后端采用“先上传文件、再更新用户资料”的两步接口。
-    if (avatarFile.value) {
-      const uploadRes = await avatarUpload(avatarFile.value)
-      if (uploadRes.data?.code !== 200 || !uploadRes.data.data) {
-        throw new Error(uploadRes.data?.message || '头像上传失败')
-      }
-      avatarurl = uploadRes.data.data
-    }
-
     const updateRes = await updateSelf({
       username: editForm.username?.trim(),
-      avatarurl,
       gender: editForm.gender,
       phone: editForm.phone?.trim(),
       email: editForm.email?.trim(),
@@ -172,7 +117,6 @@ async function saveProfile() {
       throw new Error(updateRes.data?.message || '个人资料更新失败')
     }
 
-    clearAvatarSelection()
     emit('update:open', false)
     emit('saved')
     message.success('个人资料已更新')
@@ -187,7 +131,6 @@ watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) resetForm()
-    else clearAvatarSelection()
   },
 )
 </script>
@@ -195,25 +138,7 @@ watch(
 <style scoped>
 .profile-edit-form { padding-top: 6px; }
 .profile-edit-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.avatar-edit-row { display: flex; align-items: center; gap: 14px; }
-.avatar-edit-action { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.avatar-edit-action span {
-  max-width: 310px;
-  overflow: hidden;
-  color: var(--proto-muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.avatar-permission-note {
-  margin: 8px 0 0;
-  color: var(--proto-orange);
-  font-family: 'DM Mono', monospace;
-  font-size: 9px;
-  line-height: 1.5;
-}
 @media (max-width: 520px) {
   .profile-edit-fields { grid-template-columns: 1fr; gap: 0; }
-  .avatar-edit-row { align-items: flex-start; }
 }
 </style>

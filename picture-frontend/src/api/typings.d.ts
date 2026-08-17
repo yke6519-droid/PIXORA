@@ -7,6 +7,12 @@ declare namespace API {
     userLevel?: string;
   };
 
+  type AdminCheckAvatarRequest = {
+    userId?: number | string;
+    checkResult?: number;
+    checkMessage?: string;
+  };
+
   type AdminCheckPictureBatchRequest = {
     picIds?: Array<number | string>;
     checkResult?: number;
@@ -40,6 +46,12 @@ declare namespace API {
     code?: number;
     message?: string;
     data?: UserVO[];
+  };
+
+  type BaseResponseListAvatarReviewVO = {
+    code?: number;
+    message?: string;
+    data?: AvatarReviewVO[];
   };
 
   type BaseResponsePictureListVO = {
@@ -94,6 +106,12 @@ declare namespace API {
     code?: number;
     message?: string;
     data?: string;
+  };
+
+  type BaseResponseUploadAvatarVO = {
+    code?: number;
+    message?: string;
+    data?: UploadAvatarVO;
   };
 
   type BaseResponseUserPagesVO = {
@@ -321,11 +339,28 @@ declare namespace API {
 
   type UpdateSelfRequest = {
     username?: string;
-    avatarurl?: string;
     gender?: number;
     phone?: string;
     email?: string;
     profile?: string;
+  };
+
+  type UploadAvatarVO = {
+    message?: string;
+    status?: number;
+    newURL?: string;
+  };
+
+  type AvatarReviewVO = {
+    id?: number | string;
+    userId?: number | string;
+    username?: string;
+    useraccount?: string;
+    avatarUrl?: string;
+    status?: number;
+    submittedAt?: string;
+    reviewedAt?: string;
+    checkMessage?: string;
   };
 
   type UpdateUserRequest = {
