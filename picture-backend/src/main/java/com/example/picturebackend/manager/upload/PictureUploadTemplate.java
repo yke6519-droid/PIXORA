@@ -9,7 +9,9 @@ import cn.hutool.core.util.RandomUtil;
 import com.example.picturebackend.Config.CosClientConfig;
 import com.example.picturebackend.Exception.BusinessException;
 import com.example.picturebackend.Exception.ErrorCode;
+import com.example.picturebackend.Exception.ThrowExceptionUtils;
 
+import com.example.picturebackend.constant.PictureConstant;
 import com.example.picturebackend.domain.dto.file.UploadPictureResult;
 import com.example.picturebackend.manager.CosManager;
 import com.qcloud.cos.COSClient;
@@ -20,11 +22,12 @@ import com.qcloud.cos.model.ciModel.persistence.ProcessResults;
 import lombok.extern.slf4j.Slf4j;
 
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 业务层面的
@@ -51,35 +54,60 @@ public abstract class PictureUploadTemplate {
     public UploadPictureResult uploadPicture(Object inputSource, String uploadPrefix) {
         // 1. 校验图片
         vailPic(inputSource);
+        
         // 2. 图片上传地址
         String uuid = RandomUtil.randomString(16);
         String originalFilename = getOriginalFilename(inputSource);
+        String fileSuffix = FileUtil.getSuffix(originalFilename).toLowerCase(Locale.ROOT);
+
         // 自己拼接文件上传路径，而不是让用户自己上传（可能会导致url出异常）
-        String fileName = String.format("%s_%s.%s", DateUtil.formatDate(new Date()), uuid, FileUtil.getSuffix(originalFilename));
+        String fileName = String.format("%s_%s.%s", DateUtil.formatDate(new Date()), uuid, fileSuffix);
         String uploadPath = String.format("/%s/%s", uploadPrefix, fileName);
+
+        System.out.println("uploadPath = "+uploadPath);
+
         File file = null;
         try {
-            // 3.1 创建临时文件，获取图片到服务器
-            file = File.createTempFile(uploadPath, null);
+            /*
+             * 临时文件名不能包含 COS 路径分隔符。
+             * COS 对象路径只用于上传，服务器临时文件使用安全的固定前缀。
+             */
+            String tempSuffix = fileSuffix.isBlank() ? ".tmp" : "." + fileSuffix;
+            file = File.createTempFile("pixora-upload-", tempSuffix);
             // 3.2 处理文件来源
             processFile(inputSource,file);
+            
+            // URL 来源可能没有 Content-Length，下载完成后再做一次硬性大小校验。
+            ThrowExceptionUtils.throwIF(
+                    FileUtil.size(file) > PictureConstant.MAX_PICTURE_SIZE_BYTES,
+                    ErrorCode.PARAMS_ERROR,
+                    "图片大小不能超过5MB"
+            );
+
             // 4. 上传对象存储，并获取上传对象结果
             PutObjectResult putObjectResult = cosManager.putPictureObject(uploadPath, file);
+
             // 5. 获取图片信息对象
             ImageInfo imageInfo = putObjectResult.getCiUploadResult().getOriginalInfo().getImageInfo();
+            
             // 5.1 获取处理后的图片列表
             ProcessResults processResults = putObjectResult.getCiUploadResult().getProcessResults();
+
             List<CIObject> objectList = processResults.getObjectList();
+
             if (CollUtil.isNotEmpty(objectList)){
                 // 获取压缩后的文件信息
                 CIObject compressCiObject = objectList.get(0);
                 CIObject thumbnailCiObject = objectList.get(1);
                 // 封装压缩图的返回结果
-                return getUploadPictureResult(originalFilename, compressCiObject, thumbnailCiObject);
+                return getUploadPictureResult(uploadPath,originalFilename, compressCiObject, thumbnailCiObject);
             }
+
             // 6. 封装返回结果
             UploadPictureResult uploadPictureResult = getUploadPictureResult(originalFilename, imageInfo, file, uploadPath);
+
             return uploadPictureResult;
+
         } catch (IOException e) {
             log.error("图片上传到对象存储失败");
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传失败");
@@ -88,6 +116,7 @@ public abstract class PictureUploadTemplate {
             deleteTemFile(file);
         }
     }
+    
     protected abstract void vailPic(Object inputSource);
 
     protected abstract String getOriginalFilename(Object inputSource);
@@ -100,7 +129,7 @@ public abstract class PictureUploadTemplate {
      * @param compressCiObject 压缩后的对象
      * @return
      */
-    private UploadPictureResult getUploadPictureResult(String originalFilename, CIObject compressCiObject, CIObject thumbnailCiObject) {
+    private UploadPictureResult getUploadPictureResult(String originalKey, String originalFilename, CIObject compressCiObject, CIObject thumbnailCiObject) {
         UploadPictureResult uploadPictureResult = new UploadPictureResult();
         uploadPictureResult.setName(FileUtil.mainName(originalFilename));
         uploadPictureResult.setThumbnailUrl(cosClientConfig.getHost() + "/" + thumbnailCiObject.getKey());
@@ -110,6 +139,12 @@ public abstract class PictureUploadTemplate {
         uploadPictureResult.setPicsize(compressCiObject.getSize().longValue());
         uploadPictureResult.setPicscale(NumberUtil.round((double) compressCiObject.getWidth() / compressCiObject.getHeight(), 2).doubleValue());
         uploadPictureResult.setUrl(cosClientConfig.getHost() + "/" + compressCiObject.getKey());
+
+        uploadPictureResult.setThumbnailKey(thumbnailCiObject.getKey());
+        uploadPictureResult.setPictureKey(compressCiObject.getKey());
+        uploadPictureResult.setOriginalKey(originalKey);
+
+
         return uploadPictureResult;
     }
 
@@ -130,6 +165,7 @@ public abstract class PictureUploadTemplate {
         uploadPictureResult.setPicsize(FileUtil.size(file));
         uploadPictureResult.setPicscale(NumberUtil.round((double) imageInfo.getWidth() / imageInfo.getHeight(), 2).doubleValue());
         uploadPictureResult.setUrl(cosClientConfig.getHost() + "/" + uploadPath);
+        // uploadPictureResult.setKey(uploadPath);
         return uploadPictureResult;
     }
 

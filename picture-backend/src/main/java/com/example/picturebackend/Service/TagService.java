@@ -1,6 +1,6 @@
 package com.example.picturebackend.Service;
 
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.example.picturebackend.domain.po.Tag;
 
 /**

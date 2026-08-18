@@ -14,12 +14,12 @@ import com.example.picturebackend.domain.request.space.AlterLevelRequest;
 import com.example.picturebackend.domain.request.space.CreateSpaceRequest;
 import com.example.picturebackend.domain.request.space.SpaceQueryRequest;
 import com.example.picturebackend.domain.request.space.SpaceUpdateRequest;
-import com.example.picturebackend.domain.vo.SpacePageVO;
-import com.example.picturebackend.domain.vo.SpaceVO;
-import org.springframework.transaction.annotation.Transactional;
+import com.example.picturebackend.domain.vo.space.SpacePageVO;
+import com.example.picturebackend.domain.vo.space.SpaceVO;
+
 import org.springframework.web.bind.annotation.*;
-import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/space")
@@ -82,8 +82,23 @@ public class SpaceController {
      */
     @DeleteMapping("/deleteById")
     public BaseResponse<Boolean> deleteById(Long spaceId, HttpServletRequest request){
+        
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceId),ErrorCode.PARAMS_ERROR,"空间id为空");
+
         User loginUser = userService.getCurrentUser(request);
+
+        // 先拦截未创建空间，且非管理员的用户
+        ThrowExceptionUtils.throwIF(!loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE) && 
+                                    ObjectUtil.isNull(loginUser.getSpaceId()),
+            ErrorCode.PARAMS_ERROR,"当前用户未创建空间"
+        );
+
+        // 再进行鉴权
+        ThrowExceptionUtils.throwIF(!loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE)&&
+            !loginUser.getSpaceId().equals(spaceId),
+            ErrorCode.NO_AUTH_ERROR, "无权删除此空间"
+        );
+
         Boolean res = spaceService.deleteById(spaceId,loginUser);
         return ResponseUtils.success(res);
     }
@@ -97,9 +112,27 @@ public class SpaceController {
      */
     @PutMapping("/updateById")
     public BaseResponse<Boolean> updateById(@RequestBody SpaceUpdateRequest spaceUpdateRequest, HttpServletRequest request){
-        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceUpdateRequest),ErrorCode.PARAMS_ERROR,"空间id为空");
+
+        // 参数校验
+        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceUpdateRequest),
+            ErrorCode.PARAMS_ERROR,"空间id为空"
+        );
         User loginUser = userService.getCurrentUser(request);
+
+        // 先拦截未创建空间，且非管理员的用户
+        ThrowExceptionUtils.throwIF(!loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE) && 
+                                    ObjectUtil.isNull(loginUser.getSpaceId()),
+            ErrorCode.PARAMS_ERROR,"当前用户未创建空间"
+        );
+
+        // 再进行鉴权
+        ThrowExceptionUtils.throwIF(!loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE)&&
+            !loginUser.getSpaceId().equals(spaceUpdateRequest.getSpaceId()),
+            ErrorCode.NO_AUTH_ERROR, "无权删除此空间"
+        );
+
         Boolean res = spaceService.updateById(spaceUpdateRequest,loginUser);
+
         return ResponseUtils.success(res);
     }
 
@@ -114,9 +147,14 @@ public class SpaceController {
     @PutMapping("/alterLevelById")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> alterLevelById(@RequestBody AlterLevelRequest alterLevelRequest, HttpServletRequest request){
+        // 参数判空校验
         ThrowExceptionUtils.throwIF(ObjectUtil.isNull(alterLevelRequest),ErrorCode.PARAMS_ERROR);
+        // 获取当前登录用户
         User loginUser = userService.getCurrentUser(request);
+        // 调用service层方法修改空间等级
         boolean b = spaceService.alterLevelById(alterLevelRequest, loginUser);
+        
+        // 返回结果 todo 这里可以考虑返回修改后的空间信息，而不是仅仅返回一个boolean值
         return ResponseUtils.success(b);
     }
 }

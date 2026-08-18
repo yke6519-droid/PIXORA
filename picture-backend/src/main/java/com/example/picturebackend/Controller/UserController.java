@@ -1,27 +1,47 @@
 package com.example.picturebackend.Controller;
+import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.example.picturebackend.Service.AvatarCheckService;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.Utils.ResponseUtils;
 import com.example.picturebackend.annotation.AuthCheck;
 import com.example.picturebackend.constant.UserConstant;
+import com.example.picturebackend.domain.MyEnums.UserLevel;
+import com.example.picturebackend.domain.MyEnums.UserStatus;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.BaseResponse;
+import com.example.picturebackend.domain.request.picture.AdminCheckPictureRequest;
 import com.example.picturebackend.domain.request.user.*;
-import com.example.picturebackend.domain.vo.UserPagesVO;
+import com.example.picturebackend.domain.po.AvatarCheck;
+import com.example.picturebackend.domain.vo.user.AvatarReviewVO;
+import com.example.picturebackend.domain.vo.user.UserPagesVO;
+import com.example.picturebackend.domain.vo.user.UserVO;
+
+import ch.qos.logback.classic.spi.STEUtil;
+
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
-import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/user")
 public class UserController {
     @Resource
     private UserService userService;
+
+    @Resource
+    private AvatarCheckService avatarCheckService;
 
     /**
      * 用户注册
@@ -35,7 +55,9 @@ public class UserController {
                registerRequest ==null,
                ErrorCode.PARAMS_ERROR
        );
+
        Boolean save = userService.userRegister(registerRequest);
+
        return ResponseUtils.success(save);
    }
 
@@ -82,12 +104,15 @@ public class UserController {
      * @return
      */
     @GetMapping("/getCurrentUser")
-    public BaseResponse<User> getCurrentUser(HttpServletRequest request){
+    public BaseResponse<UserVO> getCurrentUser(HttpServletRequest request){
+
+        // 内部已做脱敏
         User currentUser = userService.getCurrentUser(request);
-        User saftyUser = userService.getSaftyUser(currentUser);
+        UserVO latestUser = userService.getSaftyUser(currentUser);
+
         // 每次get完都要把最新的user存进去
-        request.setAttribute(UserConstant.CURRENT_USER_SESSION_KEY,saftyUser);
-        return ResponseUtils.success(saftyUser);
+        request.getSession().setAttribute(UserConstant.CURRENT_USER_SESSION_KEY,latestUser);
+        return ResponseUtils.success(latestUser);
     }
 
     /**
@@ -97,9 +122,68 @@ public class UserController {
      */
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @GetMapping("/queryUsers")
-    public BaseResponse<List<User>> getAllUsers(){
-        List<User> UserList = userService.list();
+    public BaseResponse<List<UserVO>> getAllUsers(){
+        // 查询所有用户信息，并进行脱敏处理
+        List<UserVO> UserList = userService.list().stream().map(user->{
+                return userService.getSaftyUser(user);
+        }).collect(java.util.stream.Collectors.toList());
+
         return ResponseUtils.success(UserList);
+    }
+
+    /**
+     * 管理员查询头像审核列表。
+     * 通过记录按用户只保留最新一条，失败记录保留全部历史，前端按 status 分栏。
+     */
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @GetMapping("/queryAvatarReviews")
+    public BaseResponse<List<AvatarReviewVO>> queryAvatarReviews(){
+        List<AvatarCheck> avatarChecks = avatarCheckService.list(
+                new QueryWrapper<AvatarCheck>()
+                        .orderByDesc("updateTime")
+                        .orderByDesc("id")
+        );
+
+        Set<Long> approvedUserIds = new HashSet<>();
+        List<AvatarCheck> visibleAvatarChecks = avatarChecks.stream()
+                // 查询已经按更新时间倒序，首次遇到的通过记录就是该用户最新的一条。
+                .filter(avatarCheck ->
+                        !Integer.valueOf(1).equals(avatarCheck.getStatus())
+                                || avatarCheck.getUserId() == null
+                                || approvedUserIds.add(avatarCheck.getUserId()))
+                .toList();
+
+        List<Long> userIds = visibleAvatarChecks.stream()
+                .map(AvatarCheck::getUserId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, User> users = userIds.isEmpty()
+                ? Map.of()
+                : userService.listByIds(userIds).stream()
+                .collect(Collectors.toMap(User::getId, user -> user, (left, right) -> left));
+
+        List<AvatarReviewVO> result = visibleAvatarChecks.stream()
+                .map(avatarCheck -> toAvatarReviewVO(avatarCheck, users.get(avatarCheck.getUserId())))
+                .toList();
+        return ResponseUtils.success(result);
+    }
+
+    /** 将数据库审核记录转换为管理员页面所需的脱敏字段。 */
+    private AvatarReviewVO toAvatarReviewVO(AvatarCheck avatarCheck, User user) {
+        AvatarReviewVO reviewVO = new AvatarReviewVO();
+        reviewVO.setId(avatarCheck.getId());
+        reviewVO.setUserId(avatarCheck.getUserId());
+        reviewVO.setUsername(user == null ? "用户已不存在" : user.getUsername());
+        reviewVO.setUseraccount(user == null ? String.valueOf(avatarCheck.getUserId()) : user.getUseraccount());
+        reviewVO.setAvatarUrl(avatarCheck.getUrl());
+        reviewVO.setStatus(avatarCheck.getStatus());
+        reviewVO.setSubmittedAt(avatarCheck.getCreatetime());
+        reviewVO.setReviewedAt(Integer.valueOf(0).equals(avatarCheck.getStatus())
+                ? null
+                : avatarCheck.getUpdatetime());
+        reviewVO.setCheckMessage(avatarCheck.getCheckMessage());
+        return reviewVO;
     }
 
     /**
@@ -116,9 +200,16 @@ public class UserController {
                 ErrorCode.PARAMS_ERROR
         );
         IPage<User> iPage = userService.queryPageByCondition(queryPageRequest);
+        
+        // 将查询到的User对象列表转换为UserVO对象列表 
+        List<UserVO> userVOList = iPage.getRecords().stream().map(user->{
+                return userService.getSaftyUser(user);
+        }).collect(java.util.stream.Collectors.toList());
+
         UserPagesVO userPagesVO = new UserPagesVO();
-        userPagesVO.setUserList(iPage.getRecords());
+        userPagesVO.setUserList(userVOList);
         userPagesVO.setTotalSize(iPage.getTotal());
+
         return ResponseUtils.success(userPagesVO);
     }
 
@@ -128,20 +219,23 @@ public class UserController {
      * @return User
      */
     @GetMapping("/queryUserById")
-    public BaseResponse<User> getUserById(QueryUserRequest queryUserRequest){
+    public BaseResponse<UserVO> getUserById(QueryUserRequest queryUserRequest){
+        // 判空处理
         ThrowExceptionUtils.throwIF(
                 queryUserRequest==null || queryUserRequest.getId() == null,
                 ErrorCode.PARAMS_ERROR,
                 "用户ID不能为空"
         );
-        User user = userService.getById(queryUserRequest.getId());
+        UserVO userVO = userService.getSaftyUser(userService.getById(queryUserRequest.getId()));
+
+        // 如果用户不存在，抛出异常
         ThrowExceptionUtils.throwIF(
-                user == null,
+                userVO == null,
                 ErrorCode.NOT_FOUND_ERROR,
                 "用户不存在"
         );
-        User saftyUser = userService.getSaftyUser(user);
-        return ResponseUtils.success(saftyUser);
+
+        return ResponseUtils.success(userVO);
     }
 
     /**
@@ -164,13 +258,32 @@ public class UserController {
          final String Phone = updateUserRequest.getPhone();
          final String Email = updateUserRequest.getEmail();
          final String Profile = updateUserRequest.getProfile();
+         final String userLevel = updateUserRequest.getUserLevel();
+         final Integer accountStatus = updateUserRequest.getAccountStatus();
          ThrowExceptionUtils.throwIF(
-                 StrUtil.isAllBlank(Username,AvatarURL,Phone,Email,Profile) && gender==null,
+                 StrUtil.isAllBlank(Username,AvatarURL,Phone,Email,Profile)
+                         && gender == null
+                         && userLevel == null
+                         && accountStatus == null,
                  ErrorCode.PARAMS_ERROR,
                  "更新信息全为空！"
          );
+        ThrowExceptionUtils.throwIF(
+                userLevel != null && (StrUtil.isBlank(userLevel) || UserLevel.getEnumByValue(userLevel) == null),
+                ErrorCode.PARAMS_ERROR,
+                "用户等级只能是 user、admin 或 vip"
+        );
+        ThrowExceptionUtils.throwIF(
+                accountStatus != null && UserStatus.getEnumByValue(accountStatus) == null,
+                ErrorCode.PARAMS_ERROR,
+                "账户状态只能是 0（正常）或 1（封禁）"
+        );
         User user = new User();
         BeanUtils.copyProperties(updateUserRequest,user);
+        // 请求对象用 accountStatus 表达账户状态，实体字段仍对应数据库 userStatus。
+        if (accountStatus != null) {
+            user.setUserStatus(accountStatus);
+        }
         boolean b = userService.updateById(user);
         return ResponseUtils.success(b);
     }
@@ -182,30 +295,30 @@ public class UserController {
      * @return Boolean
      */
     @PostMapping("/updateSelf")
-    public BaseResponse<Boolean> updateSelf(@RequestBody UpdateSelfRequest updateSelfRequest,HttpServletRequest request){
+    public BaseResponse<Boolean> updateSelf(@RequestBody UpdateSelfRequest updateSelfRequest,
+                                                HttpServletRequest request){
         // 不从前端接收用户id，从当前Session中获取更安全
         User currentUser = userService.getCurrentUser(request);
-        ThrowExceptionUtils.throwIF(
-                currentUser ==null,
-                ErrorCode.NOT_LOGIN_ERROR
-        );
+
         // 请求体判空
         ThrowExceptionUtils.throwIF(
                 updateSelfRequest == null,
                 ErrorCode.PARAMS_ERROR,
                 "更新请求体为空"
         );
+
         final String Username = updateSelfRequest.getUsername();
-        final String AvatarURL = updateSelfRequest.getAvatarurl();
         final Integer gender = updateSelfRequest.getGender();
         final String Phone = updateSelfRequest.getPhone();
         final String Email = updateSelfRequest.getEmail();
         final String Profile = updateSelfRequest.getProfile();
+        
         ThrowExceptionUtils.throwIF(
-                StrUtil.isAllBlank(Username,AvatarURL,Phone,Email,Profile) && gender==null,
+                StrUtil.isAllBlank(Username,Phone,Email,Profile) && gender==null,
                 ErrorCode.PARAMS_ERROR,
                 "更新信息全为空！"
         );
+
         boolean b = userService.updateSelf(currentUser.getId(),request,updateSelfRequest);
         return ResponseUtils.success(b);
     }
@@ -218,8 +331,22 @@ public class UserController {
      */
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @DeleteMapping("/deleteById")
-    public BaseResponse<Boolean> deleteUser(@RequestBody DeleteRequest deleteRequest){
+    public BaseResponse<Boolean> deleteUser(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request){
+        ThrowExceptionUtils.throwIF(deleteRequest==null,ErrorCode.PARAMS_ERROR);
+        
+        User loginUser = userService.getCurrentUser(request);
+
+        ThrowExceptionUtils.throwIF(deleteRequest.getId() == loginUser.getId(),
+                ErrorCode.PARAMS_ERROR,"不能删除自己"
+        );
+
+        ThrowExceptionUtils.throwIF(userService.getById(deleteRequest.getId())
+                                .getUserLevel().equals(UserConstant.ADMIN_ROLE),
+         ErrorCode.NO_AUTH_ERROR,"不能删除管理员"
+        );
+
         boolean b = userService.removeById(deleteRequest.getId());
+
         return ResponseUtils.success(b);
     }
 
@@ -252,4 +379,25 @@ public class UserController {
         return ResponseUtils.success(b);
     }
 
+    /**
+     * 管理员审核功能 根据UserId进行新头像的审核
+     */
+    @PutMapping("/adminCheckAvatar")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Boolean> adminCheckAvatar(@RequestBody AdminCheckAvatarRequest adminCheckAvatarRequest, HttpServletRequest request) {
+        // 参数校验
+        ThrowExceptionUtils.throwIF(
+                ObjectUtil.isNull(adminCheckAvatarRequest),
+                ErrorCode.PARAMS_ERROR
+        );
+        Integer checkResult = adminCheckAvatarRequest.getCheckResult();
+        ThrowExceptionUtils.throwIF(checkResult == null || (checkResult != 1 && checkResult != 2),
+                ErrorCode.PARAMS_ERROR, "审核结果不合法" );
+        
+        User currentUser = userService.getCurrentUser(request);
+
+        Boolean result = userService.adminCheckAvatar(adminCheckAvatarRequest, currentUser);
+
+        return ResponseUtils.success(result);
+    }
 }

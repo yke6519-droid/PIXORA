@@ -2,11 +2,12 @@ package com.example.picturebackend.Service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.user.*;
+import com.example.picturebackend.domain.vo.user.UserVO;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
 * @author chen
@@ -17,7 +18,7 @@ public interface UserService extends IService<User> {
 
     String userLogin(UserLoginRequest userLoginRequest, HttpServletRequest request);
 
-    User getSaftyUser(User user);
+    UserVO getSaftyUser(User user);
 
     User getCurrentUser(HttpServletRequest request);
 
@@ -35,4 +36,7 @@ public interface UserService extends IService<User> {
      * 定义一个查询类，用于快速根据request生成queryWrapper
      */
     QueryWrapper<User> getQueryWrapper(QueryPageRequest queryPageRequest);
+
+    Boolean adminCheckAvatar(AdminCheckAvatarRequest adminCheckAvatarRequest, User currentUser);
+
 }

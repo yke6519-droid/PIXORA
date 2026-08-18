@@ -6,7 +6,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8123";
 
 const myAxios = axios.create({
   baseURL: apiBaseUrl,
-  timeout: 60000,
+  timeout: 600000,
   withCredentials: true,
 });
 

@@ -2,7 +2,6 @@ package com.example.picturebackend.domain.dto.file;
 
 import lombok.Data;
 
-import java.util.Date;
 
 @Data
 public class UploadPictureResult {
@@ -45,4 +44,13 @@ public class UploadPictureResult {
      * 图片格式
      */
     private String picformat;
+
+    /**
+     * 上传cos的key
+     */
+    private String pictureKey;
+
+    private String thumbnailKey;
+
+    private String originalKey;
 }

@@ -133,10 +133,10 @@ export const prototypePictures: PrototypePicture[] = [
 ]
 
 export const prototypeUsers = [
-  { id: 1, username: '管理员', useraccount: 'admin', gender: 0, phone: '138****0001', email: 'admin@cloudpic.local', userstatus: 'admin', profile: '负责用户、图片审核和空间运营。', createtime: '2026-05-01 09:00:00', avatarurl: 'https://i.pravatar.cc/80?img=68', spaceId: 0 },
-  { id: 12, username: '林默', useraccount: 'linmo', gender: 1, phone: '139****1024', email: 'linmo@cloudpic.local', userstatus: 'user', profile: '记录自然、材质和城市光线。', createtime: '2026-05-14 11:24:00', avatarurl: 'https://i.pravatar.cc/80?img=12', spaceId: 28 },
-  { id: 18, username: '周野', useraccount: 'zhouye', gender: 0, phone: '186****2077', email: 'zhouye@cloudpic.local', userstatus: 'user', profile: '关注建筑、几何与公共空间。', createtime: '2026-06-02 16:08:00', avatarurl: 'https://i.pravatar.cc/80?img=18', spaceId: 27 },
-  { id: 21, username: '顾言', useraccount: 'guyan', gender: 0, phone: '158****5511', email: 'guyan@cloudpic.local', userstatus: 'vip', profile: '城市摄影与视觉研究。', createtime: '2026-06-20 08:45:00', avatarurl: 'https://i.pravatar.cc/80?img=21', spaceId: 0 },
+  { id: 1, username: '管理员', useraccount: 'admin', gender: 0, phone: '138****0001', email: 'admin@cloudpic.local', userLevel: 'admin', profile: '负责用户、图片审核和空间运营。', createtime: '2026-05-01 09:00:00', avatarurl: 'https://i.pravatar.cc/80?img=68', spaceId: 0 },
+  { id: 12, username: '林默', useraccount: 'linmo', gender: 1, phone: '139****1024', email: 'linmo@cloudpic.local', userLevel: 'user', profile: '记录自然、材质和城市光线。', createtime: '2026-05-14 11:24:00', avatarurl: 'https://i.pravatar.cc/80?img=12', spaceId: 28 },
+  { id: 18, username: '周野', useraccount: 'zhouye', gender: 0, phone: '186****2077', email: 'zhouye@cloudpic.local', userLevel: 'user', profile: '关注建筑、几何与公共空间。', createtime: '2026-06-02 16:08:00', avatarurl: 'https://i.pravatar.cc/80?img=18', spaceId: 27 },
+  { id: 21, username: '顾言', useraccount: 'guyan', gender: 0, phone: '158****5511', email: 'guyan@cloudpic.local', userLevel: 'vip', profile: '城市摄影与视觉研究。', createtime: '2026-06-20 08:45:00', avatarurl: 'https://i.pravatar.cc/80?img=21', spaceId: 0 },
 ]
 
 export const prototypeCategories = ['全部', '风景', '建筑', '生活', '抽象', '城市', '纹理']

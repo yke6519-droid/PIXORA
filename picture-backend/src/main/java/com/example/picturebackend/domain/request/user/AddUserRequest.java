@@ -29,7 +29,7 @@ public class AddUserRequest implements Serializable {
     private String phone="12345678901";
 
     /**
-     * 用户状态
+     * 用户等级：user、admin、vip。
      */
-    private String userstatus;
+    private String userLevel;
 }

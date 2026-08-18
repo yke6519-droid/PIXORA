@@ -1,15 +1,17 @@
 package com.example.picturebackend.Service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
+import com.example.picturebackend.domain.dto.file.UploadPictureResult;
+import com.example.picturebackend.domain.po.Picture;
 import com.example.picturebackend.domain.po.Space;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.space.AlterLevelRequest;
 import com.example.picturebackend.domain.request.space.CreateSpaceRequest;
 import com.example.picturebackend.domain.request.space.SpaceQueryRequest;
 import com.example.picturebackend.domain.request.space.SpaceUpdateRequest;
-import com.example.picturebackend.domain.vo.SpacePageVO;
-import com.example.picturebackend.domain.vo.SpaceVO;
+import com.example.picturebackend.domain.vo.space.SpacePageVO;
+import com.example.picturebackend.domain.vo.space.SpaceVO;
 
 /**
 * @author chen
@@ -58,9 +60,33 @@ public interface SpaceService extends IService<Space> {
      */
     SpaceVO querySpace(Long spaceId, User loginUser);
 
+    /**
+     * PO 2 VO转换
+     * @param space
+     * @return
+     */
     SpaceVO Space2SPaceVO(Space space);
 
+    /**
+     * 构造space的查询条件
+     * @param spaceQueryRequest
+     * @return
+     */
     QueryWrapper<Space> getQueryWrapper(SpaceQueryRequest spaceQueryRequest);
 
+    /**
+     * space分页查询
+     * @param spaceQueryRequest
+     * @return
+     */
     SpacePageVO querySpacePage(SpaceQueryRequest spaceQueryRequest);
+
+    /**
+     * 校验当前空间容量
+     * @param spaceId
+     * @param picture
+     */
+    void checkUsage(Long spaceId, Picture picture, UploadPictureResult uploadPictureResult);
+
+    void SpaceAuthCheck(Long spaceId, User loginUser);
 }

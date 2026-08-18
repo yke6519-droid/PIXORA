@@ -3,17 +3,18 @@ package com.example.picturebackend.Service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.example.picturebackend.domain.dto.file.UploadPictureResult;
 import com.example.picturebackend.domain.po.Picture;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.picture.*;
-import com.example.picturebackend.domain.vo.PicturePageVO;
-import com.example.picturebackend.domain.vo.PictureVO;
+import com.example.picturebackend.domain.vo.picture.PictureListVO;
+import com.example.picturebackend.domain.vo.picture.PicturePageVO;
+import com.example.picturebackend.domain.vo.picture.PictureVO;
+
 import org.springframework.web.bind.annotation.RequestBody;
 
-import javax.servlet.http.HttpServletRequest;
-import java.util.List;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
 * @author chen
@@ -22,7 +23,7 @@ import java.util.List;
 */
 public interface PictureService extends IService<Picture> {
 
-    Boolean SpaceCheck(Long userId, User loginUser);
+    // Boolean AuthCheck(Long userId, User loginUser);
 
     /**
      * 通用上传图片到存储对象方法
@@ -64,17 +65,31 @@ public interface PictureService extends IService<Picture> {
      */
     Boolean updatePictureById(PictureUpdateRequest pictureUpdateRequest, User loginUser);
 
-    IPage<Picture> queryAll(PictureQueryRequest pictureQueryRequest, User adminUser);
+    /**
+     * 拿到所有图片的分页
+     * @param pictureQueryRequest
+     * @param adminUser
+     * @return
+     */
+    IPage<PictureVO> queryAll(PictureQueryRequest pictureQueryRequest, User adminUser);
 
     /**
      * 管理员分页获取图片列表
      */
-    PicturePageVO queryPicturePage(PictureQueryRequest pictureQueryRequest, User currentUser);
+    PicturePageVO queryPicturePage(PictureQueryRequest pictureQueryRequest, User loginUser);
+
+    /**
+     * 使用多级缓存分页获取图片列表。
+     *
+     * 私有空间权限必须在读取缓存之前完成校验，缓存只能加速已经通过权限校验的查询，
+     * 不能成为权限判断的替代品。
+     */
+    PicturePageVO queryPicturePageCache(PictureQueryRequest pictureQueryRequest, User loginUser);
 
     /**
      * 管理员根据id获取图片（不脱敏）
      */
-    PictureVO getPictureById(Long id, User currentUser);
+    PictureVO getPictureById(Long id, User loginUser);
 
     /**
      * 修改图片（仅图片所属用户可修改）
@@ -111,12 +126,12 @@ public interface PictureService extends IService<Picture> {
      * 管理员校验 并更新图片状态
      *
      * @param adminCheckPictureRequest
-     * @param currentUser
+     * @param loginUser
      * @return
      */
-    Boolean adminCheck(AdminCheckPictureRequest adminCheckPictureRequest, User currentUser);
+    Boolean adminCheck(AdminCheckPictureRequest adminCheckPictureRequest, User loginUser);
 
-    Boolean adminCheckBatch(@RequestBody AdminCheckPictureBatchRequest adminCheckPictureBatchRequest, User currentUser);
+    Boolean adminCheckBatch(@RequestBody AdminCheckPictureBatchRequest adminCheckPictureBatchRequest, User loginUser);
 
     /**
      * 按批次抓取并上传图片
@@ -125,5 +140,27 @@ public interface PictureService extends IService<Picture> {
      * @param loginUser
      * @return
      */
-    Integer UploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser);
+    PictureListVO UploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser);
+
+    /**
+     * 重新上传图片
+     * @param inputSource
+     * @param pictureUploadRequest
+     * @param loginUser
+     * @return
+     */
+    PictureVO reloadPicture(Object inputSource, PictureUploadRequest pictureUploadRequest, User loginUser);
+
+    /**
+     * 校验图片归属
+     * @param loginUser
+     * @param picture
+     */
+    void PictureAuthCheck(User loginUser, Picture picture);
+
+    /**
+     * 删除COS中的图片
+     * @param picture
+     */
+    void deleteCosPicture(Picture picture);
 }

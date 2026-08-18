@@ -1,13 +1,13 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { getCurrentUserUsingGet } from '../api/userController'
+import { getCurrentUser } from '../api/userController'
 
 /**
  * 存储登录用户信息
  */
 export const useLoginUserStore = defineStore('loginUser', () => {
   // 定义状态
-  const loginUser = ref<API.User | null>(null)
+  const loginUser = ref<API.UserVO | null>(null)
 
   // 定义方法
   function setLoginUser(newLoginUser: any) {
@@ -21,7 +21,7 @@ export const useLoginUserStore = defineStore('loginUser', () => {
   // 从后端获取到当前用户信息
   async function fetchLoginUser() {
     try {
-      const res = await getCurrentUserUsingGet()
+      const res = await getCurrentUser()
       const userData = res?.data?.data
       if(userData){
         setLoginUser(userData)
@@ -33,6 +33,7 @@ export const useLoginUserStore = defineStore('loginUser', () => {
       console.log('获取用户信息失败', error)
       setLoginUser(null)
     }
+    return loginUser.value
   }
 
   // 必须 return 出去！

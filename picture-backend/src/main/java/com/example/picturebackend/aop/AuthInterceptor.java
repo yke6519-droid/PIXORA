@@ -5,7 +5,7 @@ import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.annotation.AuthCheck;
 import com.example.picturebackend.constant.UserConstant;
-import com.example.picturebackend.domain.MyEnums.UserStatus;
+import com.example.picturebackend.domain.MyEnums.UserLevel;
 import com.example.picturebackend.domain.po.User;
 
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -17,8 +17,10 @@ import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
+
+import cn.hutool.core.util.StrUtil;
 
 @Aspect
 @Component
@@ -41,13 +43,17 @@ public class AuthInterceptor {
         HttpServletRequest request = ((ServletRequestAttributes) requestAttributes).getRequest();
         // 获取当前登录用户
         User currentUser = userService.getCurrentUser(request);
-        UserStatus mustRoleEnum = UserStatus.getEnumByValue(mustRole);
+        // mustRole 为空表示不限制角色，直接放行
+        if (StrUtil.isBlank(mustRole)) {
+            return joinPoint.proceed();
+        }
+        UserLevel mustRoleEnum = UserLevel.getEnumByValue(mustRole);
         // 如果没有设权限 或 运行本人操作 则放行
         if (mustRoleEnum == null){
             return joinPoint.proceed();
         }
         // 必须有权限才能通过下面的代码
-        UserStatus currentUserEnum = UserStatus.getEnumByValue(currentUser.getUserstatus());
+        UserLevel currentUserEnum = UserLevel.getEnumByValue(currentUser.getUserLevel());
         ThrowExceptionUtils.throwIF(
                 // 用户角色为空，或不等于当前必须的角色
                 currentUserEnum == null,

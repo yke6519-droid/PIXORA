@@ -11,9 +11,10 @@
             <result property="avatarurl" column="avatarUrl" />
             <result property="gender" column="gender" />
             <result property="userpassword" column="userPassword" />
-        <result property="spaceId" column="spaceId"/>
+            <result property="spaceId" column="spaceId"/>
             <result property="phone" column="phone" />
-            <result property="userstatus" column="userStatus" />
+            <result property="userLevel" column="userLevel" />
+            <result property="userStatus" column="userStatus" />
             <result property="email" column="email" />
             <result property="createtime" column="createTime" />
             <result property="updatetime" column="updateTime" />
@@ -23,7 +24,7 @@
 
     <sql id="Base_Column_List">
         id,username,userAccount,avatarUrl,gender,userPassword,
-        phone,userStatus,email,createTime,updateTime,
-        isDelete,userRole,profile
+        phone,userLevel,userStatus,email,createTime,updateTime,
+        isDelete,profile,spaceId
     </sql>
 </mapper>

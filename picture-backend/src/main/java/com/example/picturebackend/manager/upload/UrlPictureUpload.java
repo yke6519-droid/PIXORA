@@ -9,6 +9,7 @@ import cn.hutool.http.Method;
 import com.example.picturebackend.Exception.BusinessException;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
+import com.example.picturebackend.constant.PictureConstant;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -46,21 +47,25 @@ public class UrlPictureUpload extends PictureUploadTemplate {
             // 文件格式不为空，再进行校验
             if (StrUtil.isNotBlank(contentType)){
                 final List<String> ALLOW_CONTENT_TYPES = Arrays.asList("image/jpeg", "image/jpg","image/png","image/webp");
-                ThrowExceptionUtils.throwIF(!ALLOW_CONTENT_TYPES.contains(contentType.toLowerCase())
+                // 部分服务器会返回 image/jpeg;charset=UTF-8，只比较媒体类型主体。
+                String mediaType = contentType.split(";")[0].trim().toLowerCase();
+                ThrowExceptionUtils.throwIF(!ALLOW_CONTENT_TYPES.contains(mediaType)
                         ,ErrorCode.PARAMS_ERROR,"文件格式不正确！");
             }
-            String contentLength = httpResponse.header("Content_Length");
+            String contentLength = httpResponse.header("Content-Length");
             //文件大小不为空，进行校验
             try {
                 if (StrUtil.isNotBlank(contentLength)){
                     long length = Long.parseLong(contentLength);
-                    final long ONE_M = 1024*1024;
-                    ThrowExceptionUtils.throwIF(length >2*ONE_M,
-                            ErrorCode.PARAMS_ERROR,"文件大小不能超过2M");
+                    ThrowExceptionUtils.throwIF(length > PictureConstant.MAX_PICTURE_SIZE_BYTES,
+                            ErrorCode.PARAMS_ERROR,"文件大小不能超过5MB");
                 }
             }catch (NumberFormatException e){
                 throw new BusinessException(ErrorCode.PARAMS_ERROR,"文件大小格式异常");
             }
+        }catch (BusinessException e) {
+            // 主动校验失败必须返回给前端，不能被网络异常兜底逻辑吞掉。
+            throw e;
         }catch (RuntimeException e){
             // 网络请求失败，记录日志但不阻断流程
             // 可能是跨域、服务器不支持HEAD请求等情况
@@ -75,7 +80,12 @@ public class UrlPictureUpload extends PictureUploadTemplate {
     @Override
     protected String getOriginalFilename(Object inputSource) {
         String fileURL = (String) inputSource;
-        return FileUtil.mainName(fileURL);
+        try {
+            // 只取 URL 路径中的文件名，避免查询参数污染后缀判断。
+            return FileUtil.getName(new URL(fileURL).getPath());
+        } catch (MalformedURLException e) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "URL格式不正确");
+        }
     }
 
     @Override

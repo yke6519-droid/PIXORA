@@ -1,355 +1,387 @@
 declare namespace API {
   type AddUserRequest = {
+    username?: string;
+    useraccount?: string;
     gender?: number;
     phone?: string;
-    useraccount?: string;
-    username?: string;
-    userstatus?: string;
+    userLevel?: string;
+  };
+
+  type AdminCheckAvatarRequest = {
+    userId?: number | string;
+    checkResult?: number;
+    checkMessage?: string;
   };
 
   type AdminCheckPictureBatchRequest = {
-    checkMessage?: string;
+    picIds?: Array<number | string>;
     checkResult?: number;
-    picIds?: number[];
+    checkMessage?: string;
   };
 
   type AdminCheckPictureRequest = {
-    checkMessage?: string;
+    picId?: number | string;
     checkResult?: number;
-    picId?: number;
+    checkMessage?: string;
   };
 
   type AlterLevelRequest = {
+    spaceId?: number | string;
     alterLevel?: number;
-    spaceId?: number;
   };
 
-  type BaseResponseBoolean_ = {
+  type BaseResponseBoolean = {
     code?: number;
+    message?: string;
     data?: boolean;
-    message?: string;
   };
 
-  type BaseResponseIPagePicture_ = {
+  type BaseResponseIPagePictureVO = {
     code?: number;
-    data?: IPagePicture_;
     message?: string;
+    data?: IPagePictureVO;
   };
 
-  type BaseResponseListUser_ = {
+  type BaseResponseListUserVO = {
     code?: number;
-    data?: User[];
     message?: string;
+    data?: UserVO[];
   };
 
-  type BaseResponsePicturePageVO_ = {
+  type BaseResponseListAvatarReviewVO = {
     code?: number;
+    message?: string;
+    data?: AvatarReviewVO[];
+  };
+
+  type BaseResponsePictureListVO = {
+    code?: number;
+    message?: string;
+    data?: PictureListVO;
+  };
+
+  type BaseResponsePicturePageVO = {
+    code?: number;
+    message?: string;
     data?: PicturePageVO;
-    message?: string;
   };
 
-  type BaseResponsePictureTagCategory_ = {
+  type BaseResponsePictureTagCategory = {
     code?: number;
+    message?: string;
     data?: PictureTagCategory;
-    message?: string;
   };
 
-  type BaseResponsePictureVO_ = {
+  type BaseResponsePictureUploadVO = {
     code?: number;
+    message?: string;
+    data?: PictureUploadVO;
+  };
+
+  type BaseResponsePictureVO = {
+    code?: number;
+    message?: string;
     data?: PictureVO;
-    message?: string;
   };
 
-  type BaseResponseSpace_ = {
+  type BaseResponseSpace = {
     code?: number;
+    message?: string;
     data?: Space;
-    message?: string;
   };
 
-  type BaseResponseSpacePageVO_ = {
+  type BaseResponseSpacePageVO = {
     code?: number;
+    message?: string;
     data?: SpacePageVO;
-    message?: string;
   };
 
-  type BaseResponseSpaceVO_ = {
+  type BaseResponseSpaceVO = {
     code?: number;
+    message?: string;
     data?: SpaceVO;
-    message?: string;
   };
 
-  type BaseResponseString_ = {
+  type BaseResponseString = {
     code?: number;
+    message?: string;
     data?: string;
-    message?: string;
   };
 
-  type BaseResponseUser_ = {
+  type BaseResponseUploadAvatarVO = {
     code?: number;
-    data?: User;
     message?: string;
+    data?: UploadAvatarVO;
   };
 
-  type BaseResponseUserPagesVO_ = {
+  type BaseResponseUserPagesVO = {
     code?: number;
+    message?: string;
     data?: UserPagesVO;
+  };
+
+  type BaseResponseUserVO = {
+    code?: number;
     message?: string;
+    data?: UserVO;
   };
 
   type CreateSpaceRequest = {
     spaceName?: string;
   };
 
-  type deleteByIdUsingDELETEParams = {
-    /** spaceId */
-    spaceId?: number;
+  type deleteByIdParams = {
+    spaceId: number | string;
   };
 
   type DeleteRequest = {
-    id?: number;
-    ids?: number[];
-  };
-
-  type getPictureByIdUsingGETParams = {
-    /** id */
     id?: number | string;
+    ids?: Array<number | string>;
   };
 
-  type getUserByIdUsingGETParams = {
-    id?: number;
+  type getPictureByIdParams = {
+    id: number | string;
   };
 
-  type IPagePicture_ = {
+  type getUserByIdParams = {
+    queryUserRequest: QueryUserRequest;
+  };
+
+  type IPagePictureVO = {
+    size?: number | string;
     current?: number;
     pages?: number;
-    records?: Picture[];
-    size?: number;
-    total?: number;
+    records?: PictureVO[];
+    total?: number | string;
   };
 
-  type Picture = {
-    category?: string;
-    checkAdminId?: number;
-    checkMessage?: string;
-    checkTime?: string;
-    createtime?: string;
-    edittime?: string;
-    id?: number;
-    introduction?: string;
-    isdelete?: number;
-    name?: string;
-    picformat?: string;
-    picheight?: number;
-    picscale?: number;
-    picsize?: number;
-    pictureCheck?: number;
-    picwidth?: number;
-    spaceId?: number;
-    tags?: string;
-    thumbnailUrl?: string;
-    updatetime?: string;
-    url?: string;
-    userid?: number;
+  type PictureListVO = {
+    pictureList?: PictureVO[];
+    targetCount?: number;
+    successCount?: number;
   };
 
   type PicturePageVO = {
     pictureList?: PictureVO[];
-    total?: number;
+    total?: number | string;
   };
 
   type PictureQueryRequest = {
-    category?: string;
     current?: number;
-    id?: number;
-    introduction?: string;
-    name?: string;
     pageSize?: number;
-    pictureCheck?: number;
-    searchText?: string;
     sortFiled?: string;
     sortOrder?: string;
-    spaceId?: number;
+    id?: number | string;
+    name?: string;
+    introduction?: string;
+    category?: string;
+    searchText?: string;
     tags?: string[];
-    userId?: number;
+    pictureCheck?: number;
+    userId?: number | string;
+    spaceId?: number | string;
   };
 
   type PictureTagCategory = {
-    categorys?: string[];
     tags?: string[];
+    categorys?: string[];
   };
 
   type PictureUpdateRequest = {
-    category?: string;
-    id?: number;
-    introduction?: string;
+    id?: number | string;
     name?: string;
-    spaceId?: number;
+    introduction?: string;
+    category?: string;
     tags?: string[];
+    spaceId?: number | string;
   };
 
   type PictureUploadByBatchRequest = {
-    category?: string;
+    searchText?: string;
     count?: number;
     name?: string;
-    searchText?: string;
+    category?: string;
     tags?: string[];
   };
 
+  type PictureUploadFailVO = {
+    size?: number | string;
+    fileName?: string;
+    message?: string;
+  };
+
+  type PictureUploadVO = {
+    totalCount?: number;
+    successCount?: number;
+    failCount?: number;
+    successPictureList?: PictureVO[];
+    failPictureList?: PictureUploadFailVO[];
+  };
+
   type PictureVO = {
-    category?: string;
-    checkAdminId?: number;
-    checkMessage?: string;
-    createdUser?: User;
-    createtime?: string;
     id?: number | string;
-    introduction?: string;
+    url?: string;
+    thumbnailUrl?: string;
     name?: string;
-    picformat?: string;
+    introduction?: string;
+    category?: string;
+    tags?: string[];
+    picsize?: number | string;
+    picwidth?: number;
     picheight?: number;
     picscale?: number;
-    picsize?: number;
-    pictureCheck?: number;
-    picwidth?: number;
-    spaceId?: number;
-    tags?: string[];
-    thumbnailUrl?: string;
+    picformat?: string;
+    userId?: number | string;
+    createdUser?: UserVO;
+    createtime?: string;
     updatetime?: string;
-    url?: string;
-    userId?: number;
+    pictureCheck?: number;
+    checkAdminId?: number | string;
+    checkMessage?: string;
+    spaceId?: number | string;
   };
 
   type QueryPageRequest = {
     current?: number;
-    gender?: number;
-    id?: number;
-    profile?: string;
-    queryUserAccount?: string;
-    queryUsername?: string;
-    size?: number;
+    size?: number | string;
     sortField?: string;
     sortOrder?: string;
-    userStatus?: string;
+    id?: number | string;
+    queryUsername?: string;
+    queryUserAccount?: string;
+    userLevel?: string;
+    accountStatus?: number;
+    profile?: string;
+    gender?: number;
   };
 
-  type querySpaceByIdUsingGETParams = {
-    /** spaceId */
-    spaceId?: number;
+  type querySpaceByIdParams = {
+    spaceId: number | string;
   };
 
-  type querySpacePageUsingGETParams = {
-    current?: number;
-    id?: number;
-    pageSize?: number;
-    sortFiled?: string;
-    sortOrder?: string;
-    spaceLevel?: number;
-    spaceName?: string;
+  type querySpacePageParams = {
+    spaceQueryRequest: SpaceQueryRequest;
+  };
+
+  type QueryUserRequest = {
+    id?: number | string;
   };
 
   type RegisterRequest = {
-    gender?: number;
-    phone?: string;
-    reUserPassword?: string;
-    useraccount?: string;
     username?: string;
+    useraccount?: string;
+    gender?: number;
     userpassword?: string;
+    reUserPassword?: string;
+    phone?: string;
+  };
+
+  type reloadPictureParams = {
+    url?: string;
+    id?: number | string;
+    name?: string;
+    category?: string;
+    tags?: string[];
+    introduction?: string;
   };
 
   type Space = {
-    createTime?: string;
-    id?: number;
-    isDelete?: number;
-    maxCount?: number;
-    maxSize?: number;
-    spaceLevel?: number;
+    id?: number | string;
     spaceName?: string;
+    spaceLevel?: number;
+    maxSize?: number | string;
+    usedSize?: number | string;
+    maxCount?: number | string;
+    usedCount?: number | string;
+    userId?: number | string;
+    createTime?: string;
     updateTime?: string;
-    usedCount?: number;
-    usedSize?: number;
-    userId?: number;
+    isDelete?: number;
   };
 
   type SpacePageVO = {
     spaceVOList?: SpaceVO[];
-    total?: number;
+    total?: number | string;
+  };
+
+  type SpaceQueryRequest = {
+    current?: number;
+    pageSize?: number;
+    sortFiled?: string;
+    sortOrder?: string;
+    id?: number | string;
+    spaceName?: string;
+    spaceLevel?: number;
   };
 
   type SpaceUpdateRequest = {
-    spaceId?: number;
+    spaceId?: number | string;
     updatedName?: string;
   };
 
   type SpaceVO = {
-    createTime?: string;
-    createdUser?: User;
-    id?: number;
-    maxCount?: number;
-    maxSize?: number;
-    spaceLevel?: number;
+    id?: number | string;
     spaceName?: string;
+    spaceLevel?: number;
+    maxSize?: number | string;
+    usedSize?: number | string;
+    maxCount?: number | string;
+    usedCount?: number | string;
+    userId?: number | string;
+    createdUser?: UserVO;
+    createTime?: string;
     updateTime?: string;
-    usedCount?: number;
-    usedSize?: number;
-    userId?: number;
   };
 
-  type testDownloadFileUsingGETParams = {
-    /** filename */
-    filename?: string;
+  type testDownloadFileParams = {
+    filename: string;
   };
 
   type UpdateSelfRequest = {
-    avatarurl?: string;
-    email?: string;
+    username?: string;
     gender?: number;
     phone?: string;
+    email?: string;
     profile?: string;
+  };
+
+  type UploadAvatarVO = {
+    message?: string;
+    status?: number;
+    newURL?: string;
+  };
+
+  type AvatarReviewVO = {
+    id?: number | string;
+    userId?: number | string;
     username?: string;
+    useraccount?: string;
+    avatarUrl?: string;
+    status?: number;
+    submittedAt?: string;
+    reviewedAt?: string;
+    checkMessage?: string;
   };
 
   type UpdateUserRequest = {
-    avatarurl?: string;
-    email?: string;
-    gender?: number;
-    id?: number;
-    phone?: string;
-    profile?: string;
-    userStatus?: string;
+    id?: number | string;
     username?: string;
+    avatarurl?: string;
+    gender?: number;
+    phone?: string;
+    email?: string;
+    profile?: string;
+    userLevel?: string;
+    accountStatus?: number;
   };
 
-  type uploadPicUsingPOSTParams = {
-    /** category */
-    category?: string;
-    /** id */
-    id?: number;
-    /** introduction */
-    introduction?: string;
-    /** name */
-    name?: string;
-    /** spaceId */
-    spaceId?: number;
-    /** tags */
-    tags?: string[];
-    /** url */
+  type uploadPicParams = {
     url?: string;
-  };
-
-  type User = {
-    avatarurl?: string;
-    createtime?: string;
-    email?: string;
-    gender?: number;
-    id?: number;
-    isdelete?: number;
-    phone?: string;
-    profile?: string;
-    spaceId?: number;
-    updatetime?: string;
-    useraccount?: string;
-    username?: string;
-    userpassword?: string;
-    userstatus?: string;
+    name?: string;
+    category?: string;
+    tags?: string[];
+    introduction?: string;
+    spaceId?: number | string;
   };
 
   type UserLoginRequest = {
@@ -358,7 +390,23 @@ declare namespace API {
   };
 
   type UserPagesVO = {
-    totalSize?: number;
-    userList?: User[];
+    userList?: UserVO[];
+    totalSize?: number | string;
+  };
+
+  type UserVO = {
+    id?: number | string;
+    username?: string;
+    useraccount?: string;
+    avatarurl?: string;
+    gender?: number;
+    phone?: string;
+    email?: string;
+    createtime?: string;
+    updatetime?: string;
+    spaceId?: number | string;
+    profile?: string;
+    userLevel?: string;
+    userStatus?: number;
   };
 }

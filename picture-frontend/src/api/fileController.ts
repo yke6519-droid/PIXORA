@@ -2,49 +2,22 @@
 /* eslint-disable */
 import request from "../plugin/request";
 
-/** avatarUpload POST /file/avatarUpload */
-export async function avatarUploadUsingPost(
-  body: {},
-  avatar?: File,
-  options?: { [key: string]: any }
-) {
-  const formData = new FormData();
+/** 头像上传：后端使用 @RequestParam("avatar") 接收 multipart 文件。 */
+export async function avatarUpload(file: File, options?: { [key: string]: any }) {
+  const formData = new FormData()
+  formData.append('avatar', file)
 
-  if (avatar) {
-    formData.append("avatar", avatar);
-  }
-
-  Object.keys(body).forEach((ele) => {
-    const item = (body as any)[ele];
-
-    if (item !== undefined && item !== null) {
-      if (typeof item === "object" && !(item instanceof File)) {
-        if (item instanceof Array) {
-          item.forEach((f) => formData.append(ele, f || ""));
-        } else {
-          formData.append(
-            ele,
-            new Blob([JSON.stringify(item)], { type: "application/json" })
-          );
-        }
-      } else {
-        formData.append(ele, item);
-      }
-    }
-  });
-
-  return request<API.BaseResponseString_>("/file/avatarUpload", {
-    method: "POST",
+  return request<API.BaseResponseUploadAvatarVO>('/file/avatarUpload', {
+    method: 'POST',
     data: formData,
-    requestType: "form",
     ...(options || {}),
-  });
+  })
 }
 
-/** testDownloadFile GET /file/downloadFile */
-export async function testDownloadFileUsingGet(
+/** 此处后端没有提供注释 GET /file/downloadFile */
+export async function testDownloadFile(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
-  params: API.testDownloadFileUsingGETParams,
+  params: API.testDownloadFileParams,
   options?: { [key: string]: any }
 ) {
   return request<any>("/file/downloadFile", {
@@ -56,41 +29,17 @@ export async function testDownloadFileUsingGet(
   });
 }
 
-/** testUploadFile POST /file/testUpload */
-export async function testUploadFileUsingPost(
+/** 此处后端没有提供注释 POST /file/testUpload */
+export async function testUploadFile(
   body: {},
-  file?: File,
   options?: { [key: string]: any }
 ) {
-  const formData = new FormData();
-
-  if (file) {
-    formData.append("file", file);
-  }
-
-  Object.keys(body).forEach((ele) => {
-    const item = (body as any)[ele];
-
-    if (item !== undefined && item !== null) {
-      if (typeof item === "object" && !(item instanceof File)) {
-        if (item instanceof Array) {
-          item.forEach((f) => formData.append(ele, f || ""));
-        } else {
-          formData.append(
-            ele,
-            new Blob([JSON.stringify(item)], { type: "application/json" })
-          );
-        }
-      } else {
-        formData.append(ele, item);
-      }
-    }
-  });
-
-  return request<API.BaseResponseString_>("/file/testUpload", {
+  return request<API.BaseResponseString>("/file/testUpload", {
     method: "POST",
-    data: formData,
-    requestType: "form",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
     ...(options || {}),
   });
 }
