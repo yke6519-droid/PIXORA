@@ -1,6 +1,7 @@
 package com.example.picturebackend.manager;
 
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.util.StrUtil;
 import com.example.picturebackend.Config.CosClientConfig;
 import com.qcloud.cos.COSClient;
 import com.qcloud.cos.exception.CosClientException;
@@ -11,6 +12,7 @@ import com.qcloud.cos.model.PutObjectRequest;
 import com.qcloud.cos.model.PutObjectResult;
 import com.qcloud.cos.model.ciModel.persistence.PicOperations;
 import org.springframework.stereotype.Component;
+import lombok.extern.slf4j.Slf4j;
 
 import jakarta.annotation.Resource;
 import java.io.File;
@@ -21,6 +23,7 @@ import java.util.List;
 /**
  * Cos对象的通用操作
  */
+@Slf4j
 @Component
 public class CosManager {
     @Resource
@@ -94,14 +97,15 @@ public class CosManager {
      * @param key
      */
     public void deleteObject(String key){
+        if (StrUtil.isBlank(key)) {
+            return;
+        }
         try {
-            System.out.println("要删除的key为:"+key);
             cosClient.deleteObject(cosClientConfig.getBucket(), key);
-            System.out.println("已删除："+key);
         } catch (CosServiceException e) {
-            e.printStackTrace();
+            log.error("COS服务端删除对象失败，key={}", key, e);
         } catch (CosClientException e){
-            e.printStackTrace();
+            log.error("COS客户端删除对象失败，key={}", key, e);
         }
         
     }

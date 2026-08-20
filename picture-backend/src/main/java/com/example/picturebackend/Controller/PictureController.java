@@ -5,7 +5,6 @@ import cn.hutool.core.collection.ListUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.BeanUtils;
-import com.example.picturebackend.Exception.BusinessException;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.Service.PictureService;
@@ -126,7 +125,6 @@ public class PictureController {
                         "上传文件不能为空"
                 );
                 totalFileSize += file.getSize();
-                totalCount++;
             }
             ThrowExceptionUtils.throwIF(
                     totalFileSize > MAX_BATCH_TOTAL_SIZE,
@@ -134,23 +132,10 @@ public class PictureController {
                     "批量上传图片总大小不能超过30MB"
             );
 
-            // 开始上传
-            for (MultipartFile file : fileList) {
-                try {
-                    // 上传图片
-                    PictureVO pictureVO = pictureService.uploadPicture2DB(file, pictureUploadRequest, currentUser);
-                    // 成功
-                    successPictureVOs.add(pictureVO);
-                } catch (BusinessException e) {
-
-                    // 封装失败原因
-                    failPictureVOs.add(new PictureUploadFailVO(
-                        // index,
-                        file.getSize(),
-                        file.getOriginalFilename(),
-                        e.getMessage()));
-                }
-            }
+            // 将整个文件列表交给 Service；批量缓存只在所有文件处理结束后清理一次。
+            PictureUploadVO batchUploadVO = pictureService.uploadPicture2DBBatch(
+                    fileList, pictureUploadRequest, currentUser);
+            return ResponseUtils.success(batchUploadVO);
 
         } else if (hasUrl) {
             totalCount++;

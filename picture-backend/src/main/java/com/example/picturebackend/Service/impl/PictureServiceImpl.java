@@ -31,6 +31,8 @@ import com.example.picturebackend.domain.request.picture.*;
 import com.example.picturebackend.domain.request.notification.NotificationCreateRequest;
 import com.example.picturebackend.domain.vo.picture.PictureListVO;
 import com.example.picturebackend.domain.vo.picture.PicturePageVO;
+import com.example.picturebackend.domain.vo.picture.PictureUploadFailVO;
+import com.example.picturebackend.domain.vo.picture.PictureUploadVO;
 import com.example.picturebackend.domain.vo.picture.PictureVO;
 import com.example.picturebackend.domain.vo.user.UserVO;
 import com.example.picturebackend.manager.CosManager;
@@ -51,6 +53,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.multipart.MultipartFile;
+import lombok.extern.slf4j.Slf4j;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -62,6 +66,7 @@ import java.util.stream.Collectors;
 * @description 针对表【picture(图库表)】的数据库操作Service实现
 * @createDate 2026-04-28 18:35:01
 */
+@Slf4j
 @Service
 public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     implements PictureService{
@@ -138,6 +143,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
      * @param loginUser 当前登录用户
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public PictureVO reloadPicture(Object inputSource, PictureUploadRequest pictureUploadRequest, User loginUser){
         // 参数校验
         ThrowExceptionUtils.throwIF(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
@@ -150,80 +156,169 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             ErrorCode.NOT_FOUND_ERROR, 
             "图片不存在");
 
+        // 重新上传必须沿用原图片的空间归属，不能让请求体把私有图片写到公共目录。
+        Long oldSpaceId = oldPicture.getSpaceId();
+        long normalizedOldSpaceId = normalizeSpaceId(oldSpaceId);
+        if (normalizedOldSpaceId > 0) {
+            spaceService.SpaceAuthCheck(oldSpaceId, loginUser);
+        }
+        pictureUploadRequest.setSpaceId(normalizedOldSpaceId > 0 ? oldSpaceId : null);
+
         Picture picture = new Picture();
         BeanUtils.copyProperties(oldPicture, picture);
-        
-        // 如果上传了新的图片文件，则进行上传操作，并更新图片信息
-        if (inputSource != null) {
-            UploadPictureResult uploadPictureResult = this.uploadPicture2COS(inputSource, pictureUploadRequest, loginUser);
-            // 更新图片信息
-            BeanUtils.copyProperties(uploadPictureResult, picture);
+
+        // 记录本次新上传的对象；后续任一步失败时，只清理新对象，保留旧对象可继续访问。
+        UploadPictureResult uploadedResult = null;
+        try {
+            // 如果上传了新的图片文件，则进行上传操作，并更新图片信息。
+            if (inputSource != null) {
+                uploadedResult = this.uploadPicture2COS(inputSource, pictureUploadRequest, loginUser);
+                ThrowExceptionUtils.throwIF(
+                        uploadedResult == null,
+                        ErrorCode.OPERATION_ERROR,
+                        "图片上传结果为空");
+                BeanUtils.copyProperties(uploadedResult, picture);
+            }
+
+            // 私人空间需要按新旧图片大小差额更新容量。
+            if (normalizedOldSpaceId > 0) {
+                Space space = spaceService.getById(oldSpaceId);
+                ThrowExceptionUtils.throwIF(
+                        space == null,
+                        ErrorCode.NOT_FOUND_ERROR,
+                        "空间不存在");
+
+                long oldSize = defaultLong(oldPicture.getPicsize());
+                long newSize = defaultLong(picture.getPicsize());
+                long needSize = newSize - oldSize;
+                long freeSize = defaultLong(space.getMaxSize()) - defaultLong(space.getUsedSize());
+
+                // 如果新图片变大，必须确认空间剩余容量足够。
+                ThrowExceptionUtils.throwIF(
+                        freeSize < needSize && needSize > 0,
+                        ErrorCode.OPERATION_ERROR,
+                        "重新传入的图片的size过大，个人空间容量不足");
+
+                space.setUsedSize(defaultLong(space.getUsedSize()) - oldSize + newSize);
+                ThrowExceptionUtils.throwIF(
+                        !spaceService.updateById(space),
+                        ErrorCode.OPERATION_ERROR,
+                        "空间使用量更新失败");
+            }
+
+            // 更新图片的元数据（名称、分类、标签、简介）为请求中的新信息。
+            if (StrUtil.isNotBlank(pictureUploadRequest.getName())) {
+                picture.setName(pictureUploadRequest.getName());
+            }
+            if (StrUtil.isNotBlank(pictureUploadRequest.getCategory())) {
+                picture.setCategory(pictureUploadRequest.getCategory());
+            }
+            if (CollUtil.isNotEmpty(pictureUploadRequest.getTags())) {
+                picture.setTags(JSONUtil.toJsonStr(pictureUploadRequest.getTags()));
+            }
+            if (StrUtil.isNotBlank(pictureUploadRequest.getIntroduction())) {
+                picture.setIntroduction(pictureUploadRequest.getIntroduction());
+            }
+
+            // 管理员自动过审；普通用户重新进入待审核状态。
+            if (UserConstant.ADMIN_ROLE.equals(loginUser.getUserLevel())) {
+                picture.setPictureCheck(PictureConstant.CHECK_PASS);
+                picture.setCheckAdminId(loginUser.getId());
+                picture.setCheckTime(DateTime.now());
+                picture.setCheckMessage("管理员自动过审");
+            } else {
+                picture.setPictureCheck(PictureConstant.CHECK_AWAIT);
+                picture.setCheckMessage(null);
+            }
+
+            // 将图片id设置为原图片的id，确保更新操作不会创建新的图片记录。
+            picture.setId(pictureId);
+            picture.setUpdatetime(DateTime.now());
+
+            ThrowExceptionUtils.throwIF(
+                    !this.updateById(picture),
+                    ErrorCode.OPERATION_ERROR,
+                    "图片更新失败");
+        } catch (RuntimeException exception) {
+            // 数据库或空间更新失败时，删除本次新上传的对象；删除失败不能覆盖原始业务异常。
+            if (uploadedResult != null) {
+                if (StrUtil.isNotBlank(uploadedResult.getOriginalKey())) {
+                    try {
+                        cosManager.deleteObject(uploadedResult.getOriginalKey());
+                    } catch (RuntimeException cleanupException) {
+                        log.error("重新上传失败，清理原始对象失败，key={}", uploadedResult.getOriginalKey(), cleanupException);
+                    }
+                }
+                if (StrUtil.isNotBlank(uploadedResult.getThumbnailKey())
+                        && !Objects.equals(uploadedResult.getThumbnailKey(), uploadedResult.getOriginalKey())) {
+                    try {
+                        cosManager.deleteObject(uploadedResult.getThumbnailKey());
+                    } catch (RuntimeException cleanupException) {
+                        log.error("重新上传失败，清理缩略图对象失败，key={}", uploadedResult.getThumbnailKey(), cleanupException);
+                    }
+                }
+                if (StrUtil.isNotBlank(uploadedResult.getPictureKey())
+                        && !Objects.equals(uploadedResult.getPictureKey(), uploadedResult.getOriginalKey())
+                        && !Objects.equals(uploadedResult.getPictureKey(), uploadedResult.getThumbnailKey())) {
+                    try {
+                        cosManager.deleteObject(uploadedResult.getPictureKey());
+                    } catch (RuntimeException cleanupException) {
+                        log.error("重新上传失败，清理图片对象失败，key={}", uploadedResult.getPictureKey(), cleanupException);
+                    }
+                }
+            }
+            throw exception;
         }
-        
-        // 重新上传图片以原图片的 spaceId 为基准
-        Long spaceId = oldPicture.getSpaceId();
 
-        // 若为私人空间
-        if (!spaceId.equals(0L)) {
-            // 先校验空间权限
-            spaceService.SpaceAuthCheck(spaceId, loginUser);
-
-            Space space = spaceService.getById(spaceId);
-
-            Long freeSize = space.getMaxSize() - space.getUsedSize();
-
-            
-            Long needSize =picture.getPicsize() - oldPicture.getPicsize();
-
-            // 如果新传入的大于旧的，并且需要的size大于剩余size
-            ThrowExceptionUtils.throwIF(freeSize<needSize && needSize>0,
-                ErrorCode.OPERATION_ERROR, "重新传入的图片的size过大，个人空间容量不足");
-
-            // 若剩余容量足够，则先更新空间容量
-            space.setUsedSize(space.getUsedSize()-oldPicture.getPicsize()+picture.getPicsize());
-            spaceService.updateById(space);
+        // 数据库已成功指向新对象后，再删除旧对象；旧对象删除失败只记录日志，不影响新图片可用性。
+        if (uploadedResult != null) {
+            if (StrUtil.isNotBlank(oldPicture.getOriginalKey())
+                    && !Objects.equals(oldPicture.getOriginalKey(), uploadedResult.getOriginalKey())
+                    && !Objects.equals(oldPicture.getOriginalKey(), uploadedResult.getThumbnailKey())
+                    && !Objects.equals(oldPicture.getOriginalKey(), uploadedResult.getPictureKey())) {
+                try {
+                    cosManager.deleteObject(oldPicture.getOriginalKey());
+                } catch (RuntimeException cleanupException) {
+                    log.error("重新上传成功，清理旧原始对象失败，key={}", oldPicture.getOriginalKey(), cleanupException);
+                }
+            }
+            if (StrUtil.isNotBlank(oldPicture.getThumbnailKey())
+                    && !Objects.equals(oldPicture.getThumbnailKey(), uploadedResult.getOriginalKey())
+                    && !Objects.equals(oldPicture.getThumbnailKey(), uploadedResult.getThumbnailKey())
+                    && !Objects.equals(oldPicture.getThumbnailKey(), uploadedResult.getPictureKey())
+                    && !Objects.equals(oldPicture.getThumbnailKey(), oldPicture.getOriginalKey())) {
+                try {
+                    cosManager.deleteObject(oldPicture.getThumbnailKey());
+                } catch (RuntimeException cleanupException) {
+                    log.error("重新上传成功，清理旧缩略图对象失败，key={}", oldPicture.getThumbnailKey(), cleanupException);
+                }
+            }
+            if (StrUtil.isNotBlank(oldPicture.getPictureKey())
+                    && !Objects.equals(oldPicture.getPictureKey(), uploadedResult.getOriginalKey())
+                    && !Objects.equals(oldPicture.getPictureKey(), uploadedResult.getThumbnailKey())
+                    && !Objects.equals(oldPicture.getPictureKey(), uploadedResult.getPictureKey())
+                    && !Objects.equals(oldPicture.getPictureKey(), oldPicture.getOriginalKey())
+                    && !Objects.equals(oldPicture.getPictureKey(), oldPicture.getThumbnailKey())) {
+                try {
+                    cosManager.deleteObject(oldPicture.getPictureKey());
+                } catch (RuntimeException cleanupException) {
+                    log.error("重新上传成功，清理旧图片对象失败，key={}", oldPicture.getPictureKey(), cleanupException);
+                }
+            }
         }
 
-        // 更新图片的元数据（名称、分类、标签、简介）为请求中的新信息
-        String name = pictureUploadRequest.getName();
-        String category = pictureUploadRequest.getCategory();
-        List<String> tags = pictureUploadRequest.getTags();
-        String introduction = pictureUploadRequest.getIntroduction();
-
-        // 用请求中的新信息覆盖旧数据
-        if (StrUtil.isNotBlank(name)) {
-            picture.setName(name);
-        }
-        if (StrUtil.isNotBlank(category)) {
-            picture.setCategory(category);
-        }
-        if (CollUtil.isNotEmpty(tags)) {
-            picture.setTags(JSONUtil.toJsonStr(tags));
-        }
-        if (StrUtil.isNotBlank(introduction)) {
-            picture.setIntroduction(introduction);
-        }
-
-        // 管理员自动过审
-        if (loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE)) {
-            // 填充审核信息 - 管理员自动过审 - 管理员修改后也不需要进入待审核
-            picture.setPictureCheck(PictureConstant.CHECK_PASS);
-            picture.setCheckAdminId(loginUser.getId());
-            picture.setCheckTime(DateTime.now());
-            picture.setCheckMessage("管理员自动过审");
-        } else {
-            // 无论更新还是创建后,都需要设置待审核状态
-            picture.setPictureCheck(PictureConstant.CHECK_AWAIT);
-            picture.setCheckMessage(null);
-        }
-        
-        // 将图片id设置为原图片的id，确保更新操作不会创建新的图片记录
-        picture.setId(pictureId);
-        picture.setUpdatetime(DateTime.now());
-
-        this.updateById(picture);
-
+        multiCacheManager.invalidatePicturePageCache();
         return PictureVO.obj2VO(picture);
+    }
+
+    /**
+     * 兼容旧的服务层调用方：将旧版更新请求转换为重新上传请求。
+     */
+    public PictureVO reloadPicture(Object inputSource, PictureUpdateRequest pictureUpdateRequest, User loginUser) {
+        ThrowExceptionUtils.throwIF(pictureUpdateRequest == null, ErrorCode.PARAMS_ERROR, "上传参数不能为空");
+        PictureUploadRequest uploadRequest = new PictureUploadRequest();
+        BeanUtils.copyProperties(pictureUpdateRequest, uploadRequest);
+        return reloadPicture(inputSource, uploadRequest, loginUser);
     }
 
     /**
@@ -238,7 +333,73 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Override
     @Transactional
     public PictureVO uploadPicture2DB(Object inputSource, PictureUploadRequest pictureUploadRequest, User loginUser) {
-       
+        return uploadPicture2DBInternal(inputSource, pictureUploadRequest, loginUser, true);
+    }
+
+    /**
+     * 批量上传本地图片。
+     * 单文件沿用单张上传的缓存行为；多文件只在批次结束后统一失效一次缓存。
+     */
+    @Override
+    @Transactional
+    public PictureUploadVO uploadPicture2DBBatch(List<MultipartFile> fileList,
+                                                  PictureUploadRequest pictureUploadRequest,
+                                                  User loginUser) {
+        ThrowExceptionUtils.throwIF(
+                fileList == null || fileList.isEmpty(),
+                ErrorCode.PARAMS_ERROR,
+                "上传文件列表不能为空");
+        for (MultipartFile file : fileList) {
+            ThrowExceptionUtils.throwIF(
+                    file == null || file.isEmpty(),
+                    ErrorCode.PARAMS_ERROR,
+                    "上传文件不能为空");
+        }
+
+        List<PictureVO> successPictureVOs = new ArrayList<>();
+        List<PictureUploadFailVO> failPictureVOs = new ArrayList<>();
+
+        // 一个文件仍按单张上传处理，避免把单张请求改造成批量语义。
+        if (fileList.size() == 1) {
+            MultipartFile file = fileList.get(0);
+            try {
+                successPictureVOs.add(uploadPicture2DBInternal(
+                        file, pictureUploadRequest, loginUser, true));
+            } catch (BusinessException e) {
+                failPictureVOs.add(buildPictureUploadFailVO(file, e));
+            }
+            return buildPictureUploadVO(fileList.size(), successPictureVOs, failPictureVOs);
+        }
+
+        boolean changed = false;
+        try {
+            for (MultipartFile file : fileList) {
+                try {
+                    // 批量分支关闭单条缓存清理，避免一个批次重复清理 N 次。
+                    successPictureVOs.add(uploadPicture2DBInternal(
+                            file, pictureUploadRequest, loginUser, false));
+                    changed = true;
+                } catch (BusinessException e) {
+                    // 保留当前接口的部分成功语义，单个文件失败不影响其他文件继续上传。
+                    failPictureVOs.add(buildPictureUploadFailVO(file, e));
+                }
+            }
+            return buildPictureUploadVO(fileList.size(), successPictureVOs, failPictureVOs);
+        } finally {
+            // 只要本批次至少写入一张图片，就统一清理一次分页缓存。
+            if (changed) {
+                multiCacheManager.invalidatePicturePageCache();
+            }
+        }
+    }
+
+    /**
+     * 执行单张图片上传和数据库写入；由单张、批量两个入口复用。
+     */
+    private PictureVO uploadPicture2DBInternal(Object inputSource,
+                                               PictureUploadRequest pictureUploadRequest,
+                                               User loginUser,
+                                               boolean invalidateCache) {
         // 参数校验
         ThrowExceptionUtils.throwIF(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
         ThrowExceptionUtils.throwIF(pictureUploadRequest == null, ErrorCode.PARAMS_ERROR, "上传参数不能为空");
@@ -247,85 +408,145 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             "新建图片时，上传文件列表或URL不能为空");
 
 
-        // 上传到cos并获取上传结果
-        UploadPictureResult uploadPictureResult = this.uploadPicture2COS(inputSource, pictureUploadRequest, loginUser);
-        
-        // 构造picture
-        Picture picture = new Picture();
-        // 更新图片信息
-        BeanUtils.copyProperties(uploadPictureResult, picture);
+        // 上传到COS并获取上传结果；后续入库或空间更新失败时会清理这些对象。
+        UploadPictureResult uploadPictureResult = null;
+        try {
+            uploadPictureResult = this.uploadPicture2COS(inputSource, pictureUploadRequest, loginUser);
+            ThrowExceptionUtils.throwIF(
+                    uploadPictureResult == null,
+                    ErrorCode.OPERATION_ERROR,
+                    "图片上传结果为空");
 
-        // 设置图片所属用户为当前登录用户
-        picture.setUserid(loginUser.getId());
+            // 构造picture并复制上传结果。
+            Picture picture = new Picture();
+            BeanUtils.copyProperties(uploadPictureResult, picture);
 
-        String name = pictureUploadRequest.getName();
-        String category = pictureUploadRequest.getCategory();
-        List<String> tags = pictureUploadRequest.getTags();
-        String introduction = pictureUploadRequest.getIntroduction();
+            // 设置图片所属用户为当前登录用户。
+            picture.setUserid(loginUser.getId());
 
-        // 用请求中的新信息覆盖旧数据
-        if (StrUtil.isNotBlank(name)) {
-            picture.setName(name);
+            String name = pictureUploadRequest.getName();
+            String category = pictureUploadRequest.getCategory();
+            List<String> tags = pictureUploadRequest.getTags();
+            String introduction = pictureUploadRequest.getIntroduction();
+
+            // 用请求中的新信息覆盖旧数据。
+            if (StrUtil.isNotBlank(name)) {
+                picture.setName(name);
+            }
+            if (StrUtil.isNotBlank(category)) {
+                picture.setCategory(category);
+            }
+            if (CollUtil.isNotEmpty(tags)) {
+                picture.setTags(JSONUtil.toJsonStr(tags));
+            }
+            if (StrUtil.isNotBlank(introduction)) {
+                picture.setIntroduction(introduction);
+            }
+
+            // 校验空间。
+            Long spaceId = pictureUploadRequest.getSpaceId();
+            if (spaceId != null) {
+                // 校验空间权限和空间使用量。
+                spaceService.SpaceAuthCheck(spaceId, loginUser);
+                spaceService.checkUsage(spaceId, picture, uploadPictureResult);
+
+                // 给当前Picture绑定spaceId。
+                picture.setSpaceId(spaceId);
+
+                // 更新空间容量和图片数量。
+                Space space = spaceService.getById(spaceId);
+                ThrowExceptionUtils.throwIF(
+                        space == null,
+                        ErrorCode.NOT_FOUND_ERROR,
+                        "空间不存在");
+                space.setUsedSize(defaultLong(space.getUsedSize()) + defaultLong(picture.getPicsize()));
+                space.setUsedCount(defaultLong(space.getUsedCount()) + 1L);
+                ThrowExceptionUtils.throwIF(
+                        !spaceService.updateById(space),
+                        ErrorCode.OPERATION_ERROR,
+                        "空间使用量更新失败");
+            }
+
+            // 管理员自动过审，普通用户进入待审核状态。
+            if (UserConstant.ADMIN_ROLE.equals(loginUser.getUserLevel())) {
+                picture.setPictureCheck(PictureConstant.CHECK_PASS);
+                picture.setCheckAdminId(loginUser.getId());
+                picture.setCheckTime(DateTime.now());
+            } else {
+                picture.setPictureCheck(PictureConstant.CHECK_AWAIT);
+            }
+
+            // 最后设置时间。
+            picture.setCreatetime(DateTime.now());
+            picture.setUpdatetime(DateTime.now());
+
+            // 存入数据并返回VO。
+            ThrowExceptionUtils.throwIF(
+                    !this.save(picture),
+                    ErrorCode.OPERATION_ERROR,
+                    "图片上传失败！"
+            );
+
+            // 单张入口立即清理；批量入口由外层finally统一清理。
+            if (invalidateCache) {
+                multiCacheManager.invalidatePicturePageCache();
+            }
+            return PictureVO.obj2VO(picture);
+        } catch (RuntimeException exception) {
+            // 数据库、空间校验或空间更新失败时，删除本次上传产生的对象。
+            if (uploadPictureResult != null) {
+                if (StrUtil.isNotBlank(uploadPictureResult.getOriginalKey())) {
+                    try {
+                        cosManager.deleteObject(uploadPictureResult.getOriginalKey());
+                    } catch (RuntimeException cleanupException) {
+                        log.error("图片入库失败，清理原始对象失败，key={}", uploadPictureResult.getOriginalKey(), cleanupException);
+                    }
+                }
+                if (StrUtil.isNotBlank(uploadPictureResult.getThumbnailKey())
+                        && !Objects.equals(uploadPictureResult.getThumbnailKey(), uploadPictureResult.getOriginalKey())) {
+                    try {
+                        cosManager.deleteObject(uploadPictureResult.getThumbnailKey());
+                    } catch (RuntimeException cleanupException) {
+                        log.error("图片入库失败，清理缩略图对象失败，key={}", uploadPictureResult.getThumbnailKey(), cleanupException);
+                    }
+                }
+                if (StrUtil.isNotBlank(uploadPictureResult.getPictureKey())
+                        && !Objects.equals(uploadPictureResult.getPictureKey(), uploadPictureResult.getOriginalKey())
+                        && !Objects.equals(uploadPictureResult.getPictureKey(), uploadPictureResult.getThumbnailKey())) {
+                    try {
+                        cosManager.deleteObject(uploadPictureResult.getPictureKey());
+                    } catch (RuntimeException cleanupException) {
+                        log.error("图片入库失败，清理压缩对象失败，key={}", uploadPictureResult.getPictureKey(), cleanupException);
+                    }
+                }
+            }
+            throw exception;
         }
-        if (StrUtil.isNotBlank(category)) {
-            picture.setCategory(category);
-        }
-        if (CollUtil.isNotEmpty(tags)) {
-            picture.setTags(JSONUtil.toJsonStr(tags));
-        }
-        if (StrUtil.isNotBlank(introduction)) {
-            picture.setIntroduction(introduction);
-        }
-        
+    }
 
-        // 校验空间
-        Long spaceId = pictureUploadRequest.getSpaceId();
+    /**
+     * 构造批量上传返回对象，保持原有 Controller 返回结构不变。
+     */
+    private PictureUploadVO buildPictureUploadVO(int totalCount,
+                                                  List<PictureVO> successPictureVOs,
+                                                  List<PictureUploadFailVO> failPictureVOs) {
+        PictureUploadVO pictureUploadVO = new PictureUploadVO();
+        pictureUploadVO.setTotalCount(totalCount);
+        pictureUploadVO.setSuccessPictureList(successPictureVOs);
+        pictureUploadVO.setSuccessCount(successPictureVOs.size());
+        pictureUploadVO.setFailPictureList(failPictureVOs);
+        pictureUploadVO.setFailCount(failPictureVOs.size());
+        return pictureUploadVO;
+    }
 
-        // 若上传请求中指定了空间
-        if (spaceId != null) {
-            // 校验空间权限
-            spaceService.SpaceAuthCheck(spaceId, loginUser);
-
-            // 校验该空间内是否还有容量和图片张数
-            spaceService.checkUsage(spaceId,picture,uploadPictureResult);
-
-            // 若有容量 给当前Picture 绑定 spaceId
-            picture.setSpaceId(spaceId);
-
-            // 直接更新空间容量和照片数
-            Space space = spaceService.getById(spaceId);
-
-            space.setUsedSize(space.getUsedSize()+picture.getPicsize());
-            space.setUsedCount(space.getUsedCount()+1);
-            spaceService.updateById(space);
-        }
-
-        // 管理员自动过审
-        if (loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE)) {
-            // 填充审核信息 - 管理员自动过审 - 管理员修改后也不需要进入待审核
-            picture.setPictureCheck(PictureConstant.CHECK_PASS);
-            picture.setCheckAdminId(loginUser.getId());
-            picture.setCheckTime(DateTime.now());
-        } else {
-            // 无论更新还是创建后,都需要设置待审核状态
-            picture.setPictureCheck(PictureConstant.CHECK_AWAIT);
-        }
-
-        // 最后设置时间
-        picture.setCreatetime(DateTime.now());
-        picture.setUpdatetime(DateTime.now());
-
-        // 存入数据并返回VO
-        boolean result = this.save(picture);
-        ThrowExceptionUtils.throwIF(
-                !result,
-                ErrorCode.OPERATION_ERROR,
-                "图片上传失败！"
-        );
-
-        // 清除缓存，保证数据一致性
-        multiCacheManager.invalidatePicturePageCache();
-        return PictureVO.obj2VO(picture);
+    /**
+     * 将单个文件的失败信息转换为批量上传返回结构。
+     */
+    private PictureUploadFailVO buildPictureUploadFailVO(MultipartFile file, BusinessException exception) {
+        return new PictureUploadFailVO(
+                file.getSize(),
+                file.getOriginalFilename(),
+                exception.getMessage());
     }
 
     /**
@@ -381,9 +602,25 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
     @Override
     public void deleteCosPicture(Picture picture){
-        cosManager.deleteObject(picture.getOriginalKey());
-        cosManager.deleteObject(picture.getThumbnailKey());
-        cosManager.deleteObject(picture.getPictureKey());
+        if (picture == null) {
+            return;
+        }
+        String[] keys = {
+                picture.getOriginalKey(),
+                picture.getThumbnailKey(),
+                picture.getPictureKey()
+        };
+        for (String key : keys) {
+            if (StrUtil.isBlank(key)) {
+                continue;
+            }
+            try {
+                cosManager.deleteObject(key);
+            } catch (RuntimeException cleanupException) {
+                // 对象删除失败不回滚已经完成的数据库删除，避免阻断后续清理。
+                log.error("删除图片后清理COS对象失败，pictureId={}, key={}", picture.getId(), key, cleanupException);
+            }
+        }
     }
 
     /**
@@ -411,7 +648,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         // 仅管理员和图片所属者可以操作
         PictureAuthCheck(loginUser, picture);
         Picture updatePicture = new Picture();
-        BeanUtils.copyProperties(pictureUpdateRequest, updatePicture);
+        // 编辑接口不允许改变图片归属空间，避免请求体越权迁移图片。
+        BeanUtils.copyProperties(pictureUpdateRequest, updatePicture, "spaceId");
         String tagStr = JSONUtil.toJsonStr(pictureUpdateRequest.getTags());
         updatePicture.setTags(tagStr);
         updatePicture.setUpdatetime(DateTime.now());
@@ -584,13 +822,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         // 分页查询
         Page<Picture> picturePage = this.page(new Page<>(current, size), queryWrapper);
 
-        // 转换为VO列表
+        // 当前页统一批量查询创建者，避免每张图片都单独访问一次用户表。
+        Map<Long, UserVO> createdUserVOMap = getCreatedUserVOMap(picturePage.getRecords());
+
+        // 转换为VO列表；图片字段和标签只在内存中处理，创建者从批量查询结果映射。
         List<PictureVO> pictureVOList = picturePage.getRecords().stream()
                 .map(picture -> {
-                    PictureVO pictureVO = getPictureVO(picture);
-                    User createdUser = userService.getById(picture.getUserid());
-                    UserVO createdUserVO = userService.getSaftyUser(createdUser);
-                    pictureVO.setCreatedUser(createdUserVO);
+                    PictureVO pictureVO = buildPictureVO(picture);
+                    pictureVO.setCreatedUser(createdUserVOMap.get(picture.getUserid()));
                     return pictureVO;
                 })
                 .collect(Collectors.toList());
@@ -648,7 +887,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         ThrowExceptionUtils.throwIF(!picture.getUserid().equals(loginUser.getId()) && !loginUser.getUserLevel().equals("admin"),
                 ErrorCode.NO_AUTH_ERROR, "无权限修改此图片");
         Picture updatePicture = new Picture();
-        BeanUtils.copyProperties(pictureUpdateRequest, updatePicture);
+        // 编辑接口不允许改变图片归属空间，避免请求体越权迁移图片。
+        BeanUtils.copyProperties(pictureUpdateRequest, updatePicture, "spaceId");
         String tagsStr = JSONUtil.toJsonStr(pictureUpdateRequest.getTags());
         System.out.println("转换后的tags："+tagsStr);
         updatePicture.setTags(tagsStr);
@@ -666,11 +906,50 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
      */
     @Override
     public PictureVO getPictureVO(Picture picture) {
-        PictureVO pictureVO = PictureVO.obj2VO(picture);
+        PictureVO pictureVO = buildPictureVO(picture);
         // 拿到脱敏后的创建者信息
         UserVO crateUserVO = userService.getSaftyUser(userService.getById(picture.getUserid()));
         // 封装
         pictureVO.setCreatedUser(crateUserVO);
+
+        return pictureVO;
+    }
+
+    /**
+     * 只转换图片自身字段和标签，不访问用户表。
+     * 分页查询会复用该方法，避免在批量查询用户后再次逐条查用户。
+     */
+    private PictureVO buildPictureVO(Picture picture) {
+        PictureVO pictureVO = PictureVO.obj2VO(picture);
+        fillPictureTags(picture, pictureVO);
+        return pictureVO;
+    }
+
+    /**
+     * 批量加载当前页的创建者，并提前转换为脱敏用户信息。
+     */
+    private Map<Long, UserVO> getCreatedUserVOMap(List<Picture> pictures) {
+        Set<Long> userIdSet = pictures.stream()
+                .map(Picture::getUserid)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (userIdSet.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return userService.listByIds(userIdSet).stream()
+                .filter(Objects::nonNull)
+                .filter(user -> user.getId() != null)
+                .collect(Collectors.toMap(
+                        User::getId,
+                        userService::getSaftyUser,
+                        (first, ignored) -> first));
+    }
+
+    /**
+     * 将数据库中的JSON标签转换为前端使用的字符串列表。
+     */
+    private void fillPictureTags(Picture picture, PictureVO pictureVO) {
 
         // 将tags从JSON字符串转为List<String>
         if (StrUtil.isNotBlank(picture.getTags())) {
@@ -684,7 +963,6 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 pictureVO.setTags(tagList);
             }
         }
-        return pictureVO;
     }
 
     /**
@@ -830,29 +1108,36 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 "审核图片Ids为空"
         );
         validatePictureCheckResult(checkResult);
-        //1. 根据batch中的ids进行循环处理
-        for(Long picId : picIds){
-            //1.1 图片校验 = 是否存在 是否已审核 是否提交拒绝原因
-            Picture oldPicture = this.getById(picId);
-            ThrowExceptionUtils.throwIF(ObjectUtil.isNull(oldPicture), ErrorCode.PARAMS_ERROR, "待审核图片不存在");
-            Integer previousCheckResult = oldPicture.getPictureCheck();
-            ThrowExceptionUtils.throwIF(Objects.equals(oldPicture.getPictureCheck(), checkResult), ErrorCode.PARAMS_ERROR, "请勿重复审核");
-            if (checkResult.equals(PictureConstant.CHECK_PASS)) {
-                checkMessage = "审核通过";
+        boolean changed = false;
+        try {
+            // 根据批次中的 ID 循环处理；批次内不重复清理缓存。
+            for (Long picId : picIds) {
+                // 图片校验：是否存在、是否已审核、是否提交拒绝原因。
+                Picture oldPicture = this.getById(picId);
+                ThrowExceptionUtils.throwIF(ObjectUtil.isNull(oldPicture), ErrorCode.PARAMS_ERROR, "待审核图片不存在");
+                Integer previousCheckResult = oldPicture.getPictureCheck();
+                ThrowExceptionUtils.throwIF(Objects.equals(oldPicture.getPictureCheck(), checkResult), ErrorCode.PARAMS_ERROR, "请勿重复审核");
+                if (checkResult.equals(PictureConstant.CHECK_PASS)) {
+                    checkMessage = "审核通过";
+                }
+                // 更新数据库；至少有一条更新成功后，异常退出也需要清理分页缓存。
+                Picture picture = oldPicture;
+                picture.setPictureCheck(checkResult);
+                picture.setCheckMessage(checkMessage);
+                picture.setCheckAdminId(loginUser.getId());
+                picture.setCheckTime(DateTime.now());
+                boolean result = updatePictureCheckIfExpectedState(picture, previousCheckResult);
+                ThrowExceptionUtils.throwIF(!result, ErrorCode.OPERATION_ERROR, "图片审核状态更新失败");
+                changed = true;
+                userNotificationService.createNotification(buildPictureReviewNotification(picture));
             }
-            //2. DB操作
-            Picture picture = oldPicture;
-            picture.setPictureCheck(checkResult);
-            picture.setCheckMessage(checkMessage);
-            picture.setCheckAdminId(loginUser.getId());
-            picture.setCheckTime(DateTime.now());
-            boolean result = updatePictureCheckIfExpectedState(picture, previousCheckResult);
-            ThrowExceptionUtils.throwIF(!result, ErrorCode.OPERATION_ERROR, "图片审核状态更新失败");
-            // 清除缓存，保证数据一致性
-            multiCacheManager.invalidatePicturePageCache();
-            userNotificationService.createNotification(buildPictureReviewNotification(picture));
+            return true;
+        } finally {
+            // 整个批次只清理一次，避免每条审核都触发 Redis 扫描和本地缓存清空。
+            if (changed) {
+                multiCacheManager.invalidatePicturePageCache();
+            }
         }
-        return true;
     }
 
     private void validatePictureCheckResult(Integer checkResult) {
@@ -985,7 +1270,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             System.out.println("正在上传图片");
             // 调用URL上传接口 并自动过审
             try {
-                PictureVO pictureVO = this.uploadPicture2DB(inputSource, pictureUploadRequest, loginUser);
+                // URL 批量抓取复用单张保存逻辑，但关闭单条缓存清理，统一在循环结束后清理。
+                PictureVO pictureVO = this.uploadPicture2DBInternal(
+                        inputSource, pictureUploadRequest, loginUser, false);
                 if (pictureVO != null) {
                     log.debug("图片上传成功，id= "+pictureVO.getId());
                     number++;

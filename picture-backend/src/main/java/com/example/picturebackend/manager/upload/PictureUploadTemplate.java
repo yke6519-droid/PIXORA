@@ -5,6 +5,7 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.RandomUtil;
+import cn.hutool.core.util.StrUtil;
 
 import com.example.picturebackend.Config.CosClientConfig;
 import com.example.picturebackend.Exception.BusinessException;
@@ -28,6 +29,7 @@ import java.io.IOException;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
  * 业务层面的
@@ -67,6 +69,9 @@ public abstract class PictureUploadTemplate {
         System.out.println("uploadPath = "+uploadPath);
 
         File file = null;
+        String processedPictureKey = null;
+        String processedThumbnailKey = null;
+        boolean uploadAttempted = false;
         try {
             /*
              * 临时文件名不能包含 COS 路径分隔符。
@@ -85,6 +90,7 @@ public abstract class PictureUploadTemplate {
             );
 
             // 4. 上传对象存储，并获取上传对象结果
+            uploadAttempted = true;
             PutObjectResult putObjectResult = cosManager.putPictureObject(uploadPath, file);
 
             // 5. 获取图片信息对象
@@ -93,14 +99,32 @@ public abstract class PictureUploadTemplate {
             // 5.1 获取处理后的图片列表
             ProcessResults processResults = putObjectResult.getCiUploadResult().getProcessResults();
 
-            List<CIObject> objectList = processResults.getObjectList();
+            List<CIObject> objectList = processResults == null ? null : processResults.getObjectList();
 
-            if (CollUtil.isNotEmpty(objectList)){
+            // COS处理结果至少要包含压缩图和缩略图；结果不完整时回退到原图，避免下标越界。
+            if (CollUtil.isNotEmpty(objectList) && objectList.size() >= 2){
                 // 获取压缩后的文件信息
                 CIObject compressCiObject = objectList.get(0);
                 CIObject thumbnailCiObject = objectList.get(1);
+                processedPictureKey = compressCiObject.getKey();
+                processedThumbnailKey = thumbnailCiObject.getKey();
                 // 封装压缩图的返回结果
                 return getUploadPictureResult(uploadPath,originalFilename, compressCiObject, thumbnailCiObject);
+            }
+
+            if (CollUtil.isNotEmpty(objectList)) {
+                // 只有一个处理对象时，把它作为正式图片使用，原始对象继续作为缩略图兜底，避免该对象变成孤儿。
+                CIObject processedObject = objectList.get(0);
+                processedPictureKey = processedObject.getKey();
+                UploadPictureResult fallbackResult = getUploadPictureResult(
+                        originalFilename, imageInfo, file, uploadPath);
+                if (StrUtil.isNotBlank(processedPictureKey)) {
+                    fallbackResult.setPictureKey(processedPictureKey);
+                    fallbackResult.setUrl(cosClientConfig.getHost() + "/" + processedPictureKey);
+                    fallbackResult.setThumbnailKey(uploadPath);
+                    fallbackResult.setThumbnailUrl(cosClientConfig.getHost() + "/" + uploadPath);
+                }
+                return fallbackResult;
             }
 
             // 6. 封装返回结果
@@ -111,6 +135,33 @@ public abstract class PictureUploadTemplate {
         } catch (IOException e) {
             log.error("图片上传到对象存储失败");
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传失败");
+        } catch (RuntimeException e) {
+            // 上传或解析阶段失败时，清理已经明确拿到的处理对象和原始对象。
+            if (StrUtil.isNotBlank(processedPictureKey)) {
+                try {
+                    cosManager.deleteObject(processedPictureKey);
+                } catch (RuntimeException cleanupException) {
+                    log.error("图片处理失败，清理压缩对象失败，key={}", processedPictureKey, cleanupException);
+                }
+            }
+            if (StrUtil.isNotBlank(processedThumbnailKey)
+                    && !Objects.equals(processedThumbnailKey, processedPictureKey)) {
+                try {
+                    cosManager.deleteObject(processedThumbnailKey);
+                } catch (RuntimeException cleanupException) {
+                    log.error("图片处理失败，清理缩略图对象失败，key={}", processedThumbnailKey, cleanupException);
+                }
+            }
+            if (uploadAttempted && StrUtil.isNotBlank(uploadPath)
+                    && !Objects.equals(uploadPath, processedPictureKey)
+                    && !Objects.equals(uploadPath, processedThumbnailKey)) {
+                try {
+                    cosManager.deleteObject(uploadPath);
+                } catch (RuntimeException cleanupException) {
+                    log.error("图片处理失败，清理原始对象失败，key={}", uploadPath, cleanupException);
+                }
+            }
+            throw e;
         } finally {
             // 删除临时文件
             deleteTemFile(file);
@@ -161,12 +212,15 @@ public abstract class PictureUploadTemplate {
         uploadPictureResult.setName(FileUtil.mainName(originalFilename));
         uploadPictureResult.setPicwidth(imageInfo.getWidth());
         uploadPictureResult.setPicheight(imageInfo.getHeight());
-        uploadPictureResult.setPicformat(imageInfo.getFormat());
-        uploadPictureResult.setPicsize(FileUtil.size(file));
-        uploadPictureResult.setPicscale(NumberUtil.round((double) imageInfo.getWidth() / imageInfo.getHeight(), 2).doubleValue());
-        uploadPictureResult.setUrl(cosClientConfig.getHost() + "/" + uploadPath);
-        // uploadPictureResult.setKey(uploadPath);
-        return uploadPictureResult;
+         uploadPictureResult.setPicformat(imageInfo.getFormat());
+         uploadPictureResult.setPicsize(FileUtil.size(file));
+         uploadPictureResult.setPicscale(NumberUtil.round((double) imageInfo.getWidth() / imageInfo.getHeight(), 2).doubleValue());
+         uploadPictureResult.setUrl(cosClientConfig.getHost() + "/" + uploadPath);
+         // 未返回处理结果时，至少保留原始对象key，后续入库失败才能清理COS对象。
+         uploadPictureResult.setOriginalKey(uploadPath);
+         uploadPictureResult.setPictureKey(uploadPath);
+         uploadPictureResult.setThumbnailKey(uploadPath);
+         return uploadPictureResult;
     }
 
 

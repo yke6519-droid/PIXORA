@@ -10,11 +10,15 @@ import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.picture.*;
 import com.example.picturebackend.domain.vo.picture.PictureListVO;
 import com.example.picturebackend.domain.vo.picture.PicturePageVO;
+import com.example.picturebackend.domain.vo.picture.PictureUploadVO;
 import com.example.picturebackend.domain.vo.picture.PictureVO;
 
 import org.springframework.web.bind.annotation.RequestBody;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 /**
 * @author chen
@@ -45,6 +49,13 @@ public interface PictureService extends IService<Picture> {
      * @return
      */
     public PictureVO uploadPicture2DB(Object inputSource, PictureUploadRequest pictureUploadRequest, User loginUser);
+
+    /**
+     * 批量上传本地图片；批量内部只在全部处理结束后统一清理一次分页缓存。
+     */
+    PictureUploadVO uploadPicture2DBBatch(List<MultipartFile> fileList,
+                                          PictureUploadRequest pictureUploadRequest,
+                                          User loginUser);
 
     /**
      * 管理员上传图片到数据库

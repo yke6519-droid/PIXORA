@@ -34,8 +34,10 @@ import com.example.picturebackend.manager.CosManager;
 import org.joda.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 import jakarta.annotation.Resource;
+import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -44,6 +46,7 @@ import java.util.stream.Collectors;
 * @description 针对表【space(用户私有空间表)】的数据库操作Service实现
 * @createDate 2026-06-02 15:45:36
 */
+@Slf4j
 @Service
 public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
     implements SpaceService {
@@ -155,9 +158,14 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
                 ErrorCode.NO_AUTH_ERROR
         );
 
-        //1. 先删除该空间中的图片
+        //1. 先查询空间中的图片，删除数据库记录后仍需要凭这些key清理COS对象。
         QueryWrapper<Picture> queryWrapper = new QueryWrapper<Picture>().eq("spaceId",spaceId);
-        pictureMapper.delete(queryWrapper);
+        List<Picture> pictures = pictureMapper.selectList(queryWrapper);
+        int deletedPictureCount = pictureMapper.delete(queryWrapper);
+        ThrowExceptionUtils.throwIF(
+                pictures != null && deletedPictureCount < pictures.size(),
+                ErrorCode.OPERATION_ERROR,
+                "空间图片删除失败");
 
         //2. 显式 SET NULL，避免 MyBatis-Plus 默认的非空字段更新策略跳过 spaceId。
         boolean userUpdated = userService.update(
@@ -168,7 +176,33 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         ThrowExceptionUtils.throwIF(!userUpdated, ErrorCode.OPERATION_ERROR, "用户空间状态更新失败");
 
         //3. 再删除该空间
-        return this.removeById(spaceId);
+        boolean removed = this.removeById(spaceId);
+        // 空间删除失败时抛出异常，让事务回滚图片和用户空间状态，避免留下“数据库已删图片但未清理COS”的不一致。
+        ThrowExceptionUtils.throwIF(!removed, ErrorCode.OPERATION_ERROR, "空间删除失败");
+        if (removed && pictures != null) {
+            // 空间删除成功后逐个清理图片对象；单个对象删除失败不能阻断其他对象。
+            for (Picture picture : pictures) {
+                if (picture == null) {
+                    continue;
+                }
+                String[] keys = {
+                        picture.getOriginalKey(),
+                        picture.getThumbnailKey(),
+                        picture.getPictureKey()
+                };
+                for (String key : keys) {
+                    if (StrUtil.isBlank(key)) {
+                        continue;
+                    }
+                    try {
+                        cosManager.deleteObject(key);
+                    } catch (RuntimeException cleanupException) {
+                        log.error("删除空间后清理图片对象失败，spaceId={}, key={}", spaceId, key, cleanupException);
+                    }
+                }
+            }
+        }
+        return removed;
     }
 
     /**
@@ -314,21 +348,10 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         Long usedSize = space.getUsedSize();
         Long maxSize = space.getMaxSize();
 
-        // 如果已达上限，则删除cos中上传的图片。
+        // 这里只负责校验空间使用量；上传流程统一在入库失败时清理COS对象，
+        // 避免容量校验和外层异常补偿重复删除同一批对象。
         if (usedCount >= maxCount || usedSize >= maxSize 
             || usedSize+picture.getPicsize() >= maxSize) {
-
-            // 删除cos中上传的该图片 根据key删除
-
-            cosManager.deleteObject(uploadPictureResult.getPictureKey());
-            System.out.println("spaceCheck：deleteObject by key");
-
-            cosManager.deleteObject(uploadPictureResult.getThumbnailKey());
-            System.out.println("spaceCheck：deleteObject by ThumbnailKey");
-
-            cosManager.deleteObject(uploadPictureResult.getOriginalKey());
-            System.out.println("spaceCheck：deleteObject by getOriginalKey");
-            
             ThrowExceptionUtils.throwIF(usedCount >= maxCount,
                 ErrorCode.OPERATION_ERROR ,"空间图片张数已达上限");
             
