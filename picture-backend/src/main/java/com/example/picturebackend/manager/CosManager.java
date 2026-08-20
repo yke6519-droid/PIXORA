@@ -105,4 +105,39 @@ public class CosManager {
         }
         
     }
+    
+    /**
+     * 在当前存储桶中复制对象
+     * @param sourceKey
+     * @param targetKey
+     */
+    public void copyObject(String sourceKey, String targetKey){
+        cosClient.copyObject(
+            cosClientConfig.getBucket(),
+            sourceKey,
+            cosClientConfig.getBucket(),
+            targetKey
+        );
+    }
+
+    /**
+     * 根据对象的key构造访问对象的url
+     * @param key
+     * @return
+     */
+    public String buildObjectUrl(String key){
+
+        String host = cosClientConfig.getHost();
+
+        if (host.endsWith("/")) {
+            host = host.substring(0, host.length() - 1);
+        }
+
+        if (key.startsWith("/")) {
+            key = key.substring(1);
+        }
+
+        return host + "/" + key;
+    }
+
 }

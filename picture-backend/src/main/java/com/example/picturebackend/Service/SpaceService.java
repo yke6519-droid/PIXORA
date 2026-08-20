@@ -82,11 +82,18 @@ public interface SpaceService extends IService<Space> {
     SpacePageVO querySpacePage(SpaceQueryRequest spaceQueryRequest);
 
     /**
-     * 校验当前空间容量
+     * 校验替换图片时空间容量
      * @param spaceId
      * @param picture
      */
     void checkUsage(Long spaceId, Picture picture, UploadPictureResult uploadPictureResult);
+
+    /**
+     * 校验新增图片时空间容量
+     * @param spaceId
+     * @param picture
+     */
+    void checkUsage(Space space, Picture picture);
 
     void SpaceAuthCheck(Long spaceId, User loginUser);
 }

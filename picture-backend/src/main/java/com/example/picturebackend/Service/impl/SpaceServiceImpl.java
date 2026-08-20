@@ -21,6 +21,7 @@ import com.example.picturebackend.domain.dto.file.UploadPictureResult;
 import com.example.picturebackend.domain.po.Picture;
 import com.example.picturebackend.domain.po.Space;
 import com.example.picturebackend.domain.po.User;
+import com.example.picturebackend.domain.request.picture.Save2SpaceRequest;
 import com.example.picturebackend.domain.request.space.AlterLevelRequest;
 import com.example.picturebackend.domain.request.space.CreateSpaceRequest;
 import com.example.picturebackend.domain.request.space.SpaceQueryRequest;
@@ -337,6 +338,23 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         }
     }
 
+    @Override
+    public void checkUsage(Space space, Picture picture){
+        Long maxCount = space.getMaxCount();
+        Long usedCount = space.getUsedCount();
+        Long maxSize = space.getMaxSize();
+        Long usedSize = space.getUsedSize();
+        Long needSize = picture.getPicsize();
+        ThrowExceptionUtils.throwIF(maxCount < usedCount+1,
+            ErrorCode.PARAMS_ERROR,
+        "图片数量已达空间上限"
+        );
+        ThrowExceptionUtils.throwIF(maxSize == usedSize || usedSize+needSize > maxSize,
+            ErrorCode.PARAMS_ERROR,
+        "存储空间已达空间上限"
+        );
+    }
+
     /**
      * 校验该用户是否有权限操作该空间
      * @param spaceId
@@ -353,6 +371,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
             && !loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE),
             ErrorCode.NO_AUTH_ERROR);
     }
+
 }
 
 

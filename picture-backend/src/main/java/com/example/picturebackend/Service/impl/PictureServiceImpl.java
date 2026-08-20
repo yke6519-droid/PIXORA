@@ -2,12 +2,14 @@ package com.example.picturebackend.Service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.date.DateTime;
+import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.example.picturebackend.Exception.BusinessException;
@@ -39,6 +41,7 @@ import com.example.picturebackend.manager.upload.UrlPictureUpload;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
+import org.checkerframework.checker.units.qual.m;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -411,7 +414,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         BeanUtils.copyProperties(pictureUpdateRequest, updatePicture);
         String tagStr = JSONUtil.toJsonStr(pictureUpdateRequest.getTags());
         updatePicture.setTags(tagStr);
-        updatePicture.setUpdatetime(new Date());
+        updatePicture.setUpdatetime(DateTime.now());
         boolean result = this.updateById(updatePicture);
         // 清除缓存，保证数据一致性
         if (result) {
@@ -565,13 +568,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         long current = pictureQueryRequest.getCurrent();
         long size = pictureQueryRequest.getPageSize();
 
-        // 限制普通用户和未登录用户的分页上限
-        // 若等级为空，则肯定是未登录
-        String userLevel = loginUser == null ? null : loginUser.getUserLevel();
-        if (ObjectUtil.isNull(userLevel) || UserConstant.DEFAULT_ROLE.equals(userLevel)){
-            if (size > 5){
-                size = 5;
-            }
+        // 公共图库按登录状态限制分页数量；私人空间保持原有分页能力。
+        // Controller 会把匿名请求包装成空 User，因此同时检查用户对象和用户 ID。
+        // 未登录用户展示两行（最多10张），登录用户展示四行（最多20张）。
+        Long spaceId = pictureQueryRequest.getSpaceId();
+        boolean isPublicGallery = spaceId == null || spaceId == 0L;
+        if (isPublicGallery) {
+            boolean isAnonymous = loginUser == null || loginUser.getId() == null;
+            size = isAnonymous ? Math.min(size, 10L) : Math.min(size, 20L);
         }
 
         // 构建查询条件
@@ -648,7 +652,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         String tagsStr = JSONUtil.toJsonStr(pictureUpdateRequest.getTags());
         System.out.println("转换后的tags："+tagsStr);
         updatePicture.setTags(tagsStr);
-        updatePicture.setUpdatetime(new Date());
+        updatePicture.setUpdatetime(DateTime.now());
         boolean result = this.updateById(updatePicture);
         // 清除缓存，保证数据一致性
         if (result) {
@@ -1095,11 +1099,132 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     }
 
     /**
-     * 拉取公共图库的图片，到用户的个人空间
-     * 免审核，免上传 => 仅DB操作copy即可
+     * 保存图片到当前用户个人空间
      */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public PictureVO save2Space(Save2SpaceRequest save2SpaceRequest, User loginUser){
+        // 0. 判断目标图片是否存在
+        Picture oldPicture = this.getById(save2SpaceRequest.getPictureId());
 
-    /**
-     * 批量审核
-     */
+        ThrowExceptionUtils.throwIF(
+                oldPicture == null,
+                ErrorCode.NOT_FOUND_ERROR,
+                "源图片不存在"
+        );
+
+        // 1 查询空间并上事务锁
+        Space targetSpace = spaceService.getOne(
+            new QueryWrapper<Space>()
+            .eq("id", save2SpaceRequest.getSpaceId())
+            .last("FOR UPDATE")
+        );
+        ThrowExceptionUtils.throwIF(targetSpace==null, ErrorCode.NOT_FOUND_ERROR,"目标空间不存在");
+
+        // 2 加锁后再次查询是否重复
+        Picture samePicture = this.getOne(
+                new QueryWrapper<Picture>()
+                        .eq("spaceId", save2SpaceRequest.getSpaceId())
+                        .eq("sourcePictureId", save2SpaceRequest.getPictureId())
+                        .last("LIMIT 1 FOR UPDATE")
+        );
+        //  存在，则抛出错误
+        ThrowExceptionUtils.throwIF(
+            samePicture != null,
+            ErrorCode.PARAMS_ERROR,
+            "目标空间内已有该图片"
+        );
+
+        // 3. 判断空间剩余容量
+        spaceService.checkUsage(targetSpace, oldPicture);
+        
+        // 校验图片
+        // 4.1 判断目标图片是否公共
+        ThrowExceptionUtils.throwIF(oldPicture.getSpaceId()!=0, 
+            ErrorCode.PARAMS_ERROR,
+            "只能保存公共图库的图片到你的空间"
+        );
+        // 4.2 判断图片审核状态
+        ThrowExceptionUtils.throwIF(oldPicture.getPictureCheck()!=1, 
+            ErrorCode.PARAMS_ERROR,
+            "只能保存审核通过的图片到你的空间"
+        );
+
+        // 5 存储新的cos对象
+        // 5.1 构造cos中的新PictureId
+        Long newPictureId = IdWorker.getId();
+        String targetPrefix = String.format(
+            "userSpace/%s/%s/%s",
+            loginUser.getId(),
+            targetSpace.getId(),
+            newPictureId
+        );
+        // 5.2 根据新PictureId生成cosKey
+        String targetOriginalKey = targetPrefix+"/original"+FileUtil.getSuffix(oldPicture.getOriginalKey());
+        String targetPictureKey = targetPrefix+"/picture"+FileUtil.getSuffix(oldPicture.getPictureKey());
+        String targetThumbnailKey = targetPrefix+"/thumbnail"+FileUtil.getSuffix(oldPicture.getThumbnailKey());
+        // 5.3 将对象复制到指定key位置
+        List<String> copiedKeys = new ArrayList<>();
+        try{
+            cosManager.copyObject(oldPicture.getOriginalKey(), targetOriginalKey);
+            copiedKeys.add(targetOriginalKey);
+            cosManager.copyObject(oldPicture.getPictureKey(), targetPictureKey);
+            copiedKeys.add(targetPictureKey);
+            cosManager.copyObject(oldPicture.getThumbnailKey(), targetThumbnailKey);
+            copiedKeys.add(targetThumbnailKey);
+        }catch(RuntimeException exception){
+            // 哪个对象已经复制成功，就清理哪个对象
+            for (String copiedKey : copiedKeys) {
+                cosManager.deleteObject(copiedKey);
+            }
+            throw new BusinessException(
+                    ErrorCode.SYSTEM_ERROR,
+                    "图片复制失败，请稍后重试"
+            );
+        }
+        // 5.4 根据key构建新的访问url
+        String targetUrl = cosManager.buildObjectUrl(targetPictureKey);
+        String thumbnailUrl = cosManager.buildObjectUrl(targetThumbnailKey);
+        Picture newPicture = new Picture();
+
+        // 6. 复制Picture对象
+        try{
+            BeanUtils.copyProperties(oldPicture, newPicture);
+            // 6.1 封装新的信息
+            newPicture.setId(newPictureId);
+            newPicture.setSpaceId(save2SpaceRequest.getSpaceId());
+            newPicture.setSourcePictureId(oldPicture.getId());
+            newPicture.setUrl(targetUrl);
+            newPicture.setThumbnailUrl(thumbnailUrl);
+            newPicture.setOriginalKey(targetOriginalKey);
+            newPicture.setPictureKey(targetPictureKey);
+            newPicture.setThumbnailKey(targetThumbnailKey);
+            newPicture.setUserid(loginUser.getId());
+            newPicture.setCreatetime(DateTime.now());
+            newPicture.setUpdatetime(DateTime.now());
+            // 6.2 存储newPicture对象
+            boolean saveResult = this.save(newPicture);
+            ThrowExceptionUtils.throwIF(!saveResult, ErrorCode.OPERATION_ERROR,"图片保存失败");
+
+            // 7. 更新空间容量
+            targetSpace.setUsedCount(targetSpace.getUsedCount()+1);
+            targetSpace.setUsedSize(targetSpace.getUsedSize()+oldPicture.getPicsize());
+            boolean updateResult = spaceService.updateById(targetSpace);
+            ThrowExceptionUtils.throwIF(!updateResult, ErrorCode.OPERATION_ERROR,"空间容量更新失败");
+        }catch(RuntimeException exception){
+            // Transaction只能保证数据库的回滚
+            // 因此数据库出错时，也要手动对cos进行回滚
+            for (String copiedKey : copiedKeys) {
+                cosManager.deleteObject(copiedKey);
+            }
+            throw new BusinessException(
+                ErrorCode.SYSTEM_ERROR,
+                "图片保存失败，请稍后重试"
+            );
+        }
+        // 清理缓存
+        multiCacheManager.invalidatePictureCache(newPictureId);
+
+        return PictureVO.obj2VO(newPicture);
+    }
 }

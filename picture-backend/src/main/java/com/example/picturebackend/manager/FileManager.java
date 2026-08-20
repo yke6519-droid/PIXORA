@@ -14,6 +14,7 @@ import com.example.picturebackend.Config.CosClientConfig;
 import com.example.picturebackend.Exception.BusinessException;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
+import com.example.picturebackend.constant.PictureConstant;
 
 import com.example.picturebackend.domain.dto.file.UploadPictureResult;
 import com.qcloud.cos.COSClient;
@@ -105,11 +106,10 @@ public class FileManager {
                 "上传的图片不能为空"
         );
         long fileSize = multipartFile.getSize();
-        final long ONE_M = 1024 * 1024;
         ThrowExceptionUtils.throwIF(
-                fileSize > 2 * ONE_M,
+                fileSize > PictureConstant.MAX_PICTURE_SIZE_BYTES,
                 ErrorCode.PARAMS_ERROR,
-                "图片大小不能超过2M"
+                "图片大小不能超过5MB"
         );
         String fileSuffix = FileUtil.getSuffix(multipartFile.getOriginalFilename());
         final List<String> ALLOW_FORMAT_LIST = Arrays.asList("jpeg", "png", "jpg", "webp");
@@ -216,14 +216,13 @@ public class FileManager {
                 ThrowExceptionUtils.throwIF(!ALLOW_CONTENT_TYPES.contains(contentType.toLowerCase())
                         ,ErrorCode.PARAMS_ERROR,"文件格式不正确！");
             }
-            String contentLength = httpResponse.header("Content_Length");
+            String contentLength = httpResponse.header("Content-Length");
             //文件大小不为空，进行校验
             try {
                 if (StrUtil.isNotBlank(contentLength)){
                     long length = Long.parseLong(contentLength);
-                    final long ONE_M = 1024*1024;
-                    ThrowExceptionUtils.throwIF(length >2*ONE_M,
-                            ErrorCode.PARAMS_ERROR,"文件大小不能超过2M");
+                    ThrowExceptionUtils.throwIF(length > PictureConstant.MAX_PICTURE_SIZE_BYTES,
+                            ErrorCode.PARAMS_ERROR,"文件大小不能超过5MB");
                 }
             }catch (NumberFormatException e){
                 throw new BusinessException(ErrorCode.PARAMS_ERROR,"文件大小格式异常");

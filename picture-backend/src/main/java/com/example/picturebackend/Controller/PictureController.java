@@ -9,6 +9,7 @@ import com.example.picturebackend.Exception.BusinessException;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.Service.PictureService;
+import com.example.picturebackend.Service.SpaceService;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.Utils.ResponseUtils;
 import com.example.picturebackend.annotation.AuthCheck;
@@ -30,6 +31,8 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 
 
 import lombok.extern.slf4j.Slf4j;
+
+import org.apache.tomcat.util.descriptor.web.ErrorPage;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -58,6 +61,8 @@ public class PictureController {
     private UserService userService;
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+    @Resource
+    private SpaceService spaceService;
     /**
      * 构造本地缓存
      */
@@ -95,7 +100,8 @@ public class PictureController {
         pictureUploadRequest.setIntroduction(introduction);
         pictureUploadRequest.setSpaceId(spaceId);
         
-        Integer totalSize = 0;
+        // 快捷上传的统一元信息会复用于本批每一个文件；totalCount 只表示本次收到的图片数量。
+        Integer totalCount = 0;
         List<PictureVO> successPictureVOs = new ArrayList<>();
         List<PictureUploadFailVO> failPictureVOs = new ArrayList<>();
         
@@ -120,7 +126,7 @@ public class PictureController {
                         "上传文件不能为空"
                 );
                 totalFileSize += file.getSize();
-                totalSize++;
+                totalCount++;
             }
             ThrowExceptionUtils.throwIF(
                     totalFileSize > MAX_BATCH_TOTAL_SIZE,
@@ -147,7 +153,7 @@ public class PictureController {
             }
 
         } else if (hasUrl) {
-            totalSize++;
+            totalCount++;
             PictureVO pictureVO = pictureService.uploadPicture2DB(url, pictureUploadRequest, currentUser);
             successPictureVOs.add(pictureVO);
         } else {
@@ -164,7 +170,7 @@ public class PictureController {
         pictureUploadVO.setSuccessCount(successPictureVOs.size());
         pictureUploadVO.setFailPictureList(failPictureVOs);
         pictureUploadVO.setFailCount(failPictureVOs.size());
-        pictureUploadVO.setTotalCount(totalSize);
+        pictureUploadVO.setTotalCount(totalCount);
         
         return ResponseUtils.success(pictureUploadVO);
     }
@@ -419,7 +425,6 @@ public class PictureController {
      * @param pictureUploadByBatchRequest
      * @param request
      * @return
-     * todo 这里最好加上一个事务处理，防止最终上传失败，导致部分图片上传成功，部分失败
      */
     @PostMapping("/adminFetchPictureBatch")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
@@ -432,6 +437,33 @@ public class PictureController {
         return ResponseUtils.success(pictureListVO);
     }
 
+    /**
+     * 保存公共图库图片到个人空间
+     * @param save2SpaceRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/save2Space")
+    public BaseResponse<PictureVO> save2Space(@RequestBody Save2SpaceRequest save2SpaceRequest, HttpServletRequest request){
+        // 0. 校验请求体
+        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(save2SpaceRequest), ErrorCode.PARAMS_ERROR,"请求体为空");
+        ThrowExceptionUtils.throwIF(save2SpaceRequest.getPictureId()==null, ErrorCode.PARAMS_ERROR,"目标图片Id为空");
+        ThrowExceptionUtils.throwIF(save2SpaceRequest.getSpaceId()==null, ErrorCode.PARAMS_ERROR,"目标空间Id为空");
+        // 1. 校验用户是否已登录
+        User loginUser = userService.getCurrentUser(request);
+
+        // 2. 校验用户是否有空间，且目标space是否有权限
+        ThrowExceptionUtils.throwIF(
+            loginUser.getSpaceId()==null, 
+            ErrorCode.PARAMS_ERROR,
+            "当前用户未创建个人空间");
+        ThrowExceptionUtils.throwIF(!loginUser.getSpaceId().equals(save2SpaceRequest.getSpaceId()), ErrorCode.NO_AUTH_ERROR,"不能保存图片到他人空间");
+        
+        // 3. 进行图片的保存
+        PictureVO pictureVO = pictureService.save2Space(save2SpaceRequest,loginUser);
+        return ResponseUtils.success(pictureVO);
+    }
+    
     /**
      * 分类标签表
      * 目前种类较少，不选择存库
@@ -446,4 +478,6 @@ public class PictureController {
         pictureTagCategory.setCategorys(categorys);
         return ResponseUtils.success(pictureTagCategory);
     }
+
+    
 }

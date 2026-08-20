@@ -163,4 +163,10 @@ public interface PictureService extends IService<Picture> {
      * @param picture
      */
     void deleteCosPicture(Picture picture);
+
+    /**
+     * 保存公共图库图片到指定私人空间
+     * @return 
+     */
+    PictureVO save2Space(Save2SpaceRequest save2SpaceRequest, User loginUser);
 }

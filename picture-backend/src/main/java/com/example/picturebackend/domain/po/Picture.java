@@ -120,6 +120,14 @@ public class Picture implements Serializable {
     private Long spaceId;
 
     /**
+     * 图片id来源 - 默认为null
+     * sourcePictureId
+     * 用于判断是否已经保存过该图片该空间内
+     * 防止用户同一张图片保存多次
+     */
+    private Long sourcePictureId=null;
+
+    /**
      * WebP 正式图片
      */
     private String pictureKey;
