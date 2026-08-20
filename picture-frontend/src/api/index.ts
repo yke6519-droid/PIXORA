@@ -7,10 +7,12 @@ import * as spaceController from "./spaceController";
 import * as pictureController from "./pictureController";
 import * as fileController from "./fileController";
 import * as mainController from "./mainController";
+import * as notificationController from "./notificationController";
 export default {
   userController,
   spaceController,
   pictureController,
   fileController,
   mainController,
+  notificationController,
 };

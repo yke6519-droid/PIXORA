@@ -42,6 +42,18 @@ declare namespace API {
     data?: IPagePictureVO;
   };
 
+  type BaseResponseIPageNotificationVO = {
+    code?: number;
+    message?: string;
+    data?: IPageNotificationVO;
+  };
+
+  type BaseResponseInteger = {
+    code?: number;
+    message?: string;
+    data?: number;
+  };
+
   type BaseResponseListUserVO = {
     code?: number;
     message?: string;
@@ -155,6 +167,40 @@ declare namespace API {
     total?: number | string;
   };
 
+  type IPageNotificationVO = {
+    size?: number | string;
+    current?: number;
+    pages?: number;
+    records?: NotificationVO[];
+    total?: number | string;
+  };
+
+  type NotificationDeleteRequest = {
+    ids?: Array<number | string>;
+  };
+
+  type NotificationReadRequest = {
+    ids?: Array<number | string>;
+  };
+
+  type NotificationQueryRequest = {
+    current?: number;
+    pageSize?: number;
+    unreadOnly?: boolean;
+  };
+
+  type NotificationVO = {
+    id?: number | string;
+    type?: string;
+    title?: string;
+    content?: string;
+    bizType?: string;
+    bizId?: number | string;
+    bizName?: string;
+    readTime?: string;
+    createTime?: string;
+  };
+
   type PictureListVO = {
     pictureList?: PictureVO[];
     targetCount?: number;
@@ -185,6 +231,12 @@ declare namespace API {
   type PictureTagCategory = {
     tags?: string[];
     categorys?: string[];
+  };
+
+  /** 保存公共图片到当前用户个人空间的请求参数。 */
+  type Save2SpaceRequest = {
+    spaceId?: number | string;
+    pictureId?: number | string;
   };
 
   type PictureUpdateRequest = {

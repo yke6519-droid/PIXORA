@@ -8,12 +8,33 @@
       :message="pageNotice"
     />
 
+    <!-- 去掉无实际操作价值的大标题，保留流程定位，避免用户失去当前步骤感知。 -->
+    <nav class="upload-progress-row" aria-label="上传步骤">
+      <div class="upload-steps">
+        <div class="upload-step is-active">
+          <span>1</span>
+          <strong>选择与预览</strong>
+        </div>
+        <div class="upload-step">
+          <span>2</span>
+          <strong>填写信息</strong>
+        </div>
+        <div class="upload-step">
+          <span>3</span>
+          <strong>完成</strong>
+        </div>
+      </div>
+    </nav>
+
     <section class="upload-layout proto-section">
       <div class="upload-source-panel proto-surface proto-rounded">
         <div class="source-heading">
-          <h2>选择图片</h2>
+          <div>
+            <h2>选择图片</h2>
+            <p>支持 JPG、PNG、WEBP · 单张最大 5MB</p>
+          </div>
           <div class="source-mode-control">
-            <span>图片来源</span>
+            <span>来源</span>
             <a-radio-group
               v-model:value="sourceMode"
               button-style="solid"
@@ -59,7 +80,7 @@
           <img
             v-if="displayPreview"
             :src="displayPreview"
-            alt="待上传图片预览"
+            :alt="activePreviewAlt"
             @error="handlePreviewError"
           />
           <div v-else class="preview-empty">
@@ -67,6 +88,55 @@
             <strong>{{ previewEmptyTitle }}</strong>
             <span>{{ previewEmptyDescription }}</span>
           </div>
+          <button
+            v-if="sourceMode === 'file' && selectedFiles.length > 1"
+            type="button"
+            class="preview-arrow preview-arrow-prev"
+            aria-label="上一张图片"
+            @click="selectPreviousPreview"
+          >
+            <LeftOutlined />
+          </button>
+          <button
+            v-if="sourceMode === 'file' && selectedFiles.length > 1"
+            type="button"
+            class="preview-arrow preview-arrow-next"
+            aria-label="下一张图片"
+            @click="selectNextPreview"
+          >
+            <RightOutlined />
+          </button>
+          <span v-if="sourceReady" class="preview-count">{{ previewCountLabel }}</span>
+        </div>
+
+        <!-- 快捷上传允许继续添加多张图片；点击缩略图只切换预览，不改变公共信息表单。 -->
+        <div v-if="sourceMode === 'file'" class="preview-strip" aria-label="已选择的图片">
+          <button
+            v-if="selectedFiles.length"
+            v-for="(file, index) in selectedFiles"
+            :key="`${file.name}-${index}`"
+            type="button"
+            class="preview-thumb"
+            :class="{ active: index === activeFileIndex }"
+            :aria-label="`预览第 ${index + 1} 张：${file.name}`"
+            :aria-current="index === activeFileIndex ? 'true' : undefined"
+            @click="selectPreview(index)"
+          >
+            <img :src="localPreviewUrls[index]" :alt="file.name" />
+            <span>{{ index + 1 }}</span>
+          </button>
+          <a-upload
+            class="preview-add-upload"
+            :before-upload="beforeUpload"
+            :multiple="true"
+            :show-upload-list="false"
+            :disabled="submitting"
+            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+          >
+            <span class="preview-add-icon"><PlusOutlined /></span>
+            <span>添加</span>
+          </a-upload>
+          <span class="preview-strip-hint">可继续拖入或点击添加</span>
         </div>
 
         <div v-if="selectedFiles.length" class="selected-source">
@@ -90,10 +160,14 @@
         <div class="form-panel-heading">
           <h2>图片信息</h2>
           <div class="form-panel-status" aria-label="当前上传审核状态">
-            <span>{{ currentUserRole }}</span>
+            <a-tag class="upload-mode-tag">快捷上传</a-tag>
             <a-tag class="upload-audit-tag">{{ auditStatusText }}</a-tag>
           </div>
         </div>
+
+        <p v-if="selectedFiles.length > 1" class="batch-metadata-hint">
+          当前为快捷上传，下面的信息会应用到本批 {{ selectedFiles.length }} 张图片。
+        </p>
 
         <a-form
           :model="form"
@@ -102,37 +176,45 @@
           :disabled="submitting || authChecking"
           @finish="submitUpload"
         >
+          <a-form-item label="上传位置" name="target">
+            <a-radio-group v-model:value="form.target" class="target-choice-group">
+              <a-radio-button value="public">
+                <span class="target-choice-icon"><GlobalOutlined /></span>
+                <span class="target-choice-copy">
+                  <strong>公共图库</strong>
+                  <small>所有人可见</small>
+                </span>
+              </a-radio-button>
+              <a-radio-button value="space" :disabled="!hasPrivateSpace">
+                <span class="target-choice-icon"><LockOutlined /></span>
+                <span class="target-choice-copy">
+                  <strong>私人空间</strong>
+                  <small>仅自己可见</small>
+                </span>
+              </a-radio-button>
+            </a-radio-group>
+            <p v-if="!hasPrivateSpace" class="field-hint">当前账号还没有私人空间</p>
+          </a-form-item>
+
           <a-form-item label="图片名称" name="name">
             <a-input
               v-model:value="form.name"
               :maxlength="50"
               show-count
-              placeholder="留空时使用文件名"
+              :placeholder="selectedFiles.length > 1 ? '留空时使用每张图片的文件名' : '留空时使用文件名'"
             />
           </a-form-item>
 
-          <div class="form-two-col">
-            <a-form-item label="图片分类" name="category">
-              <a-select
-                v-model:value="form.category"
-                :options="categoryOptions"
-                :loading="categoryLoading"
-                allow-clear
-                show-search
-                placeholder="选择分类"
-              />
-            </a-form-item>
-
-            <a-form-item label="上传位置" name="target">
-              <a-radio-group v-model:value="form.target">
-                <a-radio value="public">公共图库</a-radio>
-                <a-radio value="space" :disabled="!hasPrivateSpace">
-                  私人空间
-                </a-radio>
-              </a-radio-group>
-              <p v-if="!hasPrivateSpace" class="field-hint">当前账号还没有私人空间</p>
-            </a-form-item>
-          </div>
+          <a-form-item label="图片分类" name="category">
+            <a-select
+              v-model:value="form.category"
+              :options="categoryOptions"
+              :loading="categoryLoading"
+              allow-clear
+              show-search
+              placeholder="选择分类"
+            />
+          </a-form-item>
 
           <a-form-item label="图片标签" name="tags">
             <a-select
@@ -169,15 +251,20 @@
               <span>目标：{{ form.target === 'space' ? '私人空间' : '公共图库' }}</span>
               <span>状态：{{ auditStatusText }}</span>
             </div>
-            <a-button
-              html-type="submit"
-              class="proto-button acid-button"
-              type="primary"
-              :loading="submitting"
-              :disabled="authChecking"
-            >
-              {{ submitting ? '正在上传' : '上传图片' }}
-            </a-button>
+            <div class="upload-form-actions">
+              <a-button class="upload-cancel-button" :disabled="submitting" @click="cancelUpload">
+                取消
+              </a-button>
+              <a-button
+                html-type="submit"
+                class="proto-button acid-button"
+                type="primary"
+                :loading="submitting"
+                :disabled="authChecking"
+              >
+                {{ submitting ? '正在上传' : '上传图片' }}
+              </a-button>
+            </div>
           </div>
         </a-form>
       </div>
@@ -268,9 +355,14 @@ import { Upload, message } from 'ant-design-vue'
 import type { UploadFile, UploadProps } from 'ant-design-vue'
 import {
   DeleteOutlined,
+  GlobalOutlined,
   InboxOutlined,
   LinkOutlined,
+  LeftOutlined,
+  LockOutlined,
+  PlusOutlined,
   PictureOutlined,
+  RightOutlined,
 } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -292,9 +384,10 @@ const loginUserStore = useLoginUserStore()
 const sourceMode = ref<UploadSourceMode>('file')
 const fileList = ref<UploadFile[]>([])
 const selectedFiles = ref<File[]>([])
+const localPreviewUrls = ref<string[]>([])
+const activeFileIndex = ref(0)
 const autoGeneratedName = ref('')
 const imageUrl = ref('')
-const localPreviewUrl = ref('')
 const urlPreviewFailed = ref(false)
 const categoryLoading = ref(false)
 const authChecking = ref(true)
@@ -334,13 +427,19 @@ const hasPrivateSpace = computed(() => {
 })
 
 const isAdmin = computed(() => loginUserStore.loginUser?.userLevel === 'admin')
-const currentUserRole = computed(() => (isAdmin.value ? '管理员' : '普通用户'))
 const auditStatusText = computed(() => (isAdmin.value ? '自动通过' : '等待审核'))
 
 const validUrl = computed(() => isHttpUrl(imageUrl.value.trim()))
+const activeFile = computed(() => selectedFiles.value[activeFileIndex.value])
+const activeLocalPreviewUrl = computed(() => localPreviewUrls.value[activeFileIndex.value] || '')
 const displayPreview = computed(() => {
-  if (sourceMode.value === 'file') return localPreviewUrl.value
+  if (sourceMode.value === 'file') return activeLocalPreviewUrl.value
   return validUrl.value && !urlPreviewFailed.value ? imageUrl.value.trim() : ''
+})
+const activePreviewAlt = computed(() => activeFile.value?.name || '待上传图片预览')
+const previewCountLabel = computed(() => {
+  if (sourceMode.value === 'url') return '1 / 1'
+  return selectedFiles.value.length ? `${activeFileIndex.value + 1} / ${selectedFiles.value.length}` : '0 / 0'
 })
 
 const sourceReady = computed(() =>
@@ -384,6 +483,7 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
 
   const isFirstFile = selectedFiles.value.length === 0
   selectedFiles.value = [...selectedFiles.value, file]
+  localPreviewUrls.value = [...localPreviewUrls.value, URL.createObjectURL(file)]
   fileList.value = [...fileList.value, {
     uid: file.uid,
     name: file.name,
@@ -393,9 +493,7 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
     originFileObj: file,
   }]
 
-  if (isFirstFile) {
-    createLocalPreview(file)
-  }
+  if (isFirstFile) activeFileIndex.value = 0
 
   // 单张上传仍可自动填充名称；批量上传时清空这个临时名称，让后端按每个文件名生成。
   if (isFirstFile && !form.name.trim()) {
@@ -542,16 +640,31 @@ function openPictureManage() {
   void router.push('/gallery/manage')
 }
 
-function createLocalPreview(file: File) {
-  revokeLocalPreview()
-  localPreviewUrl.value = URL.createObjectURL(file)
+function revokeLocalPreview() {
+  localPreviewUrls.value.forEach((previewUrl) => URL.revokeObjectURL(previewUrl))
+  localPreviewUrls.value = []
+  activeFileIndex.value = 0
 }
 
-function revokeLocalPreview() {
-  if (localPreviewUrl.value) {
-    URL.revokeObjectURL(localPreviewUrl.value)
-    localPreviewUrl.value = ''
-  }
+function selectPreview(index: number) {
+  if (index < 0 || index >= selectedFiles.value.length) return
+  activeFileIndex.value = index
+}
+
+function selectPreviousPreview() {
+  if (selectedFiles.value.length < 2) return
+  activeFileIndex.value =
+    (activeFileIndex.value - 1 + selectedFiles.value.length) % selectedFiles.value.length
+}
+
+function selectNextPreview() {
+  if (selectedFiles.value.length < 2) return
+  activeFileIndex.value = (activeFileIndex.value + 1) % selectedFiles.value.length
+}
+
+function cancelUpload() {
+  if (submitting.value) return
+  void router.push('/gallery')
 }
 
 function clearSelectedFile() {
@@ -606,10 +719,15 @@ onBeforeUnmount(() => {
 <style scoped>
 .upload-prototype {
   /* 桌面端跟随外层内容区填满剩余高度，移动端由媒体查询恢复自然高度。 */
+  --upload-font-ui: 'Geist', 'Manrope', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --upload-font-display: 'Abril Fatface', Georgia, serif;
+  --upload-font-data: 'DM Mono', monospace;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  color: var(--proto-ink);
+  font-family: var(--upload-font-ui);
 }
 
 .upload-audit-tag.ant-tag {
@@ -618,6 +736,18 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 999px;
   background: rgba(186, 255, 61, .22);
+  color: #477200;
+  font-size: .6875rem;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.upload-mode-tag.ant-tag {
+  margin: 0;
+  padding: 3px 7px;
+  border: 1px solid rgba(116, 166, 25, .22);
+  border-radius: 999px;
+  background: rgba(186, 255, 61, .18);
   color: #477200;
   font-size: .6875rem;
   line-height: 1.2;
@@ -831,6 +961,71 @@ onBeforeUnmount(() => {
   object-fit: contain;
 }
 
+.preview-strip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin-top: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.preview-thumb {
+  position: relative;
+  flex: 0 0 58px;
+  width: 58px;
+  height: 42px;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid rgba(241, 242, 237, .22);
+  border-radius: 4px;
+  background: rgba(241, 242, 237, .08);
+  cursor: pointer;
+  opacity: .76;
+  transition: border-color .16s ease, opacity .16s ease;
+}
+
+.preview-thumb:hover,
+.preview-thumb:focus-visible,
+.preview-thumb.active {
+  border-color: var(--proto-acid);
+  opacity: 1;
+}
+
+.preview-thumb:focus-visible {
+  outline: 2px solid var(--proto-acid);
+  outline-offset: 2px;
+}
+
+.preview-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.preview-thumb > span {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  min-width: 14px;
+  padding: 1px 3px;
+  border-radius: 999px;
+  background: rgba(16, 19, 20, .78);
+  color: var(--proto-paper);
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.preview-strip-hint {
+  min-width: 120px;
+  color: rgba(241, 242, 237, .62);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
 .preview-empty {
   width: 100%;
   height: 100%;
@@ -898,6 +1093,13 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: rgba(255, 255, 255, 0.58);
+}
+
+.batch-metadata-hint {
+  margin: -6px 0 10px;
+  color: #5b6a51;
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .form-panel-heading {
@@ -1304,6 +1506,649 @@ onBeforeUnmount(() => {
   .upload-failed-list li > span {
     flex-basis: auto;
     text-align: left;
+  }
+}
+
+/* 第一阶段视觉整理：去掉 Hero 标题，只保留紧凑的流程定位。 */
+.upload-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 28px;
+  padding: 10px 4px 0;
+}
+
+.upload-steps {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0;
+}
+
+.upload-step {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #9a9f98;
+  font-size: .75rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.upload-step + .upload-step::before {
+  content: '';
+  position: absolute;
+  right: calc(100% + 10px);
+  width: 14px;
+  height: 1px;
+  background: var(--proto-line);
+}
+
+.upload-step > span {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #d6dbd2;
+  border-radius: 50%;
+  font-family: var(--upload-font-display);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.upload-step.is-active {
+  color: var(--proto-ink);
+}
+
+.upload-step.is-active > span {
+  border-color: var(--proto-acid);
+  background: var(--proto-acid);
+  color: var(--proto-ink);
+  font-weight: 800;
+}
+
+.upload-prototype :deep(.ant-form-item-label > label) {
+  color: var(--proto-ink);
+  font-family: var(--upload-font-ui);
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+.upload-prototype :deep(.ant-input),
+.upload-prototype :deep(.ant-input-affix-wrapper),
+.upload-prototype :deep(.ant-select-selector),
+.upload-prototype :deep(.ant-select-selection-item),
+.upload-prototype :deep(.ant-select-selection-placeholder),
+.upload-prototype :deep(.ant-radio-button-wrapper),
+.upload-prototype :deep(.ant-btn) {
+  font-family: var(--upload-font-ui);
+}
+
+.upload-prototype :deep(.ant-input),
+.upload-prototype :deep(.ant-input-affix-wrapper),
+.upload-prototype :deep(.ant-select-selector) {
+  font-size: .875rem;
+}
+
+.upload-mode-tag.ant-tag,
+.upload-audit-tag.ant-tag {
+  font-family: var(--upload-font-ui);
+  padding: 3px 7px;
+  font-size: .6875rem;
+  line-height: 1.25;
+}
+
+.preview-count {
+  font-family: var(--upload-font-display);
+  font-size: .75rem;
+}
+
+.upload-layout {
+  --upload-preview-height: 420px;
+  grid-template-columns: minmax(0, 1.18fr) minmax(330px, .82fr);
+  gap: 18px;
+  align-items: start;
+}
+
+/* 上传页不再被全局剩余高度拉伸，卡片高度由真实内容决定。 */
+.upload-prototype .upload-layout.proto-section {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.upload-source-panel,
+.upload-form-panel {
+  border: 1px solid #e2e5df;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(31, 39, 28, .06);
+  padding: 20px;
+  height: auto;
+  align-self: start;
+}
+
+.upload-prototype .upload-source-panel,
+.upload-prototype .upload-form-panel {
+  height: auto;
+  align-self: start;
+}
+
+.upload-source-panel {
+  background: #fff;
+  color: var(--proto-ink);
+}
+
+.upload-form-panel {
+  background: #fff;
+}
+
+.source-heading {
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+
+.source-heading > div:first-child {
+  min-width: 0;
+}
+
+.source-heading h2,
+.form-panel-heading h2 {
+  font-size: 1.15rem;
+  font-weight: 750;
+  line-height: 1.25;
+  letter-spacing: -0.035em;
+}
+
+.source-heading p {
+  margin: 5px 0 0;
+  color: var(--proto-muted);
+  font-size: .75rem;
+  line-height: 1.4;
+}
+
+.form-panel-heading {
+  align-items: flex-start;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #edf0ea;
+}
+
+.form-panel-status {
+  gap: 6px;
+}
+
+.source-mode-control {
+  flex: 0 0 auto;
+}
+
+.source-mode-control > span {
+  color: var(--proto-muted);
+  font-size: .6875rem;
+}
+
+.source-heading :deep(.ant-radio-button-wrapper) {
+  border-color: #dfe4dc;
+  background: #fff;
+  color: var(--proto-muted);
+}
+
+.source-heading :deep(.ant-radio-button-wrapper-checked) {
+  border-color: var(--proto-acid);
+  background: #f1fbdc;
+  color: #426600;
+}
+
+.source-control {
+  flex-basis: 72px;
+  height: 72px;
+  min-height: 72px;
+  margin-top: 12px;
+}
+
+.upload-source-panel :deep(.ant-upload.ant-upload-drag) {
+  border-color: #d9ded5;
+  border-radius: 8px;
+  background: #fafbf8;
+}
+
+.upload-source-panel :deep(.ant-upload.ant-upload-drag:hover),
+.upload-source-panel :deep(.ant-upload.ant-upload-drag:focus-within) {
+  border-color: #94c92d;
+  background: #f8fdea;
+}
+
+.upload-source-panel :deep(.ant-upload.ant-upload-drag .ant-upload-btn) {
+  color: var(--proto-ink);
+}
+
+.upload-source-panel :deep(.ant-upload-drag-icon) {
+  display: none;
+}
+
+.upload-drag-title {
+  color: var(--proto-ink);
+  font-size: .75rem;
+}
+
+.upload-drag-copy {
+  color: var(--proto-muted);
+  font-size: .625rem;
+}
+
+.url-control label,
+.url-control p {
+  color: var(--proto-muted);
+}
+
+.url-control :deep(.ant-input-affix-wrapper) {
+  border-color: #d9ded5;
+  background: #fff;
+  color: var(--proto-ink);
+}
+
+.url-control :deep(.ant-input) {
+  color: var(--proto-ink);
+}
+
+.upload-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-color: #dfe4dc;
+  border-radius: 9px;
+  background: #f5f7f3;
+}
+
+.upload-preview img {
+  background: #fff;
+}
+
+.preview-empty {
+  color: #9ca39a;
+}
+
+.preview-empty strong {
+  color: #626b61;
+}
+
+.preview-arrow {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(28, 34, 28, .68);
+  color: #fff;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.preview-arrow:hover,
+.preview-arrow:focus-visible {
+  background: #1c221c;
+}
+
+.preview-arrow:focus-visible {
+  outline: 2px solid var(--proto-acid);
+  outline-offset: 2px;
+}
+
+.preview-arrow-prev {
+  left: 12px;
+}
+
+.preview-arrow-next {
+  right: 12px;
+}
+
+.preview-count {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(26, 30, 27, .78);
+  color: #fff;
+  font-size: .625rem;
+  line-height: 1.2;
+  transform: translateX(-50%);
+}
+
+.preview-strip {
+  gap: 8px;
+  min-height: 58px;
+  margin-top: 10px;
+  padding-bottom: 0;
+}
+
+.preview-thumb {
+  flex-basis: 78px;
+  width: 78px;
+  height: 54px;
+  border-color: #dfe4dc;
+  border-radius: 7px;
+  opacity: .82;
+}
+
+.preview-thumb.active {
+  border: 2px solid var(--proto-acid);
+}
+
+.preview-add-upload {
+  flex: 0 0 78px;
+  width: 78px;
+  height: 54px;
+}
+
+.preview-add-upload :deep(.ant-upload) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border: 1px dashed #cdd4c8;
+  border-radius: 7px;
+  background: #fafbf8;
+  color: var(--proto-muted);
+  cursor: pointer;
+}
+
+.preview-add-upload :deep(.ant-upload:hover) {
+  border-color: #94c92d;
+  color: #5a890d;
+}
+
+.preview-add-icon {
+  margin-right: 4px;
+  font-size: .875rem;
+}
+
+.preview-add-upload :deep(.ant-upload) > span:last-child {
+  font-size: .6875rem;
+}
+
+.preview-strip-hint {
+  min-width: 90px;
+  color: #a0a69e;
+  font-size: .625rem;
+}
+
+.selected-source {
+  min-height: 34px;
+  margin-top: 9px;
+  padding: 6px 9px;
+  border: 1px solid #e5e9e2;
+  border-radius: 7px;
+  background: #fbfcfa;
+}
+
+.selected-source strong {
+  color: var(--proto-ink);
+}
+
+.selected-source small {
+  color: var(--proto-muted);
+}
+
+.batch-metadata-hint {
+  margin: -2px 0 14px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--proto-acid);
+  border-radius: 0 7px 7px 0;
+  background: #f3f9e6;
+  color: #58792a;
+  font-size: .75rem;
+  line-height: 1.5;
+}
+
+.target-choice-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.target-choice-group :deep(.ant-radio-button-wrapper) {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 54px;
+  padding: 0 12px;
+  border: 1px solid #e1e5df;
+  border-radius: 8px;
+  color: var(--proto-muted);
+}
+
+/* AntDV 会把 radio-button 的插槽内容再包一层 span，必须在这一层建立横向布局。 */
+.target-choice-group :deep(.ant-radio-button-wrapper > span:last-child) {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.target-choice-group :deep(.ant-radio-button-wrapper::before) {
+  display: none;
+}
+
+.target-choice-group :deep(.ant-radio-button-wrapper-checked) {
+  border-color: #b5e15a;
+  background: #f4fbe8;
+  color: #5b8d12;
+  box-shadow: none;
+}
+
+.target-choice-group :deep(.ant-radio-button-wrapper-disabled) {
+  background: #fafafa;
+}
+
+.target-choice-group :deep(.anticon) {
+  font-size: 1rem;
+}
+
+.target-choice-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.target-choice-icon {
+  display: grid;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+}
+
+.target-choice-group strong {
+  color: var(--proto-ink);
+  font-size: .8125rem;
+  line-height: 1.25;
+}
+
+.target-choice-group small {
+  margin-top: 3px;
+  color: var(--proto-muted);
+  font-size: .6875rem;
+  line-height: 1.3;
+}
+
+.upload-form :deep(.ant-form-item) {
+  margin-bottom: 14px;
+}
+
+.upload-form :deep(.ant-form-item-label) {
+  padding-bottom: 5px;
+}
+
+.upload-form :deep(.ant-input),
+.upload-form :deep(.ant-input-affix-wrapper),
+.upload-form :deep(.ant-select-selector) {
+  border-radius: 7px;
+}
+
+.upload-form :deep(textarea.ant-input) {
+  min-height: 86px;
+}
+
+.upload-form-foot {
+  align-items: center;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid #edf0ea;
+}
+
+.upload-submit-alert {
+  margin: 0;
+}
+
+.submit-contract {
+  font-size: .6875rem;
+  line-height: 1.4;
+}
+
+.upload-form-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.upload-cancel-button {
+  min-width: 84px;
+  height: 38px;
+  border-color: #dfe4dc;
+  border-radius: 7px;
+}
+
+.upload-form-actions .acid-button {
+  min-width: 126px;
+  height: 38px;
+  font-size: .8125rem;
+  border-radius: 7px;
+}
+
+.upload-prototype .upload-form {
+  flex: 0 0 auto;
+}
+
+.upload-prototype .upload-form-foot {
+  margin-top: 12px;
+}
+
+/* 第三阶段视觉收口：根据视口高度压缩留白，不让图片尺寸决定布局高度。 */
+@media (min-width: 921px) and (max-height: 900px) {
+  .upload-progress-row {
+    padding-top: 6px;
+  }
+
+  .upload-layout {
+    --upload-preview-height: 360px;
+  }
+
+  .upload-source-panel,
+  .upload-form-panel {
+    padding: 16px;
+  }
+
+  .source-control {
+    flex-basis: 64px;
+    height: 64px;
+    min-height: 64px;
+  }
+
+  .upload-form :deep(.ant-form-item) {
+    margin-bottom: 10px;
+  }
+
+  .upload-form :deep(textarea.ant-input) {
+    min-height: 72px;
+  }
+
+  .upload-form-foot {
+    padding-top: 12px;
+  }
+}
+
+@media (max-width: 980px) {
+  .upload-progress-row {
+    justify-content: flex-start;
+    padding-inline: 0;
+  }
+
+  .upload-steps {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .upload-layout {
+    --upload-preview-height: 280px;
+    grid-template-columns: 1fr;
+  }
+
+  .upload-source-panel,
+  .upload-form-panel {
+    height: auto;
+  }
+
+  .upload-form {
+    flex: 0 0 auto;
+  }
+
+  .upload-form-foot {
+    margin-top: 12px;
+  }
+}
+
+@media (max-width: 560px) {
+  .upload-progress-row {
+    padding-top: 8px;
+  }
+
+  .upload-steps {
+    gap: 12px;
+  }
+
+  .upload-step {
+    font-size: .6875rem;
+  }
+
+  .upload-step + .upload-step::before {
+    display: none;
+  }
+
+  .source-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .source-mode-control {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .upload-source-panel,
+  .upload-form-panel {
+    padding: 16px;
+  }
+
+  .target-choice-group {
+    grid-template-columns: 1fr;
+  }
+
+  .upload-form-foot {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .upload-form-actions,
+  .upload-form-actions :deep(.ant-btn) {
+    width: 100%;
   }
 }
 </style>

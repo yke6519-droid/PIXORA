@@ -1,136 +1,213 @@
 <template>
   <div class="gallery-prototype">
-    <section class="gallery-hero">
-      <div class="gallery-hero-copy">
-        <div class="gallery-brand">PIXORA</div>
-        <h1 class="gallery-title">找到一张值得留下的图片</h1>
-      </div>
-    </section>
-
-    <section class="gallery-search">
-      <div class="gallery-main-visual">
-        <div class="gallery-filter-row">
-          <a-input-search
-            v-model:value="searchText"
-            class="gallery-search-input"
-            placeholder="搜索图片名称或简介"
-            enter-button="搜索"
-            @search="runSearch"
-          />
+    <div class="gallery-layout">
+      <aside class="gallery-sidebar proto-surface" aria-label="图片分类">
+        <div class="gallery-sidebar-head">
+          <h2>全部分类</h2>
+          <UpOutlined aria-hidden="true" />
         </div>
-      </div>
-      <a-card class="gallery-filter-card proto-surface" :bordered="false">
-        <div class="gallery-tag-row" aria-label="按标签筛选">
-          <div class="gallery-tag-list">
+
+        <nav class="gallery-category-list">
+          <button
+            type="button"
+            class="gallery-category-item"
+            :class="{ 'is-active': !category }"
+            @click="selectCategory('')"
+          >
+            <AppstoreOutlined aria-hidden="true" />
+            <span>全部图片</span>
+            <small>{{ categoryCountLoading ? '…' : formatCount(allPictureTotal) }}</small>
+          </button>
+
+          <!-- 分类接口只返回名称，数量由公共图库分页接口按分类统计后展示。 -->
+          <button
+            v-for="item in categories"
+            :key="item"
+            type="button"
+            class="gallery-category-item"
+            :class="{ 'is-active': category === item }"
+            @click="selectCategory(item)"
+          >
+            <component :is="categoryIcon(item)" aria-hidden="true" />
+            <span>{{ item }}</span>
+            <small>{{ categoryCountLoading ? '…' : formatCount(categoryCounts[item] ?? null) }}</small>
+          </button>
+
+          <span v-if="!categories.length" class="gallery-muted gallery-category-empty">暂无可用分类</span>
+        </nav>
+      </aside>
+
+      <main class="gallery-main-column">
+        <section class="gallery-search-area" aria-label="图库搜索">
+          <div class="gallery-search-box">
+            <a-input
+              v-model:value="searchText"
+              class="gallery-search-input"
+              placeholder="搜索图片名称、关键词或描述..."
+              @pressEnter="runSearch"
+            >
+              <template #prefix>
+                <SearchOutlined aria-hidden="true" />
+              </template>
+            </a-input>
+            <span class="gallery-search-settings" aria-hidden="true">
+              <SettingOutlined />
+            </span>
+            <a-button class="gallery-search-button" type="primary" @click="runSearch">搜索</a-button>
+          </div>
+        </section>
+
+        <section class="gallery-toolbar" aria-label="图库筛选和视图设置">
+          <div class="gallery-tag-list" aria-label="按标签筛选">
             <a-checkable-tag
-              v-for="tag in tags"
+              v-for="tag in visibleTags"
               :key="tag"
               :checked="selectedTags.includes(tag)"
               @change="(checked: boolean) => toggleTag(tag, checked)"
             >
               {{ tag }}
             </a-checkable-tag>
+            <button
+              v-if="tags.length > 8"
+              type="button"
+              class="gallery-more-tags"
+              @click="showAllTags = !showAllTags"
+            >
+              {{ showAllTags ? '收起' : '更多' }}
+              <DownOutlined :class="{ 'is-open': showAllTags }" aria-hidden="true" />
+            </button>
             <span v-if="!tags.length" class="gallery-muted">暂无可用标签</span>
           </div>
-          <div class="gallery-filter-controls">
-            <a-select v-model:value="category" class="gallery-category-select" placeholder="图片分类" @change="runSearch">
-              <a-select-option value="">全部分类</a-select-option>
-              <a-select-option v-for="item in categories" :key="item" :value="item">{{ item }}</a-select-option>
+
+          <div class="gallery-toolbar-actions">
+            <a-button
+              class="gallery-tool-button"
+              :class="{ 'is-active': filterOpen || hasActiveFilters }"
+              @click="filterOpen = !filterOpen"
+            >
+              <FilterOutlined aria-hidden="true" />
+              <span>筛选</span>
+            </a-button>
+            <a-select v-model:value="sortOrder" class="gallery-sort-select" @change="runSearch">
+              <a-select-option value="latest">综合排序</a-select-option>
+              <a-select-option value="size">尺寸优先</a-select-option>
             </a-select>
-            <a-button class="proto-button ghost-button gallery-reset-button" @click="resetFilters">重置</a-button>
-          </div>
-        </div>
-      </a-card>
-    </section>
-
-    <section class="gallery-results-bar">
-      <div class="gallery-results-leading">
-        <div class="gallery-result-summary" aria-live="polite">
-          <span class="result-count">{{ total }}</span>
-          <span class="gallery-result-label">张公开图片</span>
-        </div>
-        <a-radio-group v-model:value="sortOrder" class="gallery-sort-group" button-style="solid" size="small" @change="runSearch">
-          <a-radio-button value="latest">最近上传</a-radio-button>
-          <a-radio-button value="size">尺寸优先</a-radio-button>
-        </a-radio-group>
-      </div>
-      <div class="gallery-hero-actions gallery-results-actions">
-        <a-button class="proto-button ghost-button" @click="router.push('/gallery/manage')">管理我的图片</a-button>
-        <a-button class="proto-button acid-button" type="primary" @click="router.push('/gallery/upload')">上传图片</a-button>
-      </div>
-    </section>
-
-    <a-alert v-if="loadError" class="gallery-alert" type="error" show-icon :message="loadError" />
-
-    <a-spin :spinning="loading" tip="加载图片中...">
-      <section v-if="pictureList.length" class="gallery-grid" aria-label="公共图片列表">
-        <a-card
-          v-for="picture in pictureList"
-          :key="picture.id"
-          class="gallery-card proto-surface"
-          :bordered="false"
-          role="button"
-          tabindex="0"
-          @click="openDetail(picture.id)"
-          @keydown.enter="openDetail(picture.id)"
-          @keydown.space.prevent="openDetail(picture.id)"
-        >
-          <div class="gallery-card-image">
-            <img v-if="picture.thumbnailUrl || picture.url" :src="picture.thumbnailUrl || picture.url" :alt="picture.name || '公共图片'" loading="lazy" />
-            <div v-else class="gallery-image-empty">暂无图片地址</div>
-            <span class="gallery-card-overlay">查看详情</span>
-          </div>
-          <div class="gallery-card-body">
-            <div class="gallery-card-title">
-              <strong>{{ picture.name || '未命名图片' }}</strong>
-              <span class="gallery-card-arrow" aria-hidden="true">↗</span>
-            </div>
-            <p>{{ picture.introduction || '暂无图片简介' }}</p>
-            <div class="gallery-card-foot">
-              <a-tag v-if="picture.category" class="gallery-category-tag">{{ picture.category }}</a-tag>
-              <span v-else class="gallery-muted">未分类</span>
-              <span class="gallery-author">{{ picture.createdUser?.username || '未知用户' }}</span>
+            <div class="gallery-view-toggle" aria-label="切换视图">
+              <button
+                type="button"
+                class="gallery-view-button"
+                :class="{ 'is-active': viewMode === 'grid' }"
+                aria-label="网格视图"
+                @click="viewMode = 'grid'"
+              >
+                <AppstoreOutlined aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                class="gallery-view-button"
+                :class="{ 'is-active': viewMode === 'list' }"
+                aria-label="列表视图"
+                @click="viewMode = 'list'"
+              >
+                <MenuOutlined aria-hidden="true" />
+              </button>
             </div>
           </div>
-        </a-card>
-      </section>
-      <div v-else-if="!loading" class="gallery-empty-state">
-        <a-empty description="没有找到符合条件的图片">
-          <template #extra>
-            <a-button class="proto-button acid-button" type="primary" @click="router.push('/gallery/upload')">上传第一张图片</a-button>
-          </template>
-        </a-empty>
-      </div>
-    </a-spin>
+        </section>
 
-    <div v-if="total > 0" class="gallery-pagination">
-      <span class="gallery-pagination-caption">第 {{ current }} 页 · 共 {{ total }} 张</span>
-      <a-pagination
-        v-model:current="current"
-        v-model:pageSize="pageSize"
-        :total="total"
-        :page-size-options="['6', '10']"
-        show-size-changer
-        show-less-items
-        :show-total="(value: number) => `共 ${value} 张`"
-        @change="handlePageChange"
-        @show-size-change="handlePageSizeChange"
-      />
+        <section v-if="filterOpen" class="gallery-filter-panel proto-surface" aria-label="当前筛选条件">
+          <div>
+            <strong>当前筛选</strong>
+            <span>{{ filterSummary }}</span>
+          </div>
+          <a-button class="proto-button ghost-button" @click="resetFilters">重置筛选</a-button>
+        </section>
+
+        <section class="gallery-results-bar">
+          <div class="gallery-result-summary" aria-live="polite">
+            <span class="result-count">{{ total.toLocaleString() }}</span>
+            <span class="gallery-result-label">张图片</span>
+          </div>
+        </section>
+
+        <a-alert v-if="loadError" class="gallery-alert" type="error" show-icon :message="loadError" />
+
+        <a-spin :spinning="loading" tip="加载图片中...">
+          <section
+            v-if="pictureList.length"
+            class="gallery-grid"
+            :class="{ 'is-list': viewMode === 'list' }"
+            aria-label="公共图片列表"
+          >
+            <PictureGalleryCard
+              v-for="picture in pictureList"
+              :key="picture.id"
+              :picture="picture"
+              :view-mode="viewMode"
+              @open="openDetail(picture.id)"
+            />
+          </section>
+          <div v-else-if="!loading" class="gallery-empty-state">
+            <a-empty description="没有找到符合条件的图片">
+              <template #extra>
+                <a-button class="proto-button acid-button" type="primary" @click="router.push('/gallery/upload')">
+                  上传第一张图片
+                </a-button>
+              </template>
+            </a-empty>
+          </div>
+        </a-spin>
+
+        <div v-if="total > 0" class="gallery-pagination">
+          <span class="gallery-pagination-caption">第 {{ current }} 页 · 共 {{ total.toLocaleString() }} 张</span>
+          <a-pagination
+            v-model:current="current"
+            v-model:pageSize="pageSize"
+            :total="total"
+            :page-size-options="pageSizeOptions"
+            show-size-changer
+            show-less-items
+            :show-total="(value: number) => `共 ${value.toLocaleString()} 张`"
+            @change="handlePageChange"
+            @show-size-change="handlePageSizeChange"
+          />
+        </div>
+      </main>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
+import {
+  AppstoreOutlined,
+  BoxPlotOutlined,
+  CameraOutlined,
+  DownOutlined,
+  EditOutlined,
+  FilterOutlined,
+  MenuOutlined,
+  PictureOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  SmileOutlined,
+  UpOutlined,
+} from '@ant-design/icons-vue'
 import { useRouter } from 'vue-router'
 import { queryPicturePageCache, listPictureCategory } from '../../../api/pictureController'
+import { useLoginUserStore } from '../../../stores/useLoginUserStore'
+import PictureGalleryCard from './components/PictureGalleryCard.vue'
 
 const router = useRouter()
+const loginUserStore = useLoginUserStore()
 const loading = ref(false)
 const loadError = ref('')
 const pictureList = ref<API.PictureVO[]>([])
 const total = ref(0)
+const allPictureTotal = ref<number | null>(null)
+const categoryCounts = ref<Record<string, number>>({})
+const categoryCountLoading = ref(false)
 const current = ref(1)
 const pageSize = ref(10)
 const searchText = ref('')
@@ -139,6 +216,22 @@ const selectedTags = ref<string[]>([])
 const categories = ref<string[]>([])
 const tags = ref<string[]>([])
 const sortOrder = ref<'latest' | 'size'>('latest')
+const viewMode = ref<'grid' | 'list'>('grid')
+const showAllTags = ref(false)
+const filterOpen = ref(false)
+
+const isLoggedIn = computed(() => Boolean(loginUserStore.loginUser))
+const maxPageSize = computed(() => isLoggedIn.value ? 20 : 10)
+const pageSizeOptions = computed(() => isLoggedIn.value ? ['10', '20'] : ['10'])
+const visibleTags = computed(() => showAllTags.value ? tags.value : tags.value.slice(0, 8))
+const hasActiveFilters = computed(() => Boolean(searchText.value.trim() || category.value || selectedTags.value.length))
+const filterSummary = computed(() => {
+  const values: string[] = []
+  if (searchText.value.trim()) values.push(`关键词：${searchText.value.trim()}`)
+  if (category.value) values.push(`分类：${category.value}`)
+  if (selectedTags.value.length) values.push(`标签：${selectedTags.value.join('、')}`)
+  return values.length ? values.join(' · ') : '未设置额外筛选'
+})
 
 async function loadGallery() {
   loading.value = true
@@ -176,15 +269,79 @@ async function loadCategories() {
     if (res.data?.code === 200) {
       categories.value = res.data.data?.categorys || []
       tags.value = res.data.data?.tags || []
+      await loadCategoryCounts()
     }
   } catch {
     message.warning('分类和标签暂时加载失败，仍可使用关键词查询')
   }
 }
 
+/**
+ * 查询公共图库的总数。
+ * 统计请求只取1条记录，total仍由后端分页结果提供，不把当前页面图片数量当成分类总数。
+ */
+async function queryPublicPictureCount(categoryName?: string) {
+  const res = await queryPicturePageCache({
+    current: 1,
+    pageSize: 1,
+    category: categoryName || undefined,
+    pictureCheck: 1,
+    spaceId: 0,
+    sortFiled: 'createtime',
+    sortOrder: 'descend',
+  })
+  if (res.data?.code !== 200) {
+    throw new Error(res.data?.message || '公共图库分类数量加载失败')
+  }
+  return Number(res.data.data?.total || 0)
+}
+
+/**
+ * 单独维护“全部图片”和各分类的数量，避免它们被当前搜索条件或选中分类覆盖。
+ */
+async function loadCategoryCounts() {
+  categoryCountLoading.value = true
+  try {
+    const categoryNames = categories.value.filter(Boolean)
+    const [allCount, ...categoryEntries] = await Promise.all([
+      queryPublicPictureCount(),
+      ...categoryNames.map(async (categoryName) => [
+        categoryName,
+        await queryPublicPictureCount(categoryName),
+      ] as const),
+    ])
+    allPictureTotal.value = allCount
+    categoryCounts.value = Object.fromEntries(categoryEntries)
+  } catch {
+    // 数量加载失败不影响图片浏览，左侧仅显示占位符，避免展示错误统计。
+    allPictureTotal.value = null
+    categoryCounts.value = {}
+  } finally {
+    categoryCountLoading.value = false
+  }
+}
+
+function formatCount(value: number | null) {
+  return value === null ? '—' : value.toLocaleString()
+}
+
+function categoryIcon(name: string) {
+  if (name.includes('摄影')) return CameraOutlined
+  if (name.includes('插画') || name.includes('向量')) return EditOutlined
+  if (name.includes('3D')) return BoxPlotOutlined
+  if (name.includes('表情')) return SmileOutlined
+  if (name.includes('壁纸')) return PictureOutlined
+  return AppstoreOutlined
+}
+
 function runSearch() {
   current.value = 1
   void loadGallery()
+}
+
+function selectCategory(value: string) {
+  category.value = value
+  runSearch()
 }
 
 function toggleTag(tag: string, checked: boolean) {
@@ -199,19 +356,21 @@ function resetFilters() {
   category.value = ''
   selectedTags.value = []
   sortOrder.value = 'latest'
+  showAllTags.value = false
+  filterOpen.value = false
   current.value = 1
   void loadGallery()
 }
 
 function handlePageChange(page: number, size: number) {
   current.value = page
-  pageSize.value = Math.min(size || pageSize.value, 10)
+  pageSize.value = Math.min(size || pageSize.value, maxPageSize.value)
   void loadGallery()
 }
 
 function handlePageSizeChange(page: number, size: number) {
   current.value = page
-  pageSize.value = Math.min(size || pageSize.value, 10)
+  pageSize.value = Math.min(size || pageSize.value, maxPageSize.value)
   void loadGallery()
 }
 
@@ -220,142 +379,125 @@ function openDetail(id?: number | string) {
   if (normalizedId) router.push(`/gallery/detail/${encodeURIComponent(normalizedId)}`)
 }
 
+watch(
+  () => loginUserStore.loginUser?.id,
+  (userId, previousUserId) => {
+    if (userId === previousUserId) return
+    pageSize.value = userId ? 20 : 10
+    current.value = 1
+    void loadGallery()
+  },
+)
+
 onMounted(() => {
+  // 登录用户首屏加载20张，未登录用户首屏加载10张，与后端公共图库上限保持一致。
+  pageSize.value = isLoggedIn.value ? 20 : 10
   void Promise.all([loadCategories(), loadGallery()])
 })
 </script>
 
 <style scoped>
-.gallery-prototype { margin-inline: 0; padding-top: 0; }
-/* 这里对应 Pencil 导出的“主标题文案”，搜索区域单独承担底部基线。 */
-.gallery-hero { display: flex; min-height: 115px; flex-direction: column; align-items: center; justify-content: space-around; gap: 4px; margin-inline: calc(var(--prototype-page-gutter) * -1); padding: 0 var(--prototype-page-gutter); text-align: center; }
-.gallery-hero-copy { display: flex; width: min(100%, 960px); flex-direction: column; align-items: center; }
-.gallery-brand { margin: 0; color: var(--proto-muted); font-family: 'Abril Fatface', Georgia, serif; font-size: clamp(40px, 4vw, 55px); font-weight: 400; letter-spacing: -.04em; line-height: 1; }
-.gallery-title { max-width: 960px; margin: 0; color: var(--proto-ink); font-family: 'Manrope', Arial, sans-serif; font-size: clamp(28px, 2.5vw, 36px); font-weight: 700; line-height: 38px; letter-spacing: -.04em; text-wrap: balance; }
-.gallery-hero-actions { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 8px; }
-.gallery-hero-actions .ant-btn { min-width: 108px; height: 30px; padding-inline: 13px; border-radius: 8px; font-family: 'Manrope', Arial, sans-serif; font-size: 14px; font-weight: 700; }
-.gallery-hero-actions .ghost-button.ant-btn { border-width: 2px; background: var(--proto-paper); }
-.gallery-hero-actions .acid-button.ant-btn-primary { box-shadow: 0 8px 18px rgba(186, 255, 61, .28); }
-.gallery-search { padding-top: 0; }
-.gallery-main-visual { display: flex; height: 82px; align-items: flex-end; gap: 20px; margin-bottom: -1px; padding: 5px 0; border-bottom: 1px solid var(--proto-line); }
-.gallery-main-visual .gallery-filter-row { padding-inline: 0; }
-.gallery-filter-card.ant-card { min-height: 43px; overflow: hidden; border-radius: 13px; background: rgba(255, 255, 255, .58); }
-.gallery-filter-card :deep(.ant-card-body) { padding: 0; }
-.gallery-filter-row { display: flex; width: 100%; height: 72px; align-items: center; padding: 12px 14px; }
-.gallery-search-input { display: block; width: 100%; min-width: 0; flex: 1 1 auto; }
-.gallery-search-input :deep(.ant-input),
-.gallery-search-input :deep(.ant-input-search-button) { height: 48px !important; }
-.gallery-search-input :deep(.ant-input),
-.gallery-category-select :deep(.ant-select-selector) { border-color: rgba(17, 20, 22, .16) !important; background: rgba(246, 247, 242, .86) !important; box-shadow: none !important; }
-.gallery-search-input :deep(.ant-input) { border-radius: 9px 0 0 9px !important; padding-inline: 14px; }
-.gallery-search-input :deep(.ant-input-search-button) { border: 1px solid var(--proto-ink) !important; border-radius: 0 9px 9px 0 !important; background: var(--proto-ink); color: var(--proto-paper); font-weight: 700; }
-.gallery-search-input :deep(.ant-input-search-button:hover) { background: var(--proto-orange); border-color: var(--proto-orange) !important; color: var(--proto-ink); }
-.gallery-search-input :deep(.ant-input),
-.gallery-search-input :deep(.ant-input-search-button),
-.gallery-category-select :deep(.ant-select-selection-item),
-.gallery-category-select :deep(.ant-select-selection-placeholder) { font-family: 'Manrope', Arial, sans-serif; font-size: 14px; }
-.gallery-category-select { width: 174px; }
-.gallery-category-select :deep(.ant-select-selector) { display: flex !important; height: 29px !important; align-items: center; border-radius: 9px !important; padding-inline: 13px !important; }
-.gallery-reset-button.ant-btn { width: 54px; height: 30px; padding-inline: 8px; border-radius: 9px; font-family: 'Manrope', Arial, sans-serif; font-size: 14px; font-weight: 700; }
-.gallery-category-select :deep(.ant-select-selection-item),
-.gallery-category-select :deep(.ant-select-selection-placeholder) { display: inline-flex; align-items: center; line-height: 1.2; }
-.gallery-tag-row { display: flex; min-height: 44px; align-items: center; justify-content: space-between; flex-wrap: nowrap; gap: 16px; padding: 6px 14px 7px; border-top: 1px solid var(--proto-line); }
-.gallery-tag-list { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; flex-wrap: nowrap; gap: 7px; overflow: hidden; }
-.gallery-filter-controls { display: flex; flex: 0 0 auto; align-items: center; gap: 11px; }
-.gallery-muted { color: var(--proto-muted); font-size: 12px; }
-.gallery-tag-row :deep(.ant-tag-checkable) { display: inline-flex; height: 28px; align-items: center; margin: 0; padding: 0 11px; border: 1px solid rgba(17, 20, 22, .14); border-radius: 7px; background: transparent; color: var(--proto-muted); font-family: 'Manrope', Arial, sans-serif; font-size: 13px; line-height: 28px; transition: background .25s ease, border-color .25s ease, color .25s ease; }
-.gallery-tag-row :deep(.ant-tag-checkable:hover) { border-color: var(--proto-ink); color: var(--proto-ink); }
-.gallery-tag-row :deep(.ant-tag-checkable-checked) { border-color: var(--proto-acid); background: var(--proto-acid); color: var(--proto-ink); }
-.gallery-results-bar { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 18px; padding: 0; }
-.gallery-results-leading { display: flex; min-width: 0; height: 48px; align-items: center; gap: 13px; }
-.gallery-result-summary { display: flex; height: 48px; align-items: center; gap: 10px; }
-.result-count { color: var(--proto-ink); font-family: 'Abril Fatface', Georgia, serif; font-size: 39px; font-weight: 400; letter-spacing: -.08em; line-height: 1; }
-.gallery-result-label { color: var(--proto-muted); font-family: 'Manrope', Arial, sans-serif; font-size: 16px; font-weight: 600; }
-.gallery-sort-group { display: inline-flex; height: 25px; }
-.gallery-sort-group :deep(.ant-radio-button-wrapper) { width: 57px; height: 23px; padding: 0; border-color: var(--proto-line); border-radius: 0; background: transparent; color: var(--proto-muted); font-family: 'Manrope', Arial, sans-serif; font-size: 12px; line-height: 21px; text-align: center; }
-.gallery-sort-group :deep(.ant-radio-button-wrapper:hover) { color: var(--proto-ink); }
-.gallery-sort-group :deep(.ant-radio-button-wrapper-checked) { border-color: var(--proto-ink); background: var(--proto-ink); color: var(--proto-paper); }
-.gallery-results-actions { height: 40px; margin-left: auto; }
+.gallery-prototype { min-width: 0; padding-bottom: 24px; }
+.gallery-layout { display: grid; grid-template-columns: minmax(190px, .18fr) minmax(0, .82fr); gap: 24px; padding-top: 18px; align-items: start; }
+.gallery-sidebar { position: sticky; top: calc(var(--prototype-topbar-height, 52px) + 18px); min-width: 0; padding: 16px 12px; border: 1px solid rgba(17,20,22,.05); border-radius: 14px; background: rgba(255,255,255,.66); box-shadow: 0 12px 30px rgba(18,23,23,.035); }
+.gallery-sidebar-head { min-height: 38px; padding: 0 10px 10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(17,20,22,.08); }
+.gallery-sidebar-head h2 { margin: 0; font-size: 14px; font-weight: 800; letter-spacing: -.03em; }
+.gallery-sidebar-head :deep(svg) { color: var(--proto-muted); font-size: 13px; }
+.gallery-category-list { padding-top: 10px; display: flex; flex-direction: column; gap: 3px; }
+.gallery-category-item { min-height: 42px; padding: 0 10px; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 9px; border: 0; border-radius: 9px; background: transparent; color: var(--proto-muted); cursor: pointer; font-family: inherit; font-size: 12px; text-align: left; transition: background .2s ease, color .2s ease; }
+.gallery-category-item :deep(svg) { color: var(--proto-muted); font-size: 16px; }
+.gallery-category-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gallery-category-item small { color: var(--proto-muted); font-family: 'DM Mono', monospace; font-size: 10px; }
+.gallery-category-item:hover { background: rgba(241,242,237,.8); color: var(--proto-ink); }
+.gallery-category-item.is-active { background: rgba(186,255,61,.12); color: #67951f; font-weight: 700; }
+.gallery-category-item.is-active :deep(svg), .gallery-category-item.is-active small { color: #67951f; }
+.gallery-category-empty { display: block; padding: 12px 10px; }
+
+.gallery-main-column { min-width: 0; }
+.gallery-search-area { padding: 0 0 12px; }
+.gallery-search-box { min-height: 50px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; overflow: hidden; border: 1px solid rgba(17,20,22,.12); border-radius: 11px; background: rgba(255,255,255,.78); box-shadow: 0 10px 24px rgba(18,23,23,.05); }
+.gallery-search-input { min-width: 0; }
+.gallery-search-input :deep(.ant-input), .gallery-search-input :deep(.ant-input-affix-wrapper) { height: 50px !important; border: 0 !important; background: transparent !important; box-shadow: none !important; font-family: 'Manrope', Arial, sans-serif; font-size: 13px; }
+.gallery-search-input :deep(.ant-input-prefix) { margin-inline-end: 10px; color: var(--proto-muted); font-size: 17px; }
+.gallery-search-settings { padding: 0 13px; color: var(--proto-muted); font-size: 15px; }
+.gallery-search-button.ant-btn { height: 50px; padding-inline: 23px; border: 0; border-radius: 0 10px 10px 0; background: var(--proto-ink); color: var(--proto-paper); font-size: 13px; font-weight: 700; }
+.gallery-search-button.ant-btn:hover { background: var(--proto-orange); color: var(--proto-ink); }
+
+.gallery-toolbar { min-height: 48px; padding: 0 0 12px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.gallery-tag-list { min-width: 0; display: flex; flex: 1 1 auto; align-items: center; flex-wrap: nowrap; gap: 7px; overflow: hidden; }
+.gallery-tag-list :deep(.ant-tag-checkable) { display: inline-flex; height: 29px; align-items: center; margin: 0; padding: 0 11px; border: 1px solid rgba(17,20,22,.13); border-radius: 7px; background: rgba(255,255,255,.46); color: var(--proto-muted); font-family: 'Manrope', Arial, sans-serif; font-size: 12px; line-height: 29px; transition: background .2s ease, border-color .2s ease, color .2s ease; }
+.gallery-tag-list :deep(.ant-tag-checkable:hover) { border-color: var(--proto-ink); color: var(--proto-ink); }
+.gallery-tag-list :deep(.ant-tag-checkable-checked) { border-color: var(--proto-acid); background: var(--proto-acid); color: var(--proto-ink); }
+.gallery-more-tags { flex: 0 0 auto; padding: 0 4px; border: 0; background: transparent; color: var(--proto-muted); cursor: pointer; font-family: inherit; font-size: 12px; }
+.gallery-more-tags:hover { color: var(--proto-ink); }
+.gallery-more-tags :deep(svg) { margin-left: 3px; font-size: 10px; transition: transform .2s ease; }
+.gallery-more-tags :deep(svg.is-open) { transform: rotate(180deg); }
+.gallery-toolbar-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 9px; }
+.gallery-tool-button.ant-btn { height: 32px; padding-inline: 12px; border-color: rgba(17,20,22,.11); border-radius: 8px; background: rgba(255,255,255,.66); color: var(--proto-muted); font-size: 12px; }
+.gallery-tool-button.ant-btn :deep(svg) { margin-right: 5px; }
+.gallery-tool-button.ant-btn:hover, .gallery-tool-button.is-active { border-color: var(--proto-ink); color: var(--proto-ink); }
+.gallery-sort-select { width: 124px; }
+.gallery-sort-select :deep(.ant-select-selector) { height: 32px !important; align-items: center; border-color: rgba(17,20,22,.11) !important; border-radius: 8px !important; background: rgba(255,255,255,.66) !important; box-shadow: none !important; font-size: 12px; }
+.gallery-view-toggle { height: 32px; padding: 3px; display: inline-flex; align-items: center; gap: 2px; border: 1px solid rgba(17,20,22,.11); border-radius: 8px; background: rgba(255,255,255,.66); }
+.gallery-view-button { width: 29px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 5px; background: transparent; color: var(--proto-muted); cursor: pointer; }
+.gallery-view-button:hover, .gallery-view-button.is-active { background: var(--proto-acid); color: var(--proto-ink); }
+.gallery-view-button :deep(svg) { font-size: 15px; }
+.gallery-filter-panel { min-height: 48px; margin-bottom: 12px; padding: 10px 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid rgba(17,20,22,.08); border-radius: 10px; background: rgba(255,255,255,.62); }
+.gallery-filter-panel > div { min-width: 0; display: flex; align-items: baseline; gap: 10px; }
+.gallery-filter-panel strong { flex: 0 0 auto; font-size: 12px; }
+.gallery-filter-panel span { overflow: hidden; color: var(--proto-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.gallery-filter-panel .ant-btn { flex: 0 0 auto; height: 28px; padding-inline: 10px; border-radius: 7px; font-size: 11px; }
+
+.gallery-results-bar { min-height: 45px; display: flex; align-items: center; }
+.gallery-result-summary { display: flex; align-items: baseline; gap: 8px; }
+.result-count { color: var(--proto-ink); font-family: 'Abril Fatface', Georgia, serif; font-size: 28px; font-weight: 400; letter-spacing: -.07em; line-height: 1; }
+.gallery-result-label { color: var(--proto-muted); font-family: 'Manrope', Arial, sans-serif; font-size: 13px; font-weight: 600; }
 .gallery-alert { margin-bottom: 14px; }
-.gallery-grid { display: grid; grid-auto-flow: dense; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--prototype-layout-gap); }
-.gallery-card.ant-card { position: relative; display: block; overflow: hidden; cursor: pointer; border-radius: 12px; background: var(--proto-paper-deep); transition: transform .4s cubic-bezier(.22, 1, .36, 1), box-shadow .4s ease, border-color .3s ease; }
-.gallery-card :deep(.ant-card-body) { padding: 0; }
-.gallery-card:hover { border-color: rgba(17, 20, 22, .35); transform: translateY(-5px); box-shadow: var(--proto-shadow); }
-.gallery-card:focus-visible { border-color: var(--proto-ink); box-shadow: 0 0 0 3px rgba(186, 255, 61, .35); outline: none; }
-.gallery-card-image { position: relative; aspect-ratio: 333 / 400; overflow: hidden; background: var(--proto-paper-deep); }
-.gallery-card-image::after { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(17, 20, 22, 0) 38%, rgba(17, 20, 22, .86) 100%); content: ''; opacity: 0; pointer-events: none; transition: opacity .25s ease; }
-.gallery-card-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.gallery-card-overlay { position: absolute; z-index: 3; top: 12px; right: 12px; bottom: auto; padding: 6px 9px; border-radius: 6px; background: rgba(246, 247, 242, .92); color: var(--proto-ink); font-size: 11px; font-weight: 700; opacity: 0; pointer-events: none; transform: translateY(-5px); transition: opacity .25s ease, transform .25s ease; }
-.gallery-card:hover .gallery-card-overlay,
-.gallery-card:focus-visible .gallery-card-overlay,
-.gallery-card:hover .gallery-card-image::after,
-.gallery-card:focus-visible .gallery-card-image::after { opacity: 1; transform: translateY(0); }
-.gallery-image-empty { display: grid; height: 100%; place-items: center; color: var(--proto-muted); font-size: 12px; }
-.gallery-card-body { position: absolute; z-index: 2; right: 0; bottom: 0; left: 0; padding: 42px 14px 14px; opacity: 0; pointer-events: none; transform: translateY(8px); transition: opacity .25s ease, transform .25s ease; }
-.gallery-card:hover .gallery-card-body,
-.gallery-card:focus-visible .gallery-card-body { opacity: 1; transform: translateY(0); }
-.gallery-card-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.gallery-card-title strong { overflow: hidden; color: var(--proto-paper); font-size: 15px; font-weight: 800; letter-spacing: -.045em; text-overflow: ellipsis; white-space: nowrap; }
-.gallery-card-arrow { color: var(--proto-orange); font-family: 'DM Mono', monospace; font-size: 17px; line-height: 1; transition: transform .3s ease; }
-.gallery-card:hover .gallery-card-arrow { transform: translate(3px, -3px); }
-.gallery-card-body p { display: -webkit-box; min-height: 0; margin: 7px 0 11px; overflow: hidden; color: rgba(246, 247, 242, .82); font-size: 11px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.gallery-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: rgba(246, 247, 242, .78); font-size: 10px; }
-.gallery-category-tag.ant-tag { margin: 0; border: 0; border-radius: 5px; background: rgba(246, 247, 242, .9); color: var(--proto-ink); font-size: 10px; line-height: 20px; }
-.gallery-author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gallery-empty-state { padding: 46px 24px; border: 1px solid var(--proto-line); border-radius: 12px; background: rgba(255, 255, 255, .45); }
+
+.gallery-grid { display: grid; grid-auto-flow: dense; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.gallery-grid.is-list { grid-template-columns: 1fr; gap: 12px; }
+
+.gallery-empty-state { padding: 46px 24px; border: 1px solid var(--proto-line); border-radius: 12px; background: rgba(255,255,255,.45); }
 .gallery-empty-state :deep(.ant-empty-description) { color: var(--proto-muted); }
 .gallery-pagination { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0 4px; border-top: 1px solid var(--proto-line); }
-.gallery-pagination-caption { color: var(--proto-muted); font-family: 'Abril Fatface', Georgia, serif; font-size: 20px; font-weight: 400; line-height: 1; white-space: nowrap; }
+.gallery-pagination-caption { color: var(--proto-muted); font-family: 'Abril Fatface', Georgia, serif; font-size: 15px; font-weight: 400; line-height: 1; white-space: nowrap; }
 .gallery-pagination :deep(.ant-pagination) { margin: 0; }
-.gallery-pagination :deep(.ant-pagination-item),
-.gallery-pagination :deep(.ant-pagination-prev),
-.gallery-pagination :deep(.ant-pagination-next),
-.gallery-pagination :deep(.ant-pagination-jump-prev),
-.gallery-pagination :deep(.ant-pagination-jump-next) { width: 34px; height: 34px; margin-inline-end: 6px; line-height: 32px; }
-.gallery-pagination :deep(.ant-pagination-item),
-.gallery-pagination :deep(.ant-pagination-prev .ant-pagination-item-link),
-.gallery-pagination :deep(.ant-pagination-next .ant-pagination-item-link) { border-radius: 6px; }
-.gallery-pagination :deep(.ant-pagination-item a) { color: var(--proto-muted); font-family: 'Abril Fatface', Georgia, serif; font-size: 13px; }
-.gallery-pagination :deep(.ant-pagination-prev .ant-pagination-item-link),
-.gallery-pagination :deep(.ant-pagination-next .ant-pagination-item-link),
-.gallery-pagination :deep(.ant-pagination-jump-prev .ant-pagination-item-container),
-.gallery-pagination :deep(.ant-pagination-jump-next .ant-pagination-item-container) { color: var(--proto-muted); font-family: 'Manrope', Arial, sans-serif; font-size: 13px; }
-.gallery-pagination :deep(.ant-pagination-item-active) { border-color: var(--proto-ink); background: var(--proto-ink); }
-.gallery-pagination :deep(.ant-pagination-item-active a) { color: var(--proto-paper); }
+.gallery-pagination :deep(.ant-pagination-item), .gallery-pagination :deep(.ant-pagination-prev), .gallery-pagination :deep(.ant-pagination-next), .gallery-pagination :deep(.ant-pagination-jump-prev), .gallery-pagination :deep(.ant-pagination-jump-next) { width: 32px; height: 32px; margin-inline-end: 5px; line-height: 30px; }
+.gallery-pagination :deep(.ant-pagination-item), .gallery-pagination :deep(.ant-pagination-prev .ant-pagination-item-link), .gallery-pagination :deep(.ant-pagination-next .ant-pagination-item-link) { border-radius: 7px; }
+.gallery-pagination :deep(.ant-pagination-item a) { color: var(--proto-muted); font-family: 'Abril Fatface', Georgia, serif; font-size: 12px; }
+.gallery-pagination :deep(.ant-pagination-item-active) { border-color: var(--proto-acid); background: var(--proto-acid); }
+.gallery-pagination :deep(.ant-pagination-item-active a) { color: var(--proto-ink); }
+
 @media (prefers-reduced-motion: reduce) {
-  .gallery-card.ant-card,
-  .gallery-card-image::after,
-  .gallery-card-overlay,
-  .gallery-card-body,
-  .gallery-card-arrow { transition: none; }
+  .gallery-more-tags :deep(svg) { transition: none; }
 }
-@media (max-width: 1440px) {
-  .gallery-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1120px) {
+  .gallery-layout { grid-template-columns: minmax(170px, .22fr) minmax(0, .78fr); gap: 18px; }
+  .gallery-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .gallery-tag-list { flex-wrap: wrap; overflow: visible; }
 }
-@media (max-width: 1100px) {
-  .gallery-prototype { margin-inline: 0; }
-  .gallery-hero { min-height: 108px; }
+@media (max-width: 820px) {
+  .gallery-layout { grid-template-columns: 1fr; }
+  .gallery-sidebar { position: static; }
+  .gallery-category-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .gallery-toolbar { align-items: flex-start; flex-direction: column; }
+  .gallery-toolbar-actions { width: 100%; justify-content: flex-end; }
   .gallery-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-@media (max-width: 760px) {
-  .gallery-prototype { margin-inline: 0; }
+@media (max-width: 720px) {
   .gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .gallery-tag-row { align-items: stretch; flex-direction: column; gap: 10px; }
-  .gallery-tag-list { width: 100%; flex-wrap: wrap; overflow: visible; }
-  .gallery-filter-controls { width: 100%; justify-content: flex-end; }
-  .gallery-category-select { flex: 0 1 174px; }
-  .gallery-results-bar { align-items: flex-start; flex-direction: column; gap: 12px; padding: 8px 0 10px; }
-  .gallery-results-leading { width: 100%; justify-content: space-between; }
-  .gallery-results-actions { width: 100%; }
+}
+@media (max-width: 600px) {
+  .gallery-category-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gallery-search-box { grid-template-columns: minmax(0, 1fr) auto; }
+  .gallery-search-settings { display: none; }
+  .gallery-search-button.ant-btn { padding-inline: 16px; }
+  .gallery-toolbar-actions { justify-content: stretch; }
+  .gallery-tool-button, .gallery-sort-select { flex: 1 1 0; }
+  .gallery-view-toggle { flex: 0 0 auto; }
   .gallery-pagination { align-items: flex-start; flex-direction: column; }
 }
-@media (max-width: 570px) {
-  .gallery-hero { min-height: 105px; }
-  .gallery-brand { font-size: clamp(29px, 10vw, 42px); }
-  .gallery-title { font-size: clamp(24px, 7vw, 32px); line-height: 1.1; }
-  .gallery-filter-controls { justify-content: stretch; }
-  .gallery-category-select { width: auto; max-width: none; flex: 1 1 auto; }
-  .gallery-hero-actions .ant-btn { flex: 1; }
+@media (max-width: 520px) {
   .gallery-grid { grid-template-columns: 1fr; }
 }
 </style>

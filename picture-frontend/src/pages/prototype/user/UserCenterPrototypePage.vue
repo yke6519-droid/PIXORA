@@ -20,127 +20,174 @@
     </a-result>
 
     <div v-else-if="loginUserStore.loginUser" class="center-content">
-      <!-- 页面标题已经由公共顶栏提供，这里只保留必要的退出操作。 -->
-      <div class="center-top-actions">
-        <a-button class="proto-button ghost-button" :loading="logoutLoading" @click="logout">退出登录</a-button>
-      </div>
-
       <section class="center-layout proto-section">
-        <aside class="profile-panel">
-          <div class="profile-identity">
-            <button type="button" class="profile-avatar-wrap" aria-label="更新头像" @click="avatarOpen = true">
-              <a-avatar :size="160" :src="user.avatarurl">{{ displayName.charAt(0) }}</a-avatar>
-              <span class="profile-avatar-hint">点击更新头像</span>
-            </button>
-            <h2>{{ displayName }}</h2>
-            <p class="profile-account">{{ user.useraccount || '未填写账号' }}</p>
-            <p class="profile-bio">{{ user.profile || '还没有填写个人简介。' }}</p>
-            <a-tag class="proto-status pass">{{ roleText }}</a-tag>
-          </div>
+        <aside class="profile-column">
+          <section class="profile-card proto-surface">
+            <div class="profile-identity">
+              <!-- 头像继续复用原有上传弹窗，点击头像即可更新。 -->
+              <button type="button" class="profile-avatar-wrap" aria-label="更新头像" @click="avatarOpen = true">
+                <a-avatar :size="176" :src="user.avatarurl">{{ displayName.charAt(0) }}</a-avatar>
+                <span class="profile-avatar-hint">点击更新头像</span>
+              </button>
+              <h1>{{ displayName }}</h1>
+              <p class="profile-account">@{{ user.useraccount || '未填写账号' }}</p>
+              <p class="profile-bio">{{ user.profile || '还没有填写个人简介。' }}</p>
+            </div>
 
-          <a-button class="proto-button ghost-button profile-edit" @click="editOpen = true">
-            编辑个人资料
-          </a-button>
+            <a-button class="profile-edit" @click="editOpen = true">
+              <span>编辑个人资料</span>
+              <RightOutlined />
+            </a-button>
 
-          <div class="profile-details">
-            <div><span>性别</span><strong>{{ genderText }}</strong></div>
-            <div><span>手机号</span><strong>{{ user.phone || '未填写' }}</strong></div>
-            <div><span>邮箱</span><strong>{{ user.email || '未填写' }}</strong></div>
-            <div><span>注册时间</span><strong>{{ formatDate(user.createtime) }}</strong></div>
-          </div>
+            <!-- 统计数据从已有接口读取，不新增任何后端字段。 -->
+            <div class="profile-stats" aria-label="账户统计">
+              <div>
+                <strong>{{ summaryLoading ? '—' : pictureTotal }}</strong>
+                <span>图片</span>
+              </div>
+              <div>
+                <strong>{{ hasPrivateSpace ? 1 : 0 }}</strong>
+                <span>空间</span>
+              </div>
+              <div>
+                <strong>{{ summaryLoading ? '—' : pendingTotal }}</strong>
+                <span>待审核</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- 先把后续功能的入口位置固定下来，暂未接入收藏、回收站等接口。 -->
+          <nav class="profile-menu proto-surface" aria-label="用户中心菜单">
+            <RouterLink to="/user/center" class="profile-menu-item is-active">
+              <HomeOutlined />
+              <span>概览</span>
+            </RouterLink>
+            <RouterLink to="/gallery/manage" class="profile-menu-item">
+              <PictureOutlined />
+              <span>我的图片</span>
+            </RouterLink>
+            <RouterLink to="/space" class="profile-menu-item">
+              <FolderOpenOutlined />
+              <span>我的空间</span>
+            </RouterLink>
+            <span class="profile-menu-item is-disabled" aria-disabled="true">
+              <HeartOutlined />
+              <span>收藏夹</span>
+            </span>
+            <span class="profile-menu-item is-disabled" aria-disabled="true">
+              <DeleteOutlined />
+              <span>回收站</span>
+            </span>
+            <div class="profile-menu-divider" aria-hidden="true"></div>
+            <span class="profile-menu-item is-disabled" aria-disabled="true">
+              <SettingOutlined />
+              <span>账户设置</span>
+            </span>
+            <span class="profile-menu-item is-disabled" aria-disabled="true">
+              <QuestionCircleOutlined />
+              <span>帮助与反馈</span>
+            </span>
+          </nav>
         </aside>
 
         <main class="center-main">
-          <div class="center-main-heading">
-            <h2>账户概览</h2>
-          </div>
+          <header class="welcome-block">
+            <h2>欢迎回来，{{ displayName }}</h2>
+            <p>记录灵感，收藏美好。</p>
+          </header>
 
-          <div class="center-stat-row">
-            <div class="center-stat proto-surface">
-              <span>我的图片</span>
-              <strong>{{ summaryLoading ? '—' : pictureTotal }}</strong>
-              <small>全部审核状态</small>
-            </div>
-            <div class="center-stat proto-surface">
-              <span>待审核</span>
-              <strong>{{ summaryLoading ? '—' : pendingTotal }}</strong>
-              <small>等待管理员处理</small>
-            </div>
-            <div class="center-stat proto-surface">
-              <span>私人空间</span>
-              <strong>{{ hasPrivateSpace ? 1 : 0 }}</strong>
-              <small>{{ hasPrivateSpace ? '已创建' : '尚未创建' }}</small>
-            </div>
-          </div>
-
-          <div class="center-actions">
-            <RouterLink to="/gallery/manage" class="center-action-card dark proto-surface bento-link">
-              <div>
-                <h3>管理我的图片</h3>
-              </div>
-              <span class="center-action-arrow" aria-hidden="true">↗</span>
+          <section class="quick-actions" aria-label="快捷操作">
+            <RouterLink to="/gallery/upload" class="quick-action-card">
+              <span class="quick-action-icon is-acid"><CloudUploadOutlined /></span>
+              <span class="quick-action-copy">
+                <strong>上传图片</strong>
+                <small>分享你的精彩瞬间</small>
+              </span>
             </RouterLink>
-            <RouterLink to="/space" class="center-action-card acid proto-surface bento-link">
-              <div>
-                <h3>打开个人空间</h3>
-              </div>
-              <span class="center-action-arrow" aria-hidden="true">↗</span>
+            <RouterLink to="/gallery/manage" class="quick-action-card">
+              <span class="quick-action-icon"><PictureOutlined /></span>
+              <span class="quick-action-copy">
+                <strong>管理我的图片</strong>
+                <small>查看、编辑与管理</small>
+              </span>
             </RouterLink>
-          </div>
+            <RouterLink to="/space" class="quick-action-card">
+              <span class="quick-action-icon"><PlusOutlined /></span>
+              <span class="quick-action-copy">
+                <strong>{{ hasPrivateSpace ? '进入我的空间' : '新建空间' }}</strong>
+                <small>{{ hasPrivateSpace ? '查看空间内的照片' : '创建你的专属相册' }}</small>
+              </span>
+            </RouterLink>
+          </section>
 
-          <div class="center-recent-grid">
-            <section v-for="panel in recentPanels" :key="panel.key" class="center-recent proto-surface">
-              <div class="center-recent-head">
-                <div class="center-recent-title">
-                  <h3>{{ panel.title }}</h3>
-                  <span>{{ panel.subtitle }}</span>
-                </div>
-                <a-button type="link" @click="openRecentPanel(panel.key)">查看全部</a-button>
-              </div>
+          <section class="dashboard-section proto-surface">
+            <div class="dashboard-section-head">
+              <h3>我的图片</h3>
+              <RouterLink to="/gallery/manage" class="section-link">查看全部 <span aria-hidden="true">›</span></RouterLink>
+            </div>
 
-              <a-skeleton v-if="recentLoading" active :paragraph="{ rows: 3 }" />
-              <a-alert
-                v-else-if="recentError"
-                type="error"
-                show-icon
-                :message="recentError"
+            <a-skeleton v-if="recentLoading" active :paragraph="{ rows: 3 }" />
+            <a-alert v-else-if="recentError" type="error" show-icon :message="recentError">
+              <template #action>
+                <a-button size="small" @click="loadRecentPictures(user.spaceId, user.id)">重试</a-button>
+              </template>
+            </a-alert>
+            <a-empty v-else-if="!myPictures.length" description="还没有上传图片">
+              <RouterLink to="/gallery/upload" class="proto-button acid-button">上传第一张图片</RouterLink>
+            </a-empty>
+            <div v-else class="picture-strip">
+              <RouterLink
+                v-for="picture in myPictures"
+                :key="String(picture.id)"
+                :to="`/gallery/detail/${picture.id}`"
+                class="picture-tile"
               >
-                <template #action>
-                  <a-button size="small" @click="loadRecentPictures(user.spaceId,user.id)">重试</a-button>
-                </template>
-              </a-alert>
-              <a-empty v-else-if="!panel.pictures.length" :description="panel.emptyText">
-                <a-button
-                  v-if="panel.key === 'private' && !hasPrivateSpace"
-                  class="proto-button acid-button"
-                  type="primary"
-                  @click="router.push('/space')"
-                >
-                  创建空间
-                </a-button>
-                <a-button
-                  v-else
-                  class="proto-button acid-button"
-                  type="primary"
-                  @click="router.push('/gallery/upload')"
-                >
-                  上传图片
-                </a-button>
-              </a-empty>
-              <div v-else class="recent-list">
-                <div v-for="picture in panel.pictures" :key="String(picture.id)" class="recent-row">
-                  <img :src="picture.thumbnailUrl || picture.url" :alt="picture.name || '图片预览'" />
-                  <div>
-                    <strong>{{ picture.name || '未命名图片' }}</strong>
-                    <span>{{ formatDate(picture.createtime) }}</span>
-                  </div>
-                  <a-tag class="proto-status" :class="statusClass(picture.pictureCheck)">
-                    {{ pictureStatusText(picture.pictureCheck) }}
-                  </a-tag>
+                <div class="picture-tile-image">
+                  <img :src="picture.thumbnailUrl || picture.url" :alt="picture.name || '我的图片'" />
+                  <!-- 收藏功能尚未接入，这里只保留原型中的视觉位置。 -->
+                  <span class="picture-favorite" aria-hidden="true"><HeartOutlined /></span>
+                  <span class="picture-status" :class="statusClass(picture.pictureCheck)">
+                    <i aria-hidden="true"></i>{{ statusLabel(picture.pictureCheck) }}
+                  </span>
                 </div>
-              </div>
-            </section>
-          </div>
+              </RouterLink>
+            </div>
+          </section>
+
+          <section class="dashboard-section proto-surface">
+            <div class="dashboard-section-head">
+              <h3>我的空间</h3>
+              <RouterLink to="/space" class="section-link">查看全部 <span aria-hidden="true">›</span></RouterLink>
+            </div>
+
+            <a-skeleton v-if="recentLoading" active :paragraph="{ rows: 3 }" />
+            <a-alert v-else-if="recentError" type="error" show-icon :message="recentError">
+              <template #action>
+                <a-button size="small" @click="loadRecentPictures(user.spaceId, user.id)">重试</a-button>
+              </template>
+            </a-alert>
+            <a-empty v-else-if="!hasPrivateSpace" description="还没有创建个人空间">
+              <RouterLink to="/space" class="proto-button acid-button">创建个人空间</RouterLink>
+            </a-empty>
+            <a-empty v-else-if="!privateRecentPictures.length" description="个人空间中暂无照片">
+              <RouterLink to="/gallery/upload" class="proto-button acid-button">上传到空间</RouterLink>
+            </a-empty>
+            <div v-else class="space-picture-strip">
+              <!-- 当前后端只有一个私人空间，因此这里展示该空间内真实照片，不伪造多个空间卡片。 -->
+              <RouterLink
+                v-for="picture in privateRecentPictures"
+                :key="String(picture.id)"
+                :to="`/gallery/detail/${picture.id}`"
+                class="space-picture-tile"
+              >
+                <img :src="picture.thumbnailUrl || picture.url" :alt="picture.name || '个人空间照片'" />
+                <span class="space-picture-overlay">
+                  <strong>{{ picture.name || '未命名图片' }}</strong>
+                  <small>{{ formatDate(picture.createtime) }}</small>
+                </span>
+              </RouterLink>
+            </div>
+          </section>
         </main>
       </section>
     </div>
@@ -160,12 +207,22 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
-import { getCurrentUser, userLogout } from '../../../api/userController'
+import {
+  CloudUploadOutlined,
+  DeleteOutlined,
+  FolderOpenOutlined,
+  HeartOutlined,
+  HomeOutlined,
+  PictureOutlined,
+  PlusOutlined,
+  QuestionCircleOutlined,
+  RightOutlined,
+  SettingOutlined,
+} from '@ant-design/icons-vue'
+import { getCurrentUser } from '../../../api/userController'
 import { queryPicturePage } from '../../../api/pictureController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
-import { pictureStatusText } from '../prototypeData'
 import AvatarUpdateModal from './components/AvatarUpdateModal.vue'
 import ProfileEditModal from './components/ProfileEditModal.vue'
 
@@ -173,44 +230,36 @@ const router = useRouter()
 const loginUserStore = useLoginUserStore()
 const loading = ref(true)
 const summaryLoading = ref(false)
-const logoutLoading = ref(false)
 const editOpen = ref(false)
 const avatarOpen = ref(false)
 const centerError = ref('')
-const summaryError = ref('')
 const pictureTotal = ref(0)
 const pendingTotal = ref(0)
 const recentLoading = ref(false)
 const recentError = ref('')
-const publicRecentPictures = ref<API.PictureVO[]>([])
+const myPictures = ref<API.PictureVO[]>([])
 const privateRecentPictures = ref<API.PictureVO[]>([])
-const emptyUser: API.UserVO = { username: '', useraccount: '', gender: undefined, phone: '', email: '', profile: '', avatarurl: '', spaceId: undefined }
+const emptyUser: API.UserVO = {
+  username: '',
+  useraccount: '',
+  gender: undefined,
+  phone: '',
+  email: '',
+  profile: '',
+  avatarurl: '',
+  spaceId: undefined,
+}
 const user = computed<API.UserVO>(() => loginUserStore.loginUser || emptyUser)
 const displayName = computed(() => user.value.username || '图库用户')
-const roleText = computed(() => user.value.userLevel === 'admin' ? '管理员' : user.value.userLevel === 'vip' ? 'VIP 用户' : '普通用户')
-const genderText = computed(() => user.value.gender === 0 ? '男' : user.value.gender === 1 ? '女' : '未填写')
 const hasPrivateSpace = computed(() => user.value.spaceId != null && String(user.value.spaceId) !== '0')
 
-type RecentPanelKey = 'public' | 'private'
+function statusClass(status?: number) {
+  return status === 1 ? 'pass' : status === 2 ? 'refuse' : 'wait'
+}
 
-const recentPanels = computed(() => [
-  {
-    key: 'public' as RecentPanelKey,
-    title: '公共图库',
-    subtitle: '最近上传',
-    pictures: publicRecentPictures.value,
-    emptyText: '公共图库暂无图片',
-  },
-  {
-    key: 'private' as RecentPanelKey,
-    title: '个人空间',
-    subtitle: hasPrivateSpace.value ? '最近上传' : '尚未创建',
-    pictures: privateRecentPictures.value,
-    emptyText: hasPrivateSpace.value ? '个人空间暂无图片' : '还没有个人空间',
-  },
-])
-
-function statusClass(status?: number) { return status === 1 ? 'pass' : status === 2 ? 'refuse' : 'wait' }
+function statusLabel(status?: number) {
+  return status === 1 ? '已公开' : status === 2 ? '未通过' : '审核中'
+}
 
 function formatDate(value?: string) {
   if (!value) return '—'
@@ -222,9 +271,13 @@ function parseTotal(value?: number | string) {
   return Number.isFinite(total) ? total : 0
 }
 
+function pictureTime(value?: string) {
+  return value ? Date.parse(value.replace(' ', 'T')) || 0 : 0
+}
+
 /**
- * 按审核状态和空间分别查询，保证公共图库与私人空间的统计都不会混淆。
- * 公共图库固定传0；后端对历史请求中的null只做兜底，不依赖前端传null。
+ * 按审核状态和空间分别查询，保证统计数据不会把公共图库与私人空间混淆。
+ * 公共图库固定传0；私人空间只传当前用户自己的空间id。
  */
 async function loadPictureSummary(userId?: number | string, spaceId?: number | string) {
   if (!userId) {
@@ -234,13 +287,10 @@ async function loadPictureSummary(userId?: number | string, spaceId?: number | s
   }
 
   summaryLoading.value = true
-  summaryError.value = ''
   try {
     const statuses = [0, 1, 2] as const
     const scopeIds: Array<number | string> = [0]
-    if (spaceId != null && String(spaceId) !== '0') {
-      scopeIds.push(spaceId)
-    }
+    if (spaceId != null && String(spaceId) !== '0') scopeIds.push(spaceId)
 
     const requests = scopeIds.flatMap((scopeId) =>
       statuses.map((pictureCheck) => ({ scopeId, pictureCheck })),
@@ -254,7 +304,7 @@ async function loadPictureSummary(userId?: number | string, spaceId?: number | s
           spaceId: scopeId,
           pictureCheck,
           current: 1,
-          // 统计只需要total，取1条即可，避免无意义地拉取图片列表。
+          // 统计只需要total，取1条即可，避免拉取无意义的图片列表。
           pageSize: 1,
           sortFiled: 'createtime',
           sortOrder: 'descend',
@@ -263,9 +313,7 @@ async function loadPictureSummary(userId?: number | string, spaceId?: number | s
     )
 
     responses.forEach(({ response }) => {
-      if (response.data?.code !== 200) {
-        throw new Error(response.data?.message || '图片概览加载失败')
-      }
+      if (response.data?.code !== 200) throw new Error(response.data?.message || '图片概览加载失败')
     })
 
     pictureTotal.value = responses.reduce(
@@ -275,63 +323,70 @@ async function loadPictureSummary(userId?: number | string, spaceId?: number | s
     pendingTotal.value = responses
       .filter(({ pictureCheck }) => pictureCheck === 0)
       .reduce((total, { response }) => total + parseTotal(response.data.data?.total), 0)
-  } catch (error: any) {
-    summaryError.value = error?.response?.data?.message || error?.message || '图片概览加载失败'
+  } catch {
+    // 统计失败时保留页面主体，数字使用0或占位符，不阻断用户继续浏览。
+    pictureTotal.value = 0
+    pendingTotal.value = 0
   } finally {
     summaryLoading.value = false
   }
 }
 
 /**
- * 用户中心分别拉取公共图库和当前私人空间的最近图片，两个面板各自渲染。
+ * “我的图片”展示当前用户在公共图库中的最近图片，并保留三种审核状态。
+ * “我的空间”单独读取私人空间中已通过审核的真实照片，避免静态伪造内容。
  */
 async function loadRecentPictures(spaceId?: number | string, userId?: number | string) {
   recentLoading.value = true
   recentError.value = ''
   try {
-    const queryBodies: API.PictureQueryRequest[] = [
-      {
+    const publicResponses = await Promise.all(
+      ([0, 1, 2] as const).map((pictureCheck) => queryPicturePage({
         userId,
         spaceId: 0,
-        pictureCheck: 1,
+        pictureCheck,
         current: 1,
         pageSize: 5,
         sortFiled: 'createtime',
         sortOrder: 'descend',
-      },
-    ]
-
-    if (spaceId != null && String(spaceId) !== '0') {
-      queryBodies.push({
-        spaceId,
-        pictureCheck: 1,
-        current: 1,
-        pageSize: 5,
-        sortFiled: 'createtime',
-        sortOrder: 'descend',
-      })
-    }
-
-    const responses = await Promise.all(queryBodies.map((body) => queryPicturePage(body)))
-    responses.forEach((response) => {
-      if (response.data?.code !== 200) {
-        throw new Error(response.data?.message || '最近上传加载失败')
-      }
+      })),
+    )
+    publicResponses.forEach((response) => {
+      if (response.data?.code !== 200) throw new Error(response.data?.message || '我的图片加载失败')
     })
 
-    publicRecentPictures.value = responses[0].data.data?.pictureList || []
-    privateRecentPictures.value = responses[1]?.data.data?.pictureList || []
+    const uniquePictures = new Map<string, API.PictureVO>()
+    publicResponses
+      .flatMap((response) => response.data.data?.pictureList || [])
+      .forEach((picture) => uniquePictures.set(String(picture.id), picture))
+    myPictures.value = [...uniquePictures.values()]
+      .sort((left, right) => pictureTime(right.createtime) - pictureTime(left.createtime))
+      .slice(0, 5)
+
+    if (spaceId == null || String(spaceId) === '0') {
+      privateRecentPictures.value = []
+      return
+    }
+
+    const privateResponse = await queryPicturePage({
+      spaceId,
+      pictureCheck: 1,
+      current: 1,
+      pageSize: 5,
+      sortFiled: 'createtime',
+      sortOrder: 'descend',
+    })
+    if (privateResponse.data?.code !== 200) {
+      throw new Error(privateResponse.data?.message || '个人空间图片加载失败')
+    }
+    privateRecentPictures.value = privateResponse.data.data?.pictureList || []
   } catch (error: any) {
-    publicRecentPictures.value = []
+    myPictures.value = []
     privateRecentPictures.value = []
-    recentError.value = error?.response?.data?.message || error?.message || '最近上传加载失败'
+    recentError.value = error?.response?.data?.message || error?.message || '最近图片加载失败'
   } finally {
     recentLoading.value = false
   }
-}
-
-function openRecentPanel(scope: RecentPanelKey) {
-  void router.push(scope === 'public' ? '/gallery' : '/space')
 }
 
 async function loadCenter(showSkeleton = true) {
@@ -352,7 +407,7 @@ async function loadCenter(showSkeleton = true) {
     loginUserStore.setLoginUser(currentUser)
     await Promise.all([
       loadPictureSummary(currentUser.id, currentUser.spaceId),
-      loadRecentPictures(currentUser.spaceId,currentUser.id),
+      loadRecentPictures(currentUser.spaceId, currentUser.id),
     ])
   } catch (error: any) {
     const unauthorized = error?.response?.status === 401 || error?.response?.data?.code === 40100
@@ -368,26 +423,8 @@ async function loadCenter(showSkeleton = true) {
 }
 
 async function refreshCenter() {
-  // 任一独立更新接口成功后重新读取用户，确保页面和全局登录态同步更新。
+  // 编辑资料或更新头像成功后重新读取用户，确保页面和全局登录态同步。
   await loadCenter(false)
-}
-
-async function logout() {
-  logoutLoading.value = true
-  try {
-    const res = await userLogout()
-    if (res.data?.code !== 200) {
-      message.error(res.data?.message || '退出登录失败')
-      return
-    }
-    loginUserStore.clearLoginUser()
-    message.success('已退出登录')
-    await router.replace('/user/login')
-  } catch (error: any) {
-    message.error(error?.response?.data?.message || '退出登录请求失败')
-  } finally {
-    logoutLoading.value = false
-  }
 }
 
 onMounted(loadCenter)
@@ -396,85 +433,118 @@ onMounted(loadCenter)
 <style scoped>
 .center-prototype { min-height: 100%; }
 .center-skeleton { padding-top: 18px; }
-.center-skeleton-grid { margin-top: 16px; display: grid; grid-template-columns: minmax(0, .3fr) minmax(0, .7fr); gap: var(--prototype-layout-gap); }
-.center-skeleton-grid > * { min-height: 340px; padding: 20px; background: rgba(255,255,255,.45); border: 1px solid var(--proto-line); border-radius: 10px; }
-.center-content { height: 100%; min-height: 0; display: flex; flex-direction: column; }
-.center-top-actions { display: flex; justify-content: flex-end; min-height: 43px; }
-.center-layout.proto-section { flex: 1 1 auto; min-height: 0; padding-top: 0; }
-.center-layout { display: grid; grid-template-columns: minmax(0, .3fr) minmax(0, .7fr); gap: var(--prototype-layout-gap); align-items: start; }
+.center-skeleton-grid { margin-top: 16px; display: grid; grid-template-columns: minmax(250px, .29fr) minmax(0, .71fr); gap: 28px; }
+.center-skeleton-grid > * { min-height: 420px; padding: 20px; background: rgba(255,255,255,.58); border: 1px solid var(--proto-line); border-radius: 18px; }
+.center-content { min-height: 100%; }
+.center-layout.proto-section { padding-top: 18px; }
+/* 两列保持自然高度，避免为了对齐左侧菜单而在右侧制造大块空白。 */
+.center-layout { display: grid; grid-template-columns: minmax(250px, .29fr) minmax(0, .71fr); gap: 28px; align-items: start; }
+.profile-column { min-width: 0; display: flex; flex-direction: column; gap: 22px; }
 
-/* 左侧只承担身份识别，避免把资料和统计信息挤在同一张大卡片里。 */
-.profile-panel { min-width: 0; padding: 4px 10px 0 0; }
+/* 左侧资料卡对应原型中的身份区，统计信息也归入同一张卡片。 */
+.profile-card { padding: 26px 26px 20px; border: 1px solid rgba(17,20,22,.05); border-radius: 20px; background: rgba(255,255,255,.72); box-shadow: 0 12px 32px rgba(18,23,23,.035); }
 .profile-identity { text-align: center; }
-.profile-avatar-wrap { position: relative; width: fit-content; display: flex; justify-content: center; margin: 0 auto 12px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; }
-.profile-avatar-wrap :deep(.ant-avatar) { border: 1px solid var(--proto-line-strong); background: rgba(255,255,255,.68); color: var(--proto-ink); font-size: 48px; }
-.profile-avatar-hint { position: absolute; right: 4px; bottom: 2px; padding: 4px 7px; border: 1px solid var(--proto-line); border-radius: 4px; background: var(--proto-paper); color: var(--proto-ink); font-size: 10px; opacity: 0; transform: translateY(4px); transition: opacity .2s ease, transform .2s ease; }
+.profile-avatar-wrap { position: relative; width: fit-content; display: flex; justify-content: center; margin: 0 auto 15px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.profile-avatar-wrap :deep(.ant-avatar) { border: 1px solid rgba(17,20,22,.08); background: var(--proto-paper-deep); color: var(--proto-ink); font-size: 54px; box-shadow: 0 8px 20px rgba(18,23,23,.08); }
+.profile-avatar-hint { position: absolute; right: 3px; bottom: 2px; padding: 4px 7px; border: 1px solid var(--proto-line); border-radius: 999px; background: var(--proto-paper); color: var(--proto-ink); font-size: 10px; opacity: 0; transform: translateY(4px); transition: opacity .2s ease, transform .2s ease; }
 .profile-avatar-wrap:hover .profile-avatar-hint, .profile-avatar-wrap:focus-visible .profile-avatar-hint { opacity: 1; transform: translateY(0); }
 .profile-avatar-wrap:focus-visible { outline: 2px solid var(--proto-ink); outline-offset: 5px; border-radius: 50%; }
-.profile-panel h2 { margin: 0; font-size: 32px; font-weight: 800; line-height: 1.15; letter-spacing: -.06em; }
-.profile-account { margin: 7px 0 0; color: var(--proto-muted); font-family: inherit; font-size: 15px; font-weight: 400; line-height: 1.35; }
-.profile-bio { max-width: 28ch; min-height: 32px; margin: 14px auto 0; color: var(--proto-muted); font-size: 12px; line-height: 1.55; }
-.profile-panel :deep(.proto-status) { margin-top: 12px; }
-.profile-edit { width: 100%; margin-top: 16px; }
-.profile-details { margin-top: 16px; border-top: 1px solid var(--proto-line); }
-.profile-details div { min-height: 44px; padding: 8px 0; display: flex; flex-direction: column; justify-content: space-between; border-bottom: 1px solid var(--proto-line); }
-.profile-details span { color: var(--proto-muted); font-size: 10px; }
-.profile-details strong { overflow-wrap: anywhere; font-size: 11px; }
+.profile-card h1 { margin: 0; font-size: 28px; font-weight: 800; line-height: 1.15; letter-spacing: -.06em; }
+.profile-account { margin: 7px 0 0; color: var(--proto-muted); font-size: 14px; line-height: 1.35; }
+.profile-bio { min-height: 22px; margin: 16px auto 0; color: var(--proto-muted); font-size: 12px; line-height: 1.55; }
+.profile-edit { width: 100%; height: 44px; margin-top: 20px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; border: 1px solid rgba(17,20,22,.18); border-radius: 11px; background: transparent; color: var(--proto-ink); font-size: 13px; font-weight: 700; }
+.profile-edit:hover { border-color: var(--proto-ink); color: var(--proto-ink); background: rgba(241,242,237,.55); }
+.profile-stats { margin-top: 20px; padding-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid rgba(17,20,22,.08); }
+.profile-stats > div { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; border-right: 1px solid rgba(17,20,22,.08); }
+.profile-stats > div:last-child { border-right: 0; }
+.profile-stats strong { font-family: 'Abril Fatface', Georgia, serif; font-size: 24px; font-weight: 400; line-height: 1; }
+.profile-stats span { color: var(--proto-muted); font-size: 11px; }
 
-.center-main { min-width: 0; min-height: 100%; display: flex; flex-direction: column; gap: 12px; }
-.center-main-heading { display: flex; align-items: center; justify-content: space-between; }
-.center-main-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.04em; }
-.center-stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.center-stat { min-height: 104px; padding: 16px 18px; display: flex; flex-direction: column; justify-content: space-between; }
-.center-stat span { color: var(--proto-muted); font-size: 11px; }
-.center-stat strong { font-size: 30px; letter-spacing: -.07em; }
-.center-stat small { color: var(--proto-muted); font-family: inherit; font-size: 10px; }
-.center-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+/* 侧边菜单先固定视觉层级；没有后端能力的项目仍保持不可误点。 */
+.profile-menu { padding: 14px 10px; border: 1px solid rgba(17,20,22,.04); border-radius: 18px; background: rgba(255,255,255,.6); box-shadow: 0 12px 32px rgba(18,23,23,.025); }
+.profile-menu-item { min-height: 42px; padding: 0 14px; display: flex; align-items: center; gap: 14px; border-radius: 10px; color: var(--proto-ink-soft); font-size: 13px; font-weight: 600; text-decoration: none; transition: background .2s ease, color .2s ease; }
+.profile-menu-item :deep(svg) { flex: 0 0 auto; color: var(--proto-ink-soft); font-size: 18px; }
+.profile-menu-item:hover { color: var(--proto-ink); background: rgba(241,242,237,.72); }
+.profile-menu-item.is-active { color: #5f8e1b; background: rgba(186,255,61,.12); }
+.profile-menu-item.is-active :deep(svg) { color: #6a9b1f; }
+.profile-menu-item.is-disabled { cursor: default; color: var(--proto-muted); opacity: .88; }
+.profile-menu-item.is-disabled:hover { background: transparent; }
+.profile-menu-divider { height: 1px; margin: 12px 14px; background: rgba(17,20,22,.08); }
 
-/* 快捷入口使用 GitHub 式的轻量边框卡片，保留入口但降低视觉噪声。 */
-.center-action-card { min-width: 0; min-height: 78px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--proto-ink); text-decoration: none; transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
-.center-action-card:hover { color: var(--proto-ink); border-color: var(--proto-acid); background: rgba(255,255,255,.78); box-shadow: 0 12px 26px rgba(18,23,23,.08); }
-.center-action-card.dark { background: var(--proto-ink); border-color: var(--proto-ink); color: var(--proto-paper); }
-.center-action-card.dark .center-action-arrow { color: var(--proto-acid); }
-.center-action-card.dark:hover { background: #202526; color: var(--proto-paper); border-color: #202526; }
-.center-action-card.acid { background: var(--proto-acid); border-color: var(--proto-acid); color: var(--proto-ink); }
-.center-action-card.acid:hover { background: #c5ff55; color: var(--proto-ink); border-color: #c5ff55; }
-.center-action-card h3 { margin: 0; font-size: 17px; letter-spacing: -.04em; }
-.center-action-arrow { flex: 0 0 auto; color: var(--proto-orange); font-size: 20px; line-height: 1; }
-.center-recent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.center-recent { min-width: 0; min-height: 220px; padding: 16px; }
-.center-recent-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 7px; border-bottom: 1px solid var(--proto-line); }
-.center-recent-title { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
-.center-recent-head h3 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -.04em; }
-.center-recent-title span { color: var(--proto-muted); font-size: 10px; }
-.center-recent-head :deep(.ant-btn-link) { padding-inline: 0; color: var(--proto-ink); font-size: 11px; }
-.center-recent :deep(.ant-skeleton),
-.center-recent :deep(.ant-alert),
-.center-recent :deep(.ant-empty) { margin-top: 12px; }
-.center-recent :deep(.ant-empty) { margin-block: 14px 4px; }
-.recent-row { min-height: 56px; display: grid; grid-template-columns: 50px 1fr auto; gap: 10px; align-items: center; border-bottom: 1px solid var(--proto-line); }
-.recent-row:last-child { border-bottom: 0; }
-.recent-row img { width: 50px; height: 40px; object-fit: cover; border-radius: 4px; }
-.recent-row strong, .recent-row span { display: block; }
-.recent-row strong { font-size: 12px; }
-.recent-row span { margin-top: 3px; color: var(--proto-muted); font-family: inherit; font-size: 10px; }
-@media (max-width: 980px) {
-  .center-layout, .center-skeleton-grid { gap: var(--prototype-layout-gap); grid-template-columns: minmax(0, .3fr) minmax(0, .7fr); }
+.center-main { min-width: 0; height: auto; display: flex; flex-direction: column; gap: 20px; }
+.center-main > .dashboard-section:last-child { flex: 0 0 auto; }
+.welcome-block { padding: 12px 2px 2px; }
+.welcome-block h2 { margin: 0; font-size: clamp(25px, 2.4vw, 34px); font-weight: 800; letter-spacing: -.055em; line-height: 1.2; }
+.welcome-block p { margin: 8px 0 0; color: var(--proto-muted); font-size: 15px; }
+
+/* 三个快捷入口复用现有路由，只调整为原型中的横向功能卡片。 */
+.quick-actions { min-height: 108px; padding: 22px 26px; display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; border: 1px solid rgba(17,20,22,.05); border-radius: 20px; background: rgba(255,255,255,.72); box-shadow: 0 12px 32px rgba(18,23,23,.035); }
+.quick-action-card { min-width: 0; min-height: 62px; padding: 0 24px; display: flex; align-items: center; gap: 16px; border-right: 1px solid rgba(17,20,22,.08); color: var(--proto-ink); text-decoration: none; }
+.quick-action-card:first-child { padding-left: 14px; }
+.quick-action-card:last-child { padding-right: 8px; border-right: 0; }
+.quick-action-card:hover { color: var(--proto-ink); }
+.quick-action-card:hover .quick-action-icon { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(18,23,23,.08); }
+.quick-action-icon { width: 54px; height: 54px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 16px; background: rgba(17,20,22,.045); color: var(--proto-ink-soft); font-size: 25px; transition: transform .2s ease, box-shadow .2s ease; }
+.quick-action-icon.is-acid { background: rgba(186,255,61,.15); color: #6a9b1f; }
+/* 三个快捷入口分别使用品牌绿、蓝、橙，避免后两个图标都落在同一灰色背景里。 */
+.quick-action-card:nth-child(2) .quick-action-icon { background: rgba(167,201,255,.2); color: #5279ae; }
+.quick-action-card:nth-child(3) .quick-action-icon { background: rgba(255,137,106,.16); color: #b96149; }
+.quick-action-copy { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.quick-action-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.quick-action-copy small { overflow: hidden; color: var(--proto-muted); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+
+.dashboard-section { min-width: 0; padding: 23px 22px 24px; border: 1px solid rgba(17,20,22,.05); border-radius: 20px; background: rgba(255,255,255,.72); box-shadow: 0 12px 32px rgba(18,23,23,.035); }
+.dashboard-section-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+.dashboard-section-head h3 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -.045em; }
+.section-link { flex: 0 0 auto; color: #6a9b1f; font-size: 12px; font-weight: 700; text-decoration: none; }
+.section-link:hover { color: #4d7413; }
+.section-link span { margin-left: 3px; font-size: 18px; line-height: 0; vertical-align: -1px; }
+.dashboard-section :deep(.ant-skeleton), .dashboard-section :deep(.ant-alert), .dashboard-section :deep(.ant-empty) { margin-top: 12px; }
+.dashboard-section :deep(.ant-empty) { margin-bottom: 0; }
+.picture-strip, .space-picture-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
+.space-picture-strip { padding: 2px 0 20px; }
+.picture-tile, .space-picture-tile { min-width: 0; display: block; overflow: hidden; border-radius: 14px; background: var(--proto-paper-deep); text-decoration: none; }
+.picture-tile-image { position: relative; aspect-ratio: 1 / 1.12; overflow: hidden; }
+.picture-tile-image img, .space-picture-tile img { width: 100%; height: 100%; display: block; object-fit: cover; transition: transform .3s ease; }
+.picture-tile:hover img, .space-picture-tile:hover img { transform: scale(1.035); }
+.picture-favorite { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.9); color: #81898a; font-size: 16px; }
+.picture-status { position: absolute; right: 10px; bottom: 10px; padding: 5px 9px; display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; background: rgba(255,255,255,.92); color: var(--proto-muted); font-size: 10px; line-height: 1; }
+.picture-status i { width: 7px; height: 7px; display: block; border-radius: 50%; background: #b7bec0; }
+.picture-status.pass i { background: #87c52d; }
+.picture-status.wait i { background: #f4bd20; }
+.picture-status.refuse i { background: #eb6262; }
+.space-picture-tile { position: relative; aspect-ratio: 1 / 1.08; }
+.space-picture-overlay { position: absolute; right: 0; bottom: 0; left: 0; padding: 34px 13px 12px; display: flex; flex-direction: column; gap: 4px; background: linear-gradient(transparent, rgba(17,20,22,.78)); color: var(--proto-paper); }
+.space-picture-overlay strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.space-picture-overlay small { color: rgba(241,242,237,.76); font-size: 10px; }
+
+@media (max-width: 1050px) {
+  .center-layout, .center-skeleton-grid { grid-template-columns: minmax(220px, .31fr) minmax(0, .69fr); gap: 20px; }
+  .profile-card { padding-inline: 18px; }
+  .quick-actions { padding-inline: 16px; }
+  .quick-action-card { padding-inline: 14px; gap: 10px; }
+  .quick-action-icon { width: 46px; height: 46px; font-size: 21px; }
+  .picture-strip, .space-picture-strip { gap: 10px; }
 }
-@media (max-width: 760px) {
-  .center-content { height: auto; }
-  .center-layout.proto-section { flex: none; padding-top: 18px; }
+@media (max-width: 820px) {
   .center-layout, .center-skeleton-grid { grid-template-columns: 1fr; }
-  .center-recent-grid { grid-template-columns: 1fr; }
-  .center-top-actions { justify-content: flex-start; }
-  .profile-panel { padding-right: 0; }
-  .profile-details { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }
+  .profile-column { display: grid; grid-template-columns: minmax(0, .9fr) minmax(220px, 1.1fr); align-items: start; }
+  .center-main { height: auto; gap: 16px; }
+  .center-main > .dashboard-section:last-child { flex: 0 0 auto; }
 }
-@media (max-width: 520px) {
-  .center-stat-row, .center-actions { grid-template-columns: 1fr; }
-  .profile-details { display: block; }
+@media (max-width: 650px) {
+  .profile-column { display: flex; }
+  .quick-actions { grid-template-columns: 1fr; padding: 12px 18px; }
+  .quick-action-card, .quick-action-card:first-child, .quick-action-card:last-child { min-height: 66px; padding: 8px 0; border-right: 0; border-bottom: 1px solid rgba(17,20,22,.08); }
+  .quick-action-card:last-child { border-bottom: 0; }
+  .picture-strip, .space-picture-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .picture-tile:last-child, .space-picture-tile:last-child { display: none; }
+}
+@media (max-width: 420px) {
+  .profile-stats strong { font-size: 21px; }
+  .dashboard-section { padding-inline: 15px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .profile-avatar-hint { transition: none; }
+  .profile-avatar-hint, .quick-action-icon, .picture-tile-image img, .space-picture-tile img { transition: none; }
 }
 </style>

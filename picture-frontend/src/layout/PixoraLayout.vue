@@ -31,6 +31,22 @@
             </template>
           </a-dropdown>
 
+          <button
+            v-if="loginUser"
+            class="pixora-notification-trigger"
+            :class="{ 'is-open': notificationOpen }"
+            type="button"
+            aria-label="打开通知"
+            @click="handleNotificationOpen"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+            </svg>
+            <span v-if="unreadNotificationCount > 0" class="pixora-notification-badge">
+              {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+            </span>
+          </button>
+
           <a-dropdown v-if="loginUser" placement="bottomRight" :trigger="['click']">
             <button class="pixora-account" type="button" aria-label="打开账户菜单">
               <a-avatar :size="32" :src="loginUser.avatarurl">
@@ -82,13 +98,105 @@
     <a-layout-content class="prototype-page pixora-page" :class="pageClasses">
       <RouterView />
     </a-layout-content>
+
+    <a-drawer
+      v-model:open="notificationOpen"
+      class="pixora-notification-drawer"
+      :width="notificationDrawerWidth"
+      placement="right"
+      :mask="false"
+      :destroy-on-close="false"
+    >
+      <template #title>
+        <div class="pixora-notification-title">
+          <span>通知</span>
+          <span v-if="unreadNotificationCount > 0" class="pixora-notification-unread-count">
+            {{ unreadNotificationCount }} 条未读
+          </span>
+        </div>
+      </template>
+
+      <div class="pixora-notification-content">
+        <a-skeleton v-if="notificationLoading" active :paragraph="{ rows: 5 }" />
+
+        <a-alert
+          v-else-if="notificationError"
+          type="error"
+          show-icon
+          :message="notificationError"
+        >
+          <template #action>
+            <a-button size="small" @click="loadNotifications">重试</a-button>
+          </template>
+        </a-alert>
+
+        <a-empty v-else-if="!notifications.length" description="暂时没有通知" />
+
+        <div v-else class="pixora-notification-list">
+          <article
+            v-for="notification in notifications"
+            :key="String(notification.id)"
+            class="pixora-notification-item"
+            :class="{ 'is-unread': !notification.readTime }"
+          >
+            <div class="pixora-notification-item-head">
+              <div class="pixora-notification-item-heading">
+                <span class="pixora-notification-status" aria-hidden="true"></span>
+                <h3>{{ notification.title || '系统通知' }}</h3>
+              </div>
+              <time>{{ formatNotificationDate(notification.createTime) }}</time>
+            </div>
+            <p>
+              <template v-if="notification.bizName && isPictureNotification(notification)">
+                你的图片“<strong class="pixora-notification-biz-name">{{ notification.bizName }}</strong>”{{ pictureNotificationContent(notification) }}
+              </template>
+              <template v-else>{{ notification.content }}</template>
+            </p>
+            <div class="pixora-notification-item-actions">
+              <a-button
+                v-if="!notification.readTime"
+                type="text"
+                size="small"
+                class="pixora-notification-action"
+                :loading="readingNotificationId === String(notification.id)"
+                @click="handleMarkNotificationRead(notification)"
+              >
+                标记已读
+              </a-button>
+              <RouterLink
+                v-if="isPictureNotification(notification)"
+                class="pixora-notification-action pixora-notification-view-link"
+                :to="pictureDetailPath(notification)"
+                @click="notificationOpen = false"
+              >
+                点击查看
+              </RouterLink>
+              <a-button
+                type="text"
+                size="small"
+                class="pixora-notification-action pixora-notification-delete"
+                :loading="deletingNotificationId === String(notification.id)"
+                @click="handleDeleteNotification(notification)"
+              >
+                删除
+              </a-button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </a-drawer>
   </a-layout>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
+import {
+  deleteNotifications,
+  markNotificationsRead,
+  queryNotificationPage,
+} from '../api/notificationController'
 import { userLogout } from '../api/userController'
 import { useLoginUserStore } from '../stores/useLoginUserStore'
 
@@ -96,6 +204,14 @@ const route = useRoute()
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
 const logoutLoading = ref(false)
+const notificationOpen = ref(false)
+const notificationLoading = ref(false)
+const notificationError = ref('')
+const notifications = ref<API.NotificationVO[]>([])
+const unreadNotificationCount = ref(0)
+const deletingNotificationId = ref('')
+const readingNotificationId = ref('')
+const notificationDrawerWidth = 'min(380px, calc(100vw - 16px))'
 
 const loginUser = computed(() => loginUserStore.loginUser)
 const isAdmin = computed(() => loginUser.value?.userLevel === 'admin')
@@ -156,6 +272,116 @@ function handleMobileMenuClick({ key }: { key: string }) {
   }
   navigateByMenuKey(key)
 }
+
+/**
+ * 浮窗打开时同时拉取通知列表和未读总数，避免只根据当前页数量显示角标。
+ * 未读总数来自后端 readTime 字段，标记已读后重新拉取列表，保证角标和列表状态一致。
+ */
+async function loadNotifications() {
+  if (!loginUser.value) return
+
+  notificationLoading.value = true
+  notificationError.value = ''
+  try {
+    const [pageResponse, unreadResponse] = await Promise.all([
+      queryNotificationPage({ current: 1, pageSize: 20, unreadOnly: false }),
+      queryNotificationPage({ current: 1, pageSize: 1, unreadOnly: true }),
+    ])
+    if (pageResponse.data?.code !== 200 || unreadResponse.data?.code !== 200) {
+      throw new Error(pageResponse.data?.message || unreadResponse.data?.message || '通知加载失败')
+    }
+    notifications.value = pageResponse.data.data?.records || []
+    unreadNotificationCount.value = Number(unreadResponse.data.data?.total || 0)
+  } catch (error: any) {
+    notificationError.value = error?.response?.data?.message || error?.message || '通知加载失败'
+  } finally {
+    notificationLoading.value = false
+  }
+}
+
+function handleNotificationOpen() {
+  notificationOpen.value = true
+  void loadNotifications()
+}
+
+async function handleDeleteNotification(notification: API.NotificationVO) {
+  if (!notification.id || deletingNotificationId.value) return
+
+  const notificationId = String(notification.id)
+  deletingNotificationId.value = notificationId
+  try {
+    const response = await deleteNotifications({ ids: [notification.id] })
+    if (response.data?.code !== 200) {
+      throw new Error(response.data?.message || '通知删除失败')
+    }
+    message.success('通知已删除')
+    await loadNotifications()
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || error?.message || '通知删除失败')
+  } finally {
+    deletingNotificationId.value = ''
+  }
+}
+
+async function handleMarkNotificationRead(notification: API.NotificationVO) {
+  if (!notification.id || readingNotificationId.value) return
+
+  const notificationId = String(notification.id)
+  readingNotificationId.value = notificationId
+  try {
+    const response = await markNotificationsRead({ ids: [notification.id] })
+    if (response.data?.code !== 200) {
+      throw new Error(response.data?.message || '标记已读失败')
+    }
+    await loadNotifications()
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || error?.message || '标记已读失败')
+  } finally {
+    readingNotificationId.value = ''
+  }
+}
+
+function isPictureNotification(notification: API.NotificationVO) {
+  return notification.bizType === 'PICTURE_CHECK' && notification.bizId != null
+}
+
+function pictureDetailPath(notification: API.NotificationVO) {
+  return `/gallery/detail/${String(notification.bizId)}`
+}
+
+function pictureNotificationContent(notification: API.NotificationVO) {
+  const content = notification.content || ''
+  return content.startsWith('你的图片') ? content.slice('你的图片'.length) : content
+}
+
+function formatNotificationDate(value?: string) {
+  if (!value) return '—'
+  return value.replace('T', ' ').replace(/\.\d+.*$/, '')
+}
+
+function resetNotifications() {
+  notificationOpen.value = false
+  notificationError.value = ''
+  notifications.value = []
+  unreadNotificationCount.value = 0
+}
+
+watch(
+  () => loginUser.value?.id,
+  (userId) => {
+    if (userId) {
+      void loadNotifications()
+    } else {
+      resetNotifications()
+    }
+  },
+)
+
+onMounted(() => {
+  if (loginUser.value) {
+    void loadNotifications()
+  }
+})
 </script>
 
 <style src="../pages/prototype/prototype.css"></style>

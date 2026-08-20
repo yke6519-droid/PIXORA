@@ -95,6 +95,21 @@ export async function getPictureById(
   });
 }
 
+/** 保存公共图库图片到当前用户个人空间 POST /picture/save2Space */
+export async function save2Space(
+  body: API.Save2SpaceRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponsePictureVO>("/picture/save2Space", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 此处后端没有提供注释 POST /picture/queryAll */
 export async function queryAll(
   body: API.PictureQueryRequest,

@@ -88,13 +88,19 @@
           </div>
         </div>
 
-        <!-- 功能预留：后续接入接口时，保存到个人空间应创建副本，不能修改原图。 -->
-        <div class="detail-save-panel">
+        <div v-if="canSaveToSpace" class="detail-save-panel">
           <div class="detail-save-copy">
             <strong>保存到我的空间</strong>
-            <p>创建一份副本到你的空间，原图不受影响。</p>
+            <p>{{ saveHint }}</p>
           </div>
-          <a-button class="detail-save-button" disabled>保存到我的空间</a-button>
+          <a-button
+            class="detail-save-button"
+            :loading="saving"
+            :disabled="saving || saved"
+            @click="handleSaveClick"
+          >
+            {{ saved ? '已保存' : '保存到我的空间' }}
+          </a-button>
         </div>
 
         <div v-if="picture.pictureCheck === 2 && picture.checkMessage" class="detail-review-note">
@@ -103,25 +109,60 @@
         </div>
       </aside>
     </section>
+
+    <!-- 没有个人空间时复用已有弹窗，创建完成后会自动继续保存当前图片。 -->
+    <SpaceNameModal
+      v-model:open="createSpaceOpen"
+      mode="create"
+      :submitting="creatingSpace"
+      @submit="handleCreateSpace"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getPictureById } from '../../../api/pictureController'
+import { getPictureById, save2Space } from '../../../api/pictureController'
+import { createSpace } from '../../../api/spaceController'
+import SpaceNameModal from '../space/components/SpaceNameModal.vue'
+import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import { pictureStatusText } from '../prototypeData'
 
 const route = useRoute()
 const router = useRouter()
+const loginUserStore = useLoginUserStore()
 const loading = ref(true)
 const errorMessage = ref('')
 const picture = ref<API.PictureVO | null>(null)
+const saving = ref(false)
+const saved = ref(false)
+const createSpaceOpen = ref(false)
+const creatingSpace = ref(false)
 
 const statusClass = computed(() => {
   if (picture.value?.pictureCheck === 1) return 'pass'
   if (picture.value?.pictureCheck === 2) return 'refuse'
   return 'wait'
+})
+
+// 只有审核通过的公共图片才展示“保存到我的空间”入口。
+const canSaveToSpace = computed(() => {
+  const spaceId = picture.value?.spaceId
+  return String(spaceId ?? '') === '0' && picture.value?.pictureCheck === 1
+})
+
+const hasPrivateSpace = computed(() => {
+  const spaceId = loginUserStore.loginUser?.spaceId
+  return spaceId !== undefined && spaceId !== null && String(spaceId) !== '' && String(spaceId) !== '0'
+})
+
+const saveHint = computed(() => {
+  if (saved.value) return '已创建一份副本，原图不受影响。'
+  if (!loginUserStore.loginUser) return '登录后即可创建一份副本，原图不受影响。'
+  if (!hasPrivateSpace.value) return '你还没有个人空间，点击按钮即可创建并保存。'
+  return '创建一份副本到你的空间，原图不受影响。'
 })
 
 function getPictureId() {
@@ -142,6 +183,7 @@ async function fetchPictureDetail() {
 
   loading.value = true
   errorMessage.value = ''
+  saved.value = false
   try {
     const res = await getPictureById({ id })
     if (res.data?.code !== 200 || !res.data.data) {
@@ -153,6 +195,71 @@ async function fetchPictureDetail() {
     errorMessage.value = error?.response?.data?.message || error?.message || '图片详情加载失败，请确认后端服务已启动'
   } finally {
     loading.value = false
+  }
+}
+
+/** 调用后端保存接口，spaceId 保持 number|string，避免 Long 在前端精度丢失。 */
+async function savePictureToSpace(spaceId: number | string) {
+  const pictureId = picture.value?.id
+  if (pictureId === undefined || pictureId === null || saving.value) return
+
+  saving.value = true
+  try {
+    const res = await save2Space({ pictureId, spaceId })
+    if (res.data?.code !== 200 || !res.data.data) {
+      throw new Error(res.data?.message || '保存图片失败')
+    }
+    saved.value = true
+    message.success('图片已保存到我的空间')
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || error?.message || '保存图片失败，请稍后重试')
+  } finally {
+    saving.value = false
+  }
+}
+
+/** 点击保存按钮：未登录先登录，没有空间则先打开创建空间弹窗。 */
+async function handleSaveClick() {
+  if (!picture.value?.id || saving.value || saved.value) return
+
+  if (!loginUserStore.loginUser) {
+    message.info('请先登录，再保存图片')
+    await router.push({ path: '/user/login', query: { redirect: route.fullPath } })
+    return
+  }
+
+  const spaceId = loginUserStore.loginUser.spaceId
+  if (!hasPrivateSpace.value || spaceId === undefined || spaceId === null) {
+    message.info('你还没有个人空间，请先创建一个空间')
+    createSpaceOpen.value = true
+    return
+  }
+
+  await savePictureToSpace(spaceId)
+}
+
+/** 创建空间成功后同步登录用户状态，并自动继续保存当前图片。 */
+async function handleCreateSpace(spaceName: string) {
+  if (creatingSpace.value) return
+
+  creatingSpace.value = true
+  try {
+    const res = await createSpace({ spaceName })
+    const createdSpace = res.data?.data
+    if (res.data?.code !== 200 || !createdSpace?.id) {
+      throw new Error(res.data?.message || '创建空间失败')
+    }
+
+    const currentUser = loginUserStore.loginUser
+    if (currentUser) {
+      loginUserStore.setLoginUser({ ...currentUser, spaceId: createdSpace.id })
+    }
+    createSpaceOpen.value = false
+    await savePictureToSpace(createdSpace.id)
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || error?.message || '创建空间失败，请稍后重试')
+  } finally {
+    creatingSpace.value = false
   }
 }
 
