@@ -6,13 +6,16 @@
 
     <resultMap id="BaseResultMap" type="com.example.picturebackend.domain.po.Tag">
             <id property="id" column="id" />
-            <result property="tagname" column="tagName" />
-            <result property="createtime" column="createTime" />
-            <result property="updatetime" column="updateTime" />
-            <result property="isdelete" column="isDelete" />
+            <result property="spaceId" column="spaceId" />
+            <result property="tagName" column="tagName" />
+            <result property="normalizedName" column="normalizedName" />
+            <result property="status" column="status" />
+            <result property="createdBy" column="createdBy" />
+            <result property="createTime" column="createTime" />
+            <result property="updateTime" column="updateTime" />
     </resultMap>
 
     <sql id="Base_Column_List">
-        id,tagName,createTime,updateTime,isDelete
+        id,spaceId,tagName,normalizedName,status,createdBy,createTime,updateTime
     </sql>
 </mapper>

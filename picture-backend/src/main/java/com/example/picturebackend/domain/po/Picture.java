@@ -39,13 +39,14 @@ public class Picture implements Serializable {
      */
     private String introduction;
 
-    /**
-     * 分类
-     */
+    /** 旧的自由文本分类，阶段 6 清理；新主题链路使用 categoryId。 */
     private String category;
 
+    /** 新公共主题 ID；个人空间图片允许为空。 */
+    private Long categoryId;
+
     /**
-     * 标签JSON数组
+     * 旧的 JSON 标签数组，阶段 6 清理。
      */
     private String tags;
 
