@@ -1,16 +1,10 @@
 <template>
   <div class="detail-prototype">
     <section class="detail-head">
-      <div v-if="picture" class="detail-title-bar">
-        <h1 class="detail-image-title">{{ picture.name || '未命名图片' }}</h1>
-        <a-tag class="detail-title-status proto-status" :class="statusClass">
-          {{ pictureStatusText(picture.pictureCheck) }}
-        </a-tag>
-      </div>
-      <div class="proto-page-head-actions">
-        <a-button class="proto-button ghost-button" @click="router.push('/gallery')">返回图库</a-button>
-        <a-button class="proto-button acid-button" type="primary" @click="router.push('/gallery/manage')">管理我的图片</a-button>
-      </div>
+      <button class="detail-back-button" type="button" @click="router.push('/gallery')">
+        <span aria-hidden="true">←</span>
+        <span>返回公共图库</span>
+      </button>
     </section>
 
     <div v-if="loading" class="detail-state">
@@ -29,10 +23,10 @@
       </template>
     </a-result>
 
-    <section v-else-if="picture" class="detail-layout proto-section">
+    <section v-else-if="picture" class="detail-layout">
       <div class="detail-main-visual">
-        <div class="detail-visual proto-surface proto-rounded">
-          <div class="detail-image proto-image-wrap">
+        <article class="detail-visual">
+          <div class="detail-image-stage">
             <a-image
               v-if="picture.url"
               class="detail-image-preview"
@@ -44,68 +38,105 @@
           </div>
           <div class="detail-image-caption">
             <span>{{ picture.picwidth || '-' }} × {{ picture.picheight || '-' }} px</span>
-            <span>{{ picture.picformat?.toUpperCase() || '-' }} / {{ formatPictureSize(picture.picsize) }}</span>
+            <span>{{ picture.picformat?.toUpperCase() || '-' }} · {{ formatPictureSize(picture.picsize) }}</span>
           </div>
-        </div>
+        </article>
       </div>
 
-      <aside class="detail-info">
-        <div class="detail-introduction-block">
-          <span class="detail-section-label">图片简介</span>
-          <p class="detail-introduction">{{ picture.introduction || '暂无图片简介' }}</p>
+      <aside class="detail-info-card">
+        <div class="detail-info-header">
+          <div class="detail-heading-copy">
+            <div class="detail-title-row">
+              <h1 class="detail-image-title">{{ picture.name || '未命名图片' }}</h1>
+              <a-tag class="detail-title-status proto-status" :class="statusClass">
+                {{ pictureStatusText(picture.pictureCheck) }}
+              </a-tag>
+            </div>
+            <p v-if="picture.introduction" class="detail-introduction">{{ picture.introduction }}</p>
+          </div>
+
+          <a-dropdown placement="bottomRight" :trigger="['click']">
+            <a-button class="detail-more-button" type="text" aria-label="更多操作">···</a-button>
+            <template #overlay>
+              <a-menu @click="handleMoreMenuClick">
+                <a-menu-item key="back">返回公共图库</a-menu-item>
+                <a-menu-item key="manage">进入图片管理</a-menu-item>
+                <a-menu-item v-if="canSaveToSpace" key="save" :disabled="saving || saved">
+                  {{ saved ? '已保存到我的空间' : '保存到我的空间' }}
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
         </div>
         <div v-if="picture.tags?.length" class="detail-tags">
-          <a-tag v-for="tag in picture.tags" :key="tag" class="proto-tag acid-tag">{{ tag }}</a-tag>
+          <a-tag v-for="tag in picture.tags" :key="tag" class="detail-tag">{{ tag }}</a-tag>
         </div>
 
-        <a-descriptions
-          class="detail-descriptions"
-          bordered
-          size="small"
-          layout="vertical"
-          :column="{ xxl: 2, xl: 2, lg: 2, md: 2, sm: 1, xs: 1 }"
-        >
-          <a-descriptions-item label="分类">{{ picture.category || '未分类' }}</a-descriptions-item>
-          <a-descriptions-item label="空间">{{ formatSpaceName(picture.spaceId) }}</a-descriptions-item>
-          <a-descriptions-item label="比例">{{ formatRatio(picture.picwidth, picture.picheight) }}</a-descriptions-item>
-          <a-descriptions-item label="格式 / 大小">
-            {{ picture.picformat?.toUpperCase() || '-' }} / {{ formatPictureSize(picture.picsize) }}
-          </a-descriptions-item>
-          <a-descriptions-item label="上传时间" :span="2">{{ formatDateTime(picture.createtime) }}</a-descriptions-item>
-        </a-descriptions>
+        <section class="detail-metadata" aria-labelledby="detail-metadata-title">
+          <h2 id="detail-metadata-title">图片信息</h2>
+          <dl class="detail-metadata-list">
+            <div class="detail-metadata-row">
+              <dt>分类</dt>
+              <dd>{{ picture.category || '未分类' }}</dd>
+            </div>
+            <div class="detail-metadata-row">
+              <dt>所属空间</dt>
+              <dd class="detail-space-value">{{ formatSpaceName(picture.spaceId) }}</dd>
+            </div>
+            <div class="detail-metadata-row">
+              <dt>尺寸</dt>
+              <dd>{{ picture.picwidth || '-' }} × {{ picture.picheight || '-' }} px</dd>
+            </div>
+            <div class="detail-metadata-row">
+              <dt>比例</dt>
+              <dd>{{ formatRatio(picture.picwidth, picture.picheight) }}</dd>
+            </div>
+            <div class="detail-metadata-row">
+              <dt>格式</dt>
+              <dd>{{ picture.picformat?.toUpperCase() || '-' }}</dd>
+            </div>
+            <div class="detail-metadata-row">
+              <dt>文件大小</dt>
+              <dd>{{ formatPictureSize(picture.picsize) }}</dd>
+            </div>
+            <div class="detail-metadata-row">
+              <dt>上传时间</dt>
+              <dd>{{ formatDateTime(picture.createtime) }}</dd>
+            </div>
+          </dl>
+        </section>
 
         <div v-if="picture.createdUser" class="detail-uploader">
-          <a-avatar
-            class="detail-uploader-avatar"
-            :src="picture.createdUser.avatarurl"
-            :size="42"
-          >
-            {{ picture.createdUser.username?.charAt(0) || '?' }}
-          </a-avatar>
-          <div class="detail-uploader-copy">
-            <span class="detail-uploader-label">上传者</span>
-            <strong>{{ picture.createdUser.username || '未知用户' }}</strong>
+          <h2>上传者</h2>
+          <div class="detail-uploader-row">
+            <a-avatar
+              class="detail-uploader-avatar"
+              :src="picture.createdUser.avatarurl"
+              :size="42"
+            >
+              {{ picture.createdUser.username?.charAt(0) || '?' }}
+            </a-avatar>
+            <div class="detail-uploader-copy">
+              <strong>{{ picture.createdUser.username || '未知用户' }}</strong>
+            </div>
           </div>
-        </div>
-
-        <div v-if="canSaveToSpace" class="detail-save-panel">
-          <div class="detail-save-copy">
-            <strong>保存到我的空间</strong>
-            <p>{{ saveHint }}</p>
-          </div>
-          <a-button
-            class="detail-save-button"
-            :loading="saving"
-            :disabled="saving || saved"
-            @click="handleSaveClick"
-          >
-            {{ saved ? '已保存' : '保存到我的空间' }}
-          </a-button>
         </div>
 
         <div v-if="picture.pictureCheck === 2 && picture.checkMessage" class="detail-review-note">
           <strong>审核备注</strong>
           <p>{{ picture.checkMessage }}</p>
+        </div>
+
+        <div class="detail-action-area">
+          <a-button
+            class="detail-manage-button"
+            type="primary"
+            block
+            @click="router.push('/gallery/manage')"
+          >
+            管理图片
+          </a-button>
+          <p v-if="canSaveToSpace" class="detail-action-hint">{{ saveHint }}</p>
         </div>
       </aside>
     </section>
@@ -263,6 +294,22 @@ async function handleCreateSpace(spaceName: string) {
   }
 }
 
+// 详情页的次要操作集中到更多菜单，主视觉区域只保留图片展示。
+function handleMoreMenuClick(info: { key: string | number }) {
+  const action = String(info.key)
+  if (action === 'back') {
+    void router.push('/gallery')
+    return
+  }
+  if (action === 'manage') {
+    void router.push('/gallery/manage')
+    return
+  }
+  if (action === 'save') {
+    void handleSaveClick()
+  }
+}
+
 function formatPictureSize(bytes?: number | string) {
   const normalizedBytes = Number(bytes)
   if (!Number.isFinite(normalizedBytes) || normalizedBytes <= 0) return '-'
@@ -272,8 +319,21 @@ function formatPictureSize(bytes?: number | string) {
 }
 
 function formatRatio(width?: number, height?: number) {
-  if (!width || !height) return '-'
-  return (width / height).toFixed(2)
+  const normalizedWidth = Math.round(Number(width))
+  const normalizedHeight = Math.round(Number(height))
+  if (!Number.isFinite(normalizedWidth) || !Number.isFinite(normalizedHeight) || normalizedWidth <= 0 || normalizedHeight <= 0) {
+    return '-'
+  }
+
+  // 用最简整数比展示比例，避免详情页出现后台计算风格的 1.00。
+  let left = normalizedWidth
+  let right = normalizedHeight
+  while (right !== 0) {
+    const remainder = left % right
+    left = right
+    right = remainder
+  }
+  return `${normalizedWidth / left} : ${normalizedHeight / left}`
 }
 
 // 后端时间保留原始时刻，只统一为页面需要的 yyyy-MM-dd HH:mm:ss 格式。
@@ -328,24 +388,6 @@ watch(() => route.params.id, () => {
   justify-content: space-between;
   gap: 20px;
   border-bottom: 1px solid transparent;
-}
-
-.detail-title-bar {
-  min-width: 0;
-  flex: 1 1 auto;
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-}
-
-.detail-head .proto-page-head-actions {
-  padding-bottom: 0;
-}
-
-.detail-head :deep(.proto-button) {
-  height: 37px;
-  padding-inline: 14px;
-  font-size: .75rem;
 }
 
 .detail-state {
@@ -459,24 +501,125 @@ watch(() => route.params.id, () => {
   background: rgba(255, 255, 255, .64);
 }
 
-.detail-image {
-  width: 100%;
-  min-height: 0;
-  flex: 1 1 auto;
+@media (prefers-reduced-motion: reduce) {
+  .detail-prototype :deep(.ant-image-img) {
+    transition: none;
+  }
+}
+.detail-prototype {
   height: auto;
-  max-height: none;
-  border-radius: 7px;
-  overflow: hidden;
+  min-height: 100%;
+  overflow: visible;
 }
 
-.detail-image :deep(.ant-image),
-.detail-image :deep(.ant-image-img) {
+.detail-head {
+  min-height: 72px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 14px 0 12px;
+  border-bottom-color: rgba(17, 20, 22, .08);
+}
+
+.detail-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--proto-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: .9375rem;
+  font-weight: 700;
+}
+
+.detail-back-button span:first-child {
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.detail-back-button:hover {
+  color: #6a9419;
+}
+
+.detail-state {
+  min-height: 420px;
+  padding: 20px 0 24px;
+}
+
+.detail-loading-shell {
+  width: 100%;
+  height: auto;
+  min-height: min(70vh, 760px);
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 32px;
+  padding-top: 0;
+}
+
+.detail-loading-image {
+  min-height: 420px;
+  border-radius: 16px;
+}
+
+.detail-loading-info {
+  padding: 28px 0;
+}
+
+.detail-layout {
+  width: 100%;
+  max-width: 1480px;
+  margin-inline: auto;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 32px;
+  align-items: start;
+  padding: 16px 0 24px;
+  overflow: visible;
+}
+
+.detail-main-visual {
+  height: auto;
+  min-height: 0;
+  display: block;
+}
+
+.detail-visual {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  display: block;
+  flex: none;
+  padding: 12px 12px 18px;
+  border: 1px solid var(--proto-line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(17, 20, 22, .06);
+}
+
+.detail-image-stage {
+  width: 100%;
+  height: clamp(420px, calc(100dvh - 190px), 760px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--proto-paper-deep);
+}
+
+.detail-image-preview,
+.detail-image-preview :deep(.ant-image),
+.detail-image-preview :deep(.ant-image-img) {
   display: block;
   width: 100%;
   height: 100%;
 }
 
-.detail-image :deep(.ant-image-img) {
+.detail-image-preview :deep(.ant-image-img) {
   object-fit: contain;
   background: var(--proto-paper-deep);
 }
@@ -485,111 +628,193 @@ watch(() => route.params.id, () => {
   height: 100%;
   display: grid;
   place-items: center;
-  color: var(--proto-ink-soft);
+  color: var(--proto-muted);
   font-size: .875rem;
 }
 
 .detail-image-caption {
+  padding: 12px 2px 0;
+  color: var(--proto-muted);
+  font-size: .8125rem;
+}
+
+.detail-info-card {
+  position: sticky;
+  top: calc(var(--prototype-topbar-height) + 16px);
+  min-height: min(70vh, 760px);
+  max-height: calc(100dvh - var(--prototype-topbar-height) - 40px);
+  overflow: auto;
   display: flex;
+  flex-direction: column;
+  padding: 28px 28px 24px;
+  border: 1px solid var(--proto-line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(17, 20, 22, .06);
+}
+
+.detail-info-header {
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 3px 0;
-  color: var(--proto-ink-soft);
-  font-size: .75rem;
-  line-height: 1.3;
-  font-variant-numeric: tabular-nums;
+  gap: 16px;
 }
 
-.detail-info {
-  min-height: 0;
-  padding: 4px 4px 0;
-  overflow: hidden;
+.detail-heading-copy {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
-.detail-introduction-block {
-  margin-top: 0;
-  padding: 0 0 12px;
-  border-bottom: 1px solid var(--proto-line);
+.detail-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.detail-section-label {
-  display: block;
-  color: var(--proto-ink-soft);
-  font-size: .75rem;
+.detail-image-title {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--proto-ink);
+  font-size: clamp(1.75rem, 2.8vw, 2.35rem);
+  line-height: 1.08;
+  letter-spacing: -.055em;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.detail-title-status {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 6px;
+  font-size: .6875rem;
   line-height: 1.25;
-  font-weight: 700;
+  font-weight: 800;
+  white-space: nowrap;
+  transform: none;
+}
+
+.detail-title-status.pass {
+  background: rgba(186, 255, 61, .28);
+  color: #5e821b;
+}
+
+.detail-title-status.wait {
+  background: rgba(255, 214, 100, .3);
+  color: #8e6610;
+}
+
+.detail-title-status.refuse {
+  background: rgba(255, 137, 106, .2);
+  color: #a34f38;
+}
+
+.detail-more-button.ant-btn {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+  border: 1px solid var(--proto-line);
+  border-radius: 10px;
+  color: var(--proto-ink);
+  font-size: 1.25rem;
+  letter-spacing: .12em;
+  line-height: 1;
+}
+
+.detail-more-button.ant-btn:hover,
+.detail-more-button.ant-btn:focus {
+  border-color: rgba(106, 148, 25, .5);
+  color: #6a9419;
+  background: rgba(186, 255, 61, .12);
 }
 
 .detail-introduction {
-  max-width: none;
-  margin: 6px 0 0;
-  color: var(--proto-ink-soft);
+  display: block;
+  margin: 16px 0 0;
+  color: var(--proto-muted);
   font-size: .9375rem;
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .detail-tags {
-  margin-top: 12px;
+  margin-top: 18px;
 }
 
-.detail-tags :deep(.proto-tag) {
+.detail-tag.ant-tag {
   margin: 0 6px 6px 0;
-  padding: 4px 8px;
-  color: var(--proto-ink);
-  font-size: .75rem;
-  line-height: 1.2;
-}
-
-.detail-descriptions {
-  margin-top: 14px;
-}
-
-.detail-descriptions :deep(.ant-descriptions-view) {
-  border-color: var(--proto-line);
-}
-
-.detail-descriptions :deep(table) {
-  table-layout: fixed;
-}
-
-.detail-descriptions :deep(.ant-descriptions-item-label),
-.detail-descriptions :deep(.ant-descriptions-item-content) {
-  padding-inline: 12px;
-  border-color: var(--proto-line);
-  color: var(--proto-ink);
-}
-
-.detail-descriptions :deep(.ant-descriptions-item-label) {
-  padding-top: 9px;
-  padding-bottom: 4px;
-  background: rgba(228, 231, 223, .72);
-  color: var(--proto-ink-soft);
-  font-size: .75rem;
+  padding: 4px 9px;
+  border: 1px solid rgba(17, 20, 22, .1);
+  border-radius: 999px;
+  background: rgba(241, 242, 237, .72);
+  color: var(--proto-muted);
+  font-size: .6875rem;
   line-height: 1.25;
-  white-space: nowrap;
 }
 
-.detail-descriptions :deep(.ant-descriptions-item-content) {
-  padding-top: 4px;
-  padding-bottom: 10px;
-  background: rgba(255, 255, 255, .4);
-  font-size: .875rem;
+.detail-metadata {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--proto-line);
+}
+
+.detail-metadata h2,
+.detail-uploader h2 {
+  margin: 0 0 12px;
+  color: var(--proto-ink);
+  font-size: .9375rem;
   line-height: 1.3;
+  font-weight: 800;
+}
+
+.detail-metadata-list {
+  margin: 0;
+}
+
+.detail-metadata-row {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid rgba(17, 20, 22, .09);
+}
+
+.detail-metadata-row dt {
+  color: var(--proto-muted);
+  font-size: .8125rem;
+}
+
+.detail-metadata-row dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--proto-ink);
+  font-size: .8125rem;
   font-weight: 700;
   overflow-wrap: anywhere;
 }
 
+.detail-space-value {
+  color: #6a9419 !important;
+}
+
 .detail-uploader {
+  display: block;
+  margin-top: 24px;
+  padding: 24px 0 0;
+  border-top: 1px solid var(--proto-line);
+  border-bottom: 0;
+}
+
+.detail-uploader-row {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 14px 0;
-  border-top: 1px solid var(--proto-line);
-  border-bottom: 1px solid var(--proto-line);
+  gap: 12px;
 }
 
 .detail-uploader-avatar.ant-avatar {
@@ -603,171 +828,150 @@ watch(() => route.params.id, () => {
   min-width: 0;
 }
 
-.detail-uploader-label,
 .detail-uploader-copy strong {
   display: block;
-}
-
-.detail-uploader-label {
-  color: var(--proto-ink-soft);
-  font-size: .75rem;
-}
-
-.detail-uploader-copy strong {
-  margin-top: 4px;
+  margin-top: 0;
   color: var(--proto-ink);
   font-size: .9375rem;
   overflow-wrap: anywhere;
 }
 
-.detail-save-panel {
-  margin-top: 16px;
-  padding-top: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  border-top: 1px solid var(--proto-line);
-}
-
-.detail-save-copy {
-  min-width: 0;
-}
-
-.detail-save-copy strong {
-  display: block;
-  color: var(--proto-ink);
-  font-size: .9375rem;
-}
-
-.detail-save-copy p {
-  margin: 4px 0 0;
-  color: var(--proto-ink-soft);
-  font-size: .75rem;
-  line-height: 1.45;
-}
-
-.detail-save-button.ant-btn {
-  flex: 0 0 auto;
-  color: var(--proto-ink-soft);
-  background: rgba(186, 255, 61, .46);
-  border-color: rgba(109, 151, 18, .35);
-  box-shadow: none;
-  font-size: .75rem;
-  font-weight: 700;
-}
-
-.detail-save-button.ant-btn[disabled] {
-  color: var(--proto-ink-soft);
-  background: rgba(186, 255, 61, .46);
-  border-color: rgba(109, 151, 18, .35);
-  cursor: not-allowed;
-}
-
 .detail-review-note {
-  margin-top: 14px;
-  padding: 11px 13px;
-  border: 1px solid rgba(255, 137, 106, .55);
-  border-radius: 8px;
-  background: rgba(255, 137, 106, .16);
+  margin-top: 20px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 137, 106, .45);
+  border-radius: 9px;
+  background: rgba(255, 137, 106, .12);
   color: var(--proto-ink);
   font-size: .8125rem;
   line-height: 1.5;
 }
 
-.detail-review-note strong {
-  font-size: .8125rem;
-}
-
 .detail-review-note p {
   margin: 5px 0 0;
-  color: var(--proto-ink-soft);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  color: var(--proto-muted);
+  display: block;
+  overflow: visible;
 }
 
-@media (max-width: 980px) {
+.detail-action-area {
+  margin-top: auto;
+  padding-top: 24px;
+}
+
+.detail-manage-button.ant-btn {
+  height: 50px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--proto-acid);
+  color: var(--proto-ink);
+  box-shadow: none;
+  font-size: .875rem;
+  font-weight: 800;
+}
+
+.detail-manage-button.ant-btn:hover,
+.detail-manage-button.ant-btn:focus {
+  background: #c7ff62;
+  color: var(--proto-ink);
+}
+
+.detail-action-hint {
+  margin: 10px 0 0;
+  color: var(--proto-muted);
+  font-size: .6875rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.detail-prototype :deep(.ant-dropdown-menu) {
+  min-width: 160px;
+}
+
+@media (max-width: 1180px) {
   .detail-layout,
   .detail-loading-shell {
-    /* 仍沿用桌面端 3:1 主次关系，直到移动端真正需要上下堆叠。 */
-    grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
-    gap: var(--prototype-layout-gap);
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 24px;
+  }
+
+  .detail-info-card {
+    padding-inline: 24px;
+  }
+}
+
+@media (max-width: 820px) {
+  .detail-prototype {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .detail-head {
+    min-height: 64px;
+    padding-top: 10px;
+  }
+
+  .detail-layout {
+    grid-template-columns: 1fr;
+    flex: none;
+    min-height: auto;
+    padding-top: 14px;
+  }
+
+  .detail-loading-shell {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .detail-loading-image {
+    min-height: 360px;
+  }
+
+  .detail-loading-info {
+    padding: 0;
+  }
+
+  .detail-image-stage {
+    height: min(72vw, 560px);
+    min-height: 320px;
+  }
+
+  .detail-info-card {
+    position: static;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+    padding: 24px 20px 20px;
+  }
+}
+
+@media (max-width: 520px) {
+  .detail-image-stage {
+    height: min(82vw, 480px);
+    min-height: 280px;
+  }
+
+  .detail-visual {
+    padding: 8px 8px 14px;
+  }
+
+  .detail-image-caption {
+    padding-inline: 2px;
+    font-size: .75rem;
+  }
+
+  .detail-info-card {
+    padding-inline: 16px;
   }
 
   .detail-image-title {
     font-size: 1.7rem;
   }
-}
 
-@media (max-width: 800px) {
-  .detail-prototype {
-    height: auto;
-    overflow: visible;
-  }
-
-  .detail-head {
-    align-items: flex-start;
-    flex-direction: column;
-    padding-top: 10px;
-    justify-content: flex-start;
-  }
-
-  .detail-title-bar {
-    width: 100%;
-  }
-
-  .detail-head .proto-page-head-actions {
-    justify-content: flex-start;
-  }
-
-  .detail-state {
-    min-height: 360px;
-  }
-
-  .detail-loading-shell {
-    height: auto;
-    min-height: 520px;
-    grid-template-columns: 1fr;
-  }
-
-  .detail-layout {
-    display: grid;
-    grid-template-columns: 1fr;
-    flex: none;
-    min-height: auto;
-    overflow: visible;
-  }
-
-  .detail-main-visual {
-    height: auto;
-  }
-
-  .detail-visual {
-    height: auto;
-    flex: none;
-  }
-
-  .detail-image {
-    height: min(66vh, 520px);
-    max-height: none;
-    flex: none;
-  }
-
-  .detail-image-title {
-    font-size: 1.5rem;
-  }
-
-  .detail-info {
-    overflow: visible;
-    padding-top: 10px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .detail-prototype :deep(.ant-image-img) {
-    transition: none;
+  .detail-metadata-row {
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 10px;
   }
 }
 </style>
