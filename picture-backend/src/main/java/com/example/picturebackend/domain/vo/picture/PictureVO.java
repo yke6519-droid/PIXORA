@@ -1,7 +1,5 @@
 package com.example.picturebackend.domain.vo.picture;
 
-import com.example.picturebackend.domain.po.User;
-import com.example.picturebackend.domain.vo.user.UserVO;
 
 import lombok.Data;
 import org.springframework.beans.BeanUtils;
@@ -72,7 +70,7 @@ public class PictureVO {
      * 创建用户信息
      *
      */
-    private UserVO createdUser;
+    private UserPictureVO createdUser;
 
     /**
      * 创建时间

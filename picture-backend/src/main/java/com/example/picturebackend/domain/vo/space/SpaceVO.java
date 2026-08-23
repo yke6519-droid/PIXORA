@@ -3,7 +3,6 @@ package com.example.picturebackend.domain.vo.space;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.example.picturebackend.domain.po.Space;
-import com.example.picturebackend.domain.vo.user.UserVO;
 
 import lombok.Data;
 import org.springframework.beans.BeanUtils;
@@ -57,7 +56,7 @@ public class SpaceVO {
      * 持有人信息
      * 需要脱敏
      */
-    private UserVO createdUser;
+    private UserSpaceVO createdUser;
 
     /**
      * 创建时间

@@ -39,7 +39,7 @@ import com.example.picturebackend.domain.vo.picture.PicturePageVO;
 import com.example.picturebackend.domain.vo.picture.PictureUploadFailVO;
 import com.example.picturebackend.domain.vo.picture.PictureUploadVO;
 import com.example.picturebackend.domain.vo.picture.PictureVO;
-import com.example.picturebackend.domain.vo.user.UserVO;
+import com.example.picturebackend.domain.vo.picture.UserPictureVO;
 import com.example.picturebackend.manager.CosManager;
 import com.example.picturebackend.manager.MultiCacheManager;
 import com.example.picturebackend.manager.upload.FilePictureUpload;
@@ -732,8 +732,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         List<PictureVO> pictureVOs = pictureIpage.getRecords().stream().map(
             picture -> {
                 PictureVO pictureVO = buildPictureVO(picture, tagNamesByPictureId);
-                pictureVO.setCreatedUser(userService.getSaftyUser(
-                    userService.getById(picture.getUserid()))
+                pictureVO.setCreatedUser(
+                    userService.getUserPictureVO(
+                        userService.getById(picture.getUserid())
+                    )
                 );
                 return pictureVO;
         }).collect(Collectors.toList());
@@ -834,7 +836,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Page<Picture> picturePage = this.page(new Page<>(current, size), queryWrapper);
 
         // 当前页统一批量查询创建者，避免每张图片都单独访问一次用户表。
-        Map<Long, UserVO> createdUserVOMap = getCreatedUserVOMap(picturePage.getRecords());
+        Map<Long, UserPictureVO> createdUserVOMap = getCreatedUserPictureVOMap(picturePage.getRecords());
 
         // 标签一次性批量读取，避免分页中每张图片单独查询标签。
         Map<Long, List<String>> tagNamesByPictureId = loadActiveTagNamesByPictureIds(
@@ -878,14 +880,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             spaceService.SpaceAuthCheck(space.getId(), loginUser);
         }
 
-        PictureVO pictureVO = getPictureVO(picture);
-
-        // 不脱敏，直接设置完整的创建用户信息
-        User createdUser = userService.getById(picture.getUserid());
-        UserVO createdUserVO = userService.getSaftyUser(createdUser);
-        pictureVO.setCreatedUser(createdUserVO);
-
-        return pictureVO;
+        return getPictureVO(picture);
     }
 
     /**
@@ -922,8 +917,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Override
     public PictureVO getPictureVO(Picture picture) {
         PictureVO pictureVO = buildPictureVO(picture);
-        // 拿到脱敏后的创建者信息
-        UserVO crateUserVO = userService.getSaftyUser(userService.getById(picture.getUserid()));
+        // 图片接口只返回创建者的公开展示信息。
+        UserPictureVO crateUserVO = userService.getUserPictureVO(userService.getById(picture.getUserid()));
         // 封装
         pictureVO.setCreatedUser(crateUserVO);
 
@@ -953,7 +948,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     /**
      * 批量加载当前页的创建者，并提前转换为脱敏用户信息。
      */
-    private Map<Long, UserVO> getCreatedUserVOMap(List<Picture> pictures) {
+    private Map<Long, UserPictureVO> getCreatedUserPictureVOMap(List<Picture> pictures) {
         Set<Long> userIdSet = pictures.stream()
                 .map(Picture::getUserid)
                 .filter(Objects::nonNull)
@@ -967,7 +962,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 .filter(user -> user.getId() != null)
                 .collect(Collectors.toMap(
                         User::getId,
-                        userService::getSaftyUser,
+                        userService::getUserPictureVO,
                         (first, ignored) -> first));
     }
 
@@ -1061,7 +1056,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 user = userIdUserListMap.get(userId).get(0);
             }
 
-            pictureVO.setCreatedUser(userService.getSaftyUser(user));
+            pictureVO.setCreatedUser(userService.getUserPictureVO(user));
         });
         pictureVOPage.setRecords(pictureVOS);
         return pictureVOPage;

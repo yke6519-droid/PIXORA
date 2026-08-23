@@ -21,6 +21,8 @@ import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.user.*;
 import com.example.picturebackend.domain.request.notification.NotificationCreateRequest;
 import com.example.picturebackend.domain.vo.user.UserVO;
+import com.example.picturebackend.domain.vo.picture.UserPictureVO;
+import com.example.picturebackend.domain.vo.space.UserSpaceVO;
 import com.example.picturebackend.manager.CosManager;
 
 import lombok.extern.slf4j.Slf4j;
@@ -324,6 +326,28 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         
         saftyUser.setSpaceId(user.getSpaceId());
         return saftyUser;
+    }
+
+    @Override
+    public UserPictureVO getUserPictureVO(User user) {
+        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(user), ErrorCode.PARAMS_ERROR, "传入用户为空");
+
+        UserPictureVO userPictureVO = new UserPictureVO();
+        userPictureVO.setId(user.getId());
+        userPictureVO.setUsername(user.getUsername());
+        userPictureVO.setAvatarurl(user.getAvatarurl());
+        return userPictureVO;
+    }
+
+    @Override
+    public UserSpaceVO getUserSpaceVO(User user) {
+        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(user), ErrorCode.PARAMS_ERROR, "传入用户为空");
+
+        UserSpaceVO userSpaceVO = new UserSpaceVO();
+        userSpaceVO.setId(user.getId());
+        userSpaceVO.setUsername(user.getUsername());
+        userSpaceVO.setAvatarurl(user.getAvatarurl());
+        return userSpaceVO;
     }
 
     @Override

@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.spring.service.IService;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.user.*;
+import com.example.picturebackend.domain.vo.picture.UserPictureVO;
+import com.example.picturebackend.domain.vo.space.UserSpaceVO;
 import com.example.picturebackend.domain.vo.user.UserVO;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,6 +21,12 @@ public interface UserService extends IService<User> {
     String userLogin(UserLoginRequest userLoginRequest, HttpServletRequest request);
 
     UserVO getSaftyUser(User user);
+
+    /** 构造图片创建者的公开展示信息。 */
+    UserPictureVO getUserPictureVO(User user);
+
+    /** 构造空间持有人的公开展示信息。 */
+    UserSpaceVO getUserSpaceVO(User user);
 
     User getCurrentUser(HttpServletRequest request);
 

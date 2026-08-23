@@ -279,7 +279,8 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
                 ErrorCode.NO_AUTH_ERROR);
         SpaceVO spaceVO = new SpaceVO();
         spaceVO = spaceVO.Space2SpaceVO(space);
-        spaceVO.setCreatedUser(userService.getSaftyUser(loginUser));
+        // 管理员查看他人空间时，也必须展示空间持有人，而不是当前管理员。
+        spaceVO.setCreatedUser(userService.getUserSpaceVO(userService.getById(space.getUserId())));
         return spaceVO;
     }
 
@@ -309,7 +310,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         SpaceVO spaceVO = new SpaceVO();
         spaceVO = spaceVO.Space2SpaceVO(space);
         User user = userService.getById(space.getUserId());
-        spaceVO.setCreatedUser(userService.getSaftyUser(user));
+        spaceVO.setCreatedUser(userService.getUserSpaceVO(user));
         return spaceVO;
     }
 
