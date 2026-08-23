@@ -19,42 +19,36 @@
       </template>
     </a-result>
 
-    <section v-else-if="!space" class="space-empty">
-      <div class="space-empty-main">
-        <div class="space-empty-copy">
-          <h1>
-            <span>创建个人空间</span>
-          </h1>
-          <p>私人空间仅你可见，用于保存和管理个人图片。</p>
-        </div>
-
-        <div class="space-empty-action">
-          <a-button class="proto-button acid-button" type="primary" @click="createOpen = true">
-            创建我的空间
-          </a-button>
-        </div>
+    <section v-else-if="!space" class="space-empty" aria-labelledby="space-empty-title">
+      <div class="space-empty-header">
+        <div class="space-empty-eyebrow"><UserOutlined aria-hidden="true" /> 个人空间</div>
+        <h1 id="space-empty-title">创建你的个人图片空间</h1>
+        <p>保存、整理并管理只属于你的图片。</p>
       </div>
 
-      <aside class="space-empty-spec" aria-label="基础空间配置">
-        <div class="space-empty-spec-head">
-          <span>空间配置</span>
-          <strong>仅持有人</strong>
+      <article class="space-empty-card" aria-label="个人空间创建引导">
+        <div class="space-empty-illustration" aria-hidden="true">
+          <div class="space-illustration-grid" />
+          <span class="space-illustration-folder"><FolderOpenOutlined /></span>
+          <span class="space-illustration-picture"><PictureOutlined /></span>
+          <span class="space-illustration-lock"><LockOutlined /></span>
         </div>
-        <dl>
-          <div>
-            <dt>容量上限</dt>
-            <dd>100 MB</dd>
+
+        <div class="space-empty-benefits">
+          <div v-for="benefit in spaceBenefits" :key="benefit.key" class="space-empty-benefit">
+            <span class="space-empty-benefit-icon"><component :is="benefit.icon" aria-hidden="true" /></span>
+            <strong>{{ benefit.value }}</strong>
+            <span>{{ benefit.label }}</span>
           </div>
-          <div>
-            <dt>图片上限</dt>
-            <dd>50 张</dd>
-          </div>
-          <div>
-            <dt>访问范围</dt>
-            <dd>仅持有人</dd>
-          </div>
-        </dl>
-      </aside>
+        </div>
+
+        <div class="space-empty-divider" />
+
+        <a-button class="proto-button acid-button space-empty-create" type="primary" @click="createOpen = true">
+          创建个人空间
+        </a-button>
+        <p class="space-empty-note">创建后即可上传、整理和管理你的私人图片。</p>
+      </article>
     </section>
 
     <template v-else>
@@ -377,11 +371,20 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import { DeleteOutlined, MoreOutlined } from '@ant-design/icons-vue'
+import {
+  DatabaseOutlined,
+  DeleteOutlined,
+  FolderOpenOutlined,
+  LockOutlined,
+  MoreOutlined,
+  PictureOutlined,
+  UserOutlined,
+} from '@ant-design/icons-vue'
 import { useRouter } from 'vue-router'
 import {
   createSpace as createSpaceApi,
   deleteById,
+  queryDefaultQuota,
   querySpaceById,
   updateById,
 } from '../../../api/spaceController'
@@ -419,6 +422,7 @@ const batchTagCreateOpen = ref(false)
 const batchTagCreateLoading = ref(false)
 const newBatchTagName = ref('')
 const space = ref<API.SpaceVO | null>(null)
+const spaceQuota = ref<API.SpaceLevel | null>(null)
 const pictures = ref<API.PictureVO[]>([])
 const tags = ref<API.Tag[]>([])
 const selectedTagIds = ref<string[]>([])
@@ -458,6 +462,26 @@ const allBatchPicturesSelected = computed(() => (
   pictures.value.length > 0
   && pictures.value.every((picture) => selectedBatchPictureIds.value.includes(normalizeId(picture.id)))
 ))
+const spaceBenefits = computed(() => [
+  {
+    key: 'storage',
+    value: formatQuotaSize(spaceQuota.value?.maxSize),
+    label: '存储空间',
+    icon: DatabaseOutlined,
+  },
+  {
+    key: 'pictures',
+    value: `${toNumber(spaceQuota.value?.maxCount)} 张`,
+    label: '图片上限',
+    icon: PictureOutlined,
+  },
+  {
+    key: 'privacy',
+    value: '仅自己可见',
+    label: '私密访问',
+    icon: LockOutlined,
+  },
+])
 
 function toNumber(value?: number | string) {
   const parsed = Number(value || 0)
@@ -479,6 +503,11 @@ function formatSize(value?: number | string) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+/** 创建页展示额度时去掉无意义的 .0，保留后端真实配置。 */
+function formatQuotaSize(value?: number | string) {
+  return formatSize(value).replace('.0 MB', ' MB').replace('.0 KB', ' KB')
 }
 
 function statusClass(status?: number) {
@@ -516,6 +545,14 @@ async function loadSpace(spaceId: number | string) {
     throw new Error(res.data?.message || '空间信息加载失败')
   }
   space.value = res.data.data
+}
+
+async function loadDefaultQuota() {
+  const res = await queryDefaultQuota()
+  if (res.data?.code !== 200 || !res.data.data) {
+    throw new Error(res.data?.message || '空间额度加载失败')
+  }
+  spaceQuota.value = res.data.data
 }
 
 /** 只加载正常标签，停用标签不会出现在个人空间的筛选和绑定列表中。 */
@@ -617,14 +654,16 @@ function pictureTime(value?: string) {
 
 async function loadPage() {
   pageLoading.value = true
-  pageError.value = ''
+    pageError.value = ''
   try {
     const currentUser = await refreshCurrentUser()
-    if (!currentUser || !hasSpaceId(currentUser)) {
+    if (!currentUser) return
+    if (!hasSpaceId(currentUser)) {
       space.value = null
       pictures.value = []
       pictureTotal.value = 0
       allPictureTotal.value = null
+      await loadDefaultQuota()
       return
     }
     await loadSpace(currentUser.spaceId!)
@@ -936,75 +975,86 @@ onMounted(loadPage)
 .space-skeleton-grid > * { min-height: 300px; padding: 20px; border: 1px solid var(--proto-line); background: rgba(255,255,255,.45); }
 .space-empty {
   width: 100%;
-  min-height: 340px;
-  margin: 18px 0 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1.16fr) minmax(300px, .84fr);
-  overflow: hidden;
-  border-radius: 10px;
-  border: 1px solid var(--proto-line);
-  background: rgba(255, 255, 255, .42);
-  box-shadow: var(--proto-shadow);
-}
-.space-empty-main {
-  min-width: 0;
-  padding: 34px 48px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 58px 24px 72px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 26px;
+  align-items: center;
+  gap: 28px;
 }
-.space-empty-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.space-empty-header { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.space-empty-eyebrow {
+  min-height: 30px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: rgba(186,255,61,.18);
+  color: #4d7e13;
+  font-size: 13px;
+  font-weight: 700;
+}
+.space-empty-eyebrow :deep(.anticon) { font-size: 14px; }
 .space-empty h1 {
-  max-width: none;
-  margin: 0;
-  font-size: 48px;
-  line-height: .98;
-  letter-spacing: -.06em;
+  margin: 24px 0 0;
+  color: var(--proto-ink);
+  font-size: clamp(34px, 4vw, 42px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -.055em;
+  text-align: center;
 }
-.space-empty h1 span { display: block; white-space: nowrap; }
-.space-empty-copy p {
-  max-width: 46ch;
-  margin: 0;
-  color: var(--proto-muted);
-  font-size: 14px;
-  line-height: 1.55;
-  text-wrap: pretty;
-}
-.space-empty-action { display: flex; align-items: center; gap: 0; }
-.space-empty-action .acid-button {
-  min-width: 136px;
-  height: 44px;
-  padding-inline: 20px;
-  font-size: 14px;
-}
-.space-empty-spec {
-  padding: 28px 30px;
+.space-empty-header p { margin: 12px 0 0; color: var(--proto-muted); font-size: 16px; line-height: 1.5; text-align: center; }
+.space-empty-card {
+  width: min(100%, 620px);
+  padding: 30px 34px 28px;
   display: flex;
   flex-direction: column;
-  background: var(--proto-ink);
-  color: var(--proto-paper);
-}
-.space-empty-spec-head {
-  padding-bottom: 18px;
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid rgba(241,242,237,.2);
+  border: 1px solid rgba(17,20,22,.1);
+  border-radius: 16px;
+  background: rgba(255,255,255,.9);
+  box-shadow: 0 16px 42px rgba(18,23,23,.08);
 }
-.space-empty-spec-head span { font-size: 14px; font-weight: 700; }
-.space-empty-spec-head strong { color: var(--proto-acid); font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .08em; }
-.space-empty-spec dl { margin: 12px 0 0; }
-.space-empty-spec dl div {
-  min-height: 56px;
-  display: flex;
+.space-empty-illustration { position: relative; width: 230px; height: 154px; margin-bottom: 20px; color: var(--proto-ink-soft); }
+.space-illustration-grid {
+  position: absolute;
+  inset: 14px 18px 4px;
+  opacity: .26;
+  background-image: linear-gradient(rgba(17,20,22,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(17,20,22,.12) 1px, transparent 1px);
+  background-size: 20px 20px;
+  mask-image: radial-gradient(ellipse at center, #000 20%, transparent 76%);
+}
+.space-illustration-folder { position: absolute; top: 24px; left: 45px; color: #818880; font-size: 116px; line-height: 1; }
+.space-illustration-picture { position: absolute; top: 69px; left: 94px; display: inline-flex; color: var(--proto-ink); font-size: 52px; line-height: 1; }
+.space-illustration-picture :deep(.anticon) { filter: drop-shadow(0 2px 0 rgba(255,255,255,.8)); }
+.space-illustration-lock {
+  position: absolute;
+  top: 17px;
+  left: 42px;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  border-bottom: 1px solid rgba(241,242,237,.15);
+  justify-content: center;
+  border: 1px solid rgba(17,20,22,.55);
+  border-radius: 50%;
+  background: rgba(255,255,255,.92);
+  color: #79b51c;
+  font-size: 18px;
 }
-.space-empty-spec dt { color: rgba(241,242,237,.58); font-size: 11px; }
-.space-empty-spec dd { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -.03em; }
+.space-empty-benefits { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.space-empty-benefit { min-width: 0; padding: 0 16px; display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center; }
+.space-empty-benefit:not(:last-child) { border-right: 1px solid rgba(17,20,22,.1); }
+.space-empty-benefit-icon { height: 26px; display: inline-flex; align-items: center; color: #76b31b; font-size: 23px; }
+.space-empty-benefit-icon :deep(.anticon) { font-size: inherit; }
+.space-empty-benefit strong { color: var(--proto-ink); font-family: 'Abril Fatface', Georgia, serif; font-size: 24px; font-weight: 400; line-height: 1.15; white-space: nowrap; }
+.space-empty-benefit span:last-child { color: var(--proto-muted); font-size: 12px; line-height: 1.2; }
+.space-empty-divider { width: 100%; margin: 26px 0 0; border-top: 1px solid rgba(17,20,22,.1); }
+.space-empty-create { width: min(100%, 320px); height: 48px; margin-top: 26px; border-radius: 9px; font-size: 15px; font-weight: 700; }
+.space-empty-note { margin: 14px 0 0; color: var(--proto-muted); font-size: 13px; line-height: 1.45; text-align: center; }
 .space-prototype > .proto-page-head { padding-top: 0; padding-bottom: 0; align-items: center; }
 .space-heading-row { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .space-heading-main { min-width: 0; display: flex; align-items: flex-end; gap: 16px; }
@@ -1126,10 +1176,16 @@ onMounted(loadPage)
   .space-batch-tag-summary, .space-batch-tag-actions { justify-content: space-between; flex-wrap: wrap; }
 }
 @media (max-width: 580px) {
-  .space-empty { margin-top: 18px; }
-  .space-empty-main { padding: 28px 20px; }
-  .space-empty h1 { font-size: 40px; }
-  .space-empty h1 span { white-space: normal; }
+  .space-empty { padding: 42px 16px 54px; gap: 22px; }
+  .space-empty h1 { margin-top: 18px; font-size: 32px; }
+  .space-empty-header p { margin-top: 10px; font-size: 14px; }
+  .space-empty-card { padding: 24px 20px 24px; }
+  .space-empty-illustration { margin-bottom: 16px; transform: scale(.9); transform-origin: center top; }
+  .space-empty-benefits { grid-template-columns: 1fr; gap: 0; }
+  .space-empty-benefit { min-height: 82px; padding: 16px 0; }
+  .space-empty-benefit:not(:last-child) { border-right: 0; border-bottom: 1px solid rgba(17,20,22,.1); }
+  .space-empty-divider { margin-top: 20px; }
+  .space-empty-create { margin-top: 22px; }
   .space-heading-row { gap: 12px; }
   .space-heading-main { gap: 10px; }
   .space-heading-meta { gap: 5px; }

@@ -120,6 +120,18 @@ declare namespace API {
     data?: Space;
   };
 
+  type SpaceLevel = {
+    level?: number;
+    maxSize?: number | string;
+    maxCount?: number | string;
+  };
+
+  type BaseResponseSpaceLevel = {
+    code?: number;
+    message?: string;
+    data?: SpaceLevel;
+  };
+
   type BaseResponseSpacePageVO = {
     code?: number;
     message?: string;
