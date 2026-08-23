@@ -144,6 +144,12 @@ public interface PictureService extends IService<Picture> {
 
     Boolean adminCheckBatch(@RequestBody AdminCheckPictureBatchRequest adminCheckPictureBatchRequest, User loginUser);
 
+    /** 管理员批量设置公共图库图片主题。 */
+    Boolean adminSetCategoryBatch(PictureCategoryBatchRequest request, User loginUser);
+
+    /** 图片所属用户批量设置自己的公共图库图片主题。 */
+    Boolean setCategoryBatch(PictureCategoryBatchRequest request, User loginUser);
+
     /**
      * 按批次抓取并上传图片
      *

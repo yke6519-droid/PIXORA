@@ -1199,6 +1199,87 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
     }
 
+    /**
+     * 管理员批量设置公共图库主题。
+     * 先校验整个批次，再执行更新，避免批次中途发现私人图片后只改成功一部分。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Boolean adminSetCategoryBatch(PictureCategoryBatchRequest request, User loginUser) {
+        ThrowExceptionUtils.throwIF(
+                loginUser == null || !UserConstant.ADMIN_ROLE.equals(loginUser.getUserLevel()),
+                ErrorCode.NO_AUTH_ERROR,
+                "只有管理员可以设置公共图库主题");
+        return setPublicCategoryBatch(request, loginUser, true);
+    }
+
+    /** 普通用户只能批量设置自己上传的公共图库图片，不能操作他人的图片。 */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Boolean setCategoryBatch(PictureCategoryBatchRequest request, User loginUser) {
+        ThrowExceptionUtils.throwIF(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
+        return setPublicCategoryBatch(request, loginUser, false);
+    }
+
+    /**
+     * 公共图库主题批量更新的共同逻辑。
+     * isAdmin=true 时由管理员处理全部公共图片；否则只允许当前用户自己的图片。
+     */
+    private Boolean setPublicCategoryBatch(
+            PictureCategoryBatchRequest request,
+            User loginUser,
+            boolean isAdmin) {
+        ThrowExceptionUtils.throwIF(request == null, ErrorCode.PARAMS_ERROR, "主题请求不能为空");
+        ThrowExceptionUtils.throwIF(
+                request.getPictureIds() == null || request.getPictureIds().isEmpty(),
+                ErrorCode.PARAMS_ERROR,
+                "图片 id 不能为空");
+
+        categoryService.getRequired(request.getCategoryId());
+
+        List<Long> pictureIds = new ArrayList<>();
+        for (Long pictureId : request.getPictureIds()) {
+            ThrowExceptionUtils.throwIF(
+                    pictureId == null || pictureId <= 0,
+                    ErrorCode.PARAMS_ERROR,
+                    "图片 id 不合法");
+            if (!pictureIds.contains(pictureId)) {
+                pictureIds.add(pictureId);
+            }
+        }
+
+        // 先完整读取并校验，确保批量操作不会混入私人空间图片。
+        List<Picture> pictures = new ArrayList<>();
+        for (Long pictureId : pictureIds) {
+            Picture picture = this.getById(pictureId);
+            ThrowExceptionUtils.throwIF(
+                    picture == null,
+                    ErrorCode.NOT_FOUND_ERROR,
+                    "图片不存在：" + pictureId);
+            ThrowExceptionUtils.throwIF(
+                    normalizeSpaceId(picture.getSpaceId()) != 0L,
+                    ErrorCode.PARAMS_ERROR,
+                    "只能为公共图库图片设置主题");
+            ThrowExceptionUtils.throwIF(
+                    !isAdmin && !loginUser.getId().equals(picture.getUserid()),
+                    ErrorCode.NO_AUTH_ERROR,
+                    "只能设置自己上传的公共图库图片主题");
+            pictures.add(picture);
+        }
+
+        for (Picture picture : pictures) {
+            picture.setCategoryId(request.getCategoryId());
+            ThrowExceptionUtils.throwIF(
+                    !this.updateById(picture),
+                    ErrorCode.OPERATION_ERROR,
+                    "图片主题更新失败");
+        }
+
+        // 批量更新结束后只清理一次缓存。
+        multiCacheManager.invalidatePicturePageCache();
+        return true;
+    }
+
     private void validatePictureCheckResult(Integer checkResult) {
         ThrowExceptionUtils.throwIF(
                 !Objects.equals(checkResult, PictureConstant.CHECK_PASS)

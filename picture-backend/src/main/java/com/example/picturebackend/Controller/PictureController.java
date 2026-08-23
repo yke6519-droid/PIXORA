@@ -400,6 +400,35 @@ public class PictureController {
         return ResponseUtils.success(checkResult);
     }
 
+    /** 管理员批量设置公共图库图片主题。 */
+    @PutMapping("/adminSetCategoryBatch")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Boolean> adminSetCategoryBatch(
+            @RequestBody PictureCategoryBatchRequest pictureCategoryBatchRequest,
+            HttpServletRequest request) {
+        ThrowExceptionUtils.throwIF(
+                ObjectUtil.isNull(pictureCategoryBatchRequest),
+                ErrorCode.PARAMS_ERROR,
+                "主题请求不能为空");
+        User currentUser = userService.getCurrentUser(request);
+        return ResponseUtils.success(
+                pictureService.adminSetCategoryBatch(pictureCategoryBatchRequest, currentUser));
+    }
+
+    /** 普通用户批量设置自己上传到公共图库的图片主题，不能创建主题。 */
+    @PutMapping("/setCategoryBatch")
+    public BaseResponse<Boolean> setCategoryBatch(
+            @RequestBody PictureCategoryBatchRequest pictureCategoryBatchRequest,
+            HttpServletRequest request) {
+        ThrowExceptionUtils.throwIF(
+                ObjectUtil.isNull(pictureCategoryBatchRequest),
+                ErrorCode.PARAMS_ERROR,
+                "主题请求不能为空");
+        User currentUser = userService.getCurrentUser(request);
+        return ResponseUtils.success(
+                pictureService.setCategoryBatch(pictureCategoryBatchRequest, currentUser));
+    }
+
     /**
      * 管理员批量拉取并上传图片
      * @param pictureUploadByBatchRequest
