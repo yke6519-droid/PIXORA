@@ -396,6 +396,18 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
             ErrorCode.NO_AUTH_ERROR);
     }
 
+    /**
+     * 锁定空间行，避免并发删除图片时同时读取到旧的容量数据。
+     *
+     * <p>调用方需要处于事务中，锁才会一直保持到事务提交或回滚。</p>
+     */
+    @Override
+    public Space getByIdForUpdate(Long spaceId) {
+        return this.getOne(new QueryWrapper<Space>()
+                .eq("id", spaceId)
+                .last("FOR UPDATE"));
+    }
+
 }
 
 

@@ -10,6 +10,7 @@ import com.example.picturebackend.domain.vo.space.UserSpaceVO;
 import com.example.picturebackend.domain.vo.user.UserVO;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 
 /**
 * @author chen
@@ -35,6 +36,11 @@ public interface UserService extends IService<User> {
     boolean updateSelf(Long id, HttpServletRequest request, UpdateSelfRequest updateSelfRequest);
 
     boolean addUser(AddUserRequest addUserRequest);
+
+    /**
+     * 管理员统一删除用户入口。
+     */
+    boolean adminDeleteUsers(List<Long> userIds, User currentAdmin);
 
     IPage<User> queryPageByCondition(QueryPageRequest queryPageRequest);
 

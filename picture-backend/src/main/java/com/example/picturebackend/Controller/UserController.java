@@ -333,19 +333,9 @@ public class UserController {
     @DeleteMapping("/deleteById")
     public BaseResponse<Boolean> deleteUser(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request){
         ThrowExceptionUtils.throwIF(deleteRequest==null,ErrorCode.PARAMS_ERROR);
-        
-        User loginUser = userService.getCurrentUser(request);
 
-        ThrowExceptionUtils.throwIF(deleteRequest.getId() == loginUser.getId(),
-                ErrorCode.PARAMS_ERROR,"不能删除自己"
-        );
-
-        ThrowExceptionUtils.throwIF(userService.getById(deleteRequest.getId())
-                                .getUserLevel().equals(UserConstant.ADMIN_ROLE),
-         ErrorCode.NO_AUTH_ERROR,"不能删除管理员"
-        );
-
-        boolean b = userService.removeById(deleteRequest.getId());
+        User currentAdmin = userService.getCurrentUser(request);
+        boolean b = userService.adminDeleteUsers(List.of(deleteRequest.getId()), currentAdmin);
 
         return ResponseUtils.success(b);
     }
@@ -358,8 +348,10 @@ public class UserController {
      */
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @DeleteMapping("/deleteByIds")
-    public BaseResponse<Boolean> deleteUsers(@RequestBody DeleteRequest deleteRequest){
-        boolean b = userService.removeByIds(deleteRequest.getIds());
+    public BaseResponse<Boolean> deleteUsers(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request){
+        ThrowExceptionUtils.throwIF(deleteRequest == null, ErrorCode.PARAMS_ERROR);
+        User currentAdmin = userService.getCurrentUser(request);
+        boolean b = userService.adminDeleteUsers(deleteRequest.getIds(), currentAdmin);
         return ResponseUtils.success(b);
     }
 

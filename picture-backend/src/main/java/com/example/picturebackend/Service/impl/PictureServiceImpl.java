@@ -562,7 +562,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Override
     @Transactional
     public Boolean deletePictureById(Long id, User loginUser) {
-        ThrowExceptionUtils.throwIF(id <= 0, ErrorCode.PARAMS_ERROR, "图片id非法");
+        // 先判断 null，再判断数值，避免 id 为空时直接触发空指针异常。
+        ThrowExceptionUtils.throwIF(id == null || id <= 0, ErrorCode.PARAMS_ERROR, "图片id非法");
         Picture picture = this.getById(id);
 
         ThrowExceptionUtils.throwIF(picture == null, ErrorCode.NOT_FOUND_ERROR, "图片不存在");
@@ -572,7 +573,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         if (normalizeSpaceId(spaceId) > 0) {
             // 先读取空间持有人，再校验用户权限；不能直接拿 spaceId 与 userId 比较。
             spaceService.SpaceAuthCheck(spaceId, loginUser);
-            Space space = spaceService.getById(spaceId);
+            // 权限校验后重新加行锁，避免并发删除时覆盖空间容量数据。
+            Space space = spaceService.getByIdForUpdate(spaceId);
+            ThrowExceptionUtils.throwIF(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
             //1. 校验完成后 先删除图片
             boolean result = this.removeById(id);
             //2. 再更新空间的容量 并 删除COS中的对象

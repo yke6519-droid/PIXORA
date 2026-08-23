@@ -26,17 +26,22 @@ import com.example.picturebackend.domain.vo.picture.UserPictureVO;
 import com.example.picturebackend.domain.vo.space.UserSpaceVO;
 import com.example.picturebackend.manager.CosManager;
 
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 
 /**
@@ -44,9 +49,11 @@ import java.util.Date;
 * @description 针对表【user】的数据库操作Service实现
 * @createDate 2026-04-21 15:38:23
 */
-@Slf4j
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService{
+    // 使用独立名称，避免与 MyBatis-Plus 基类中的 log 字段冲突。
+    private static final Logger logger = LoggerFactory.getLogger(UserServiceImpl.class);
+
     @Resource
     private RedisTemplate redisTemplate;
     @Resource
@@ -255,6 +262,63 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return this.save(user);
     }
 
+    /**
+     * 管理员统一删除用户。
+     *
+     * 所有校验集中在这里，避免单个删除和批量删除出现不同的安全规则。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean adminDeleteUsers(List<Long> userIds, User currentAdmin) {
+        // Service 层再次确认操作者身份，避免未来新增调用入口时绕过权限校验。
+        ThrowExceptionUtils.throwIF(currentAdmin == null, ErrorCode.NOT_LOGIN_ERROR);
+        ThrowExceptionUtils.throwIF(
+                !UserConstant.ADMIN_ROLE.equals(currentAdmin.getUserLevel()),
+                ErrorCode.NO_AUTH_ERROR,
+                "只有管理员可以删除用户"
+        );
+
+        ThrowExceptionUtils.throwIF(
+                userIds == null || userIds.isEmpty(),
+                ErrorCode.PARAMS_ERROR,
+                "删除用户列表不能为空"
+        );
+
+        // 去重，同时检查每一个 ID 是否合法。
+        Set<Long> uniqueUserIds = new LinkedHashSet<>();
+        for (Long userId : userIds) {
+            ThrowExceptionUtils.throwIF(
+                    userId == null || userId <= 0,
+                    ErrorCode.PARAMS_ERROR,
+                    "用户 ID 不合法"
+            );
+            uniqueUserIds.add(userId);
+        }
+
+        // 逻辑删除只允许在所有目标都有效时执行，避免批量操作部分成功。
+        List<User> targetUsers = this.listByIds(new ArrayList<>(uniqueUserIds));
+        ThrowExceptionUtils.throwIF(
+                targetUsers.size() != uniqueUserIds.size(),
+                ErrorCode.NOT_FOUND_ERROR,
+                "待删除用户中存在不存在或已删除的用户"
+        );
+
+        for (User targetUser : targetUsers) {
+            ThrowExceptionUtils.throwIF(
+                    currentAdmin.getId().equals(targetUser.getId()),
+                    ErrorCode.PARAMS_ERROR,
+                    "不能删除自己"
+            );
+            ThrowExceptionUtils.throwIF(
+                    UserConstant.ADMIN_ROLE.equals(targetUser.getUserLevel()),
+                    ErrorCode.NO_AUTH_ERROR,
+                    "不能删除管理员"
+            );
+        }
+
+        return this.removeByIds(new ArrayList<>(uniqueUserIds));
+    }
+
     @Override
     public IPage<User> queryPageByCondition(QueryPageRequest queryPageRequest) {
 
@@ -420,7 +484,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
      */
     private void deleteRejectedAvatar(String avatarUrl) {
         if (StrUtil.isBlank(avatarUrl)) {
-            log.warn("拒绝头像缺少 COS URL，跳过对象清理");
+            logger.warn("拒绝头像缺少 COS URL，跳过对象清理");
             return;
         }
 
@@ -430,12 +494,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                     ? path.substring(1)
                     : path;
             if (StrUtil.isBlank(objectKey)) {
-                log.warn("无法从头像 URL 提取 COS Key，url = {}", avatarUrl);
+                logger.warn("无法从头像 URL 提取 COS Key，url = {}", avatarUrl);
                 return;
             }
             cosManager.deleteObject(objectKey);
         } catch (IllegalArgumentException exception) {
-            log.warn("头像 URL 格式异常，跳过 COS 对象清理，url = {}", avatarUrl, exception);
+            logger.warn("头像 URL 格式异常，跳过 COS 对象清理，url = {}", avatarUrl, exception);
         }
     }
 }

@@ -95,5 +95,13 @@ public interface SpaceService extends IService<Space> {
      */
     void checkUsage(Space space, Picture picture);
 
+    /**
+     * 在当前事务中锁定空间记录，供图片删除等容量变更操作使用。
+     *
+     * @param spaceId 空间 id
+     * @return 已锁定的空间
+     */
+    Space getByIdForUpdate(Long spaceId);
+
     void SpaceAuthCheck(Long spaceId, User loginUser);
 }

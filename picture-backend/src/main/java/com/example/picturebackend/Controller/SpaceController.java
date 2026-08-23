@@ -6,6 +6,7 @@ import com.example.picturebackend.Service.SpaceService;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.Utils.ResponseUtils;
 import com.example.picturebackend.annotation.AuthCheck;
+import com.example.picturebackend.constant.SpaceConstant;
 import com.example.picturebackend.constant.UserConstant;
 import com.example.picturebackend.domain.po.Space;
 import com.example.picturebackend.domain.po.User;
@@ -15,6 +16,7 @@ import com.example.picturebackend.domain.request.space.CreateSpaceRequest;
 import com.example.picturebackend.domain.request.space.SpaceQueryRequest;
 import com.example.picturebackend.domain.request.space.SpaceUpdateRequest;
 import com.example.picturebackend.domain.vo.space.SpacePageVO;
+import com.example.picturebackend.domain.vo.space.SpaceLevel;
 import com.example.picturebackend.domain.vo.space.SpaceVO;
 
 import org.springframework.web.bind.annotation.*;
@@ -71,6 +73,18 @@ public class SpaceController {
         User loginUser = userService.getCurrentUser(request);
         Space createdSpace = spaceService.createSpace(createSpaceRequest, loginUser);
         return ResponseUtils.success(createdSpace);
+    }
+
+    /**
+     * 返回创建普通个人空间时使用的默认额度。
+     * 仅提供展示所需的只读配置，不改变空间创建、权限或数据库逻辑。
+     */
+    @GetMapping("/queryDefaultQuota")
+    public BaseResponse<SpaceLevel> queryDefaultQuota(HttpServletRequest request) {
+        // 复用当前用户校验，避免未登录用户直接读取空间创建配置。
+        userService.getCurrentUser(request);
+        SpaceLevel spaceLevel = SpaceConstant.getSizeAndCountByLevel(SpaceConstant.NORMAL_LEVEL);
+        return ResponseUtils.success(spaceLevel);
     }
 
     /**
