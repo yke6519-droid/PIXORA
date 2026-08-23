@@ -63,9 +63,9 @@
       </a-form-item>
 
       <div class="editor-two-col">
-        <a-form-item label="图片分类">
+        <a-form-item v-if="isPublicPicture" label="图片主题">
           <a-select
-            v-model:value="form.category"
+            v-model:value="form.categoryId"
             :options="categoryOptions"
             allow-clear
             show-search
@@ -73,14 +73,11 @@
           />
         </a-form-item>
 
-        <a-form-item label="图片标签">
-          <a-select
-            v-model:value="form.tags"
-            mode="tags"
-            :options="tagOptions"
-            :max-tag-count="3"
-            allow-clear
-            placeholder="选择或输入标签"
+        <a-form-item v-else label="图片标签">
+          <a-alert
+            type="info"
+            show-icon
+            message="个人空间图片的标签，请在图片列表中使用“批量标签”功能管理。"
           />
         </a-form-item>
       </div>
@@ -121,8 +118,7 @@ const props = defineProps<{
   open: boolean
   mode: EditorMode
   picture: API.PictureVO | null
-  categories: string[]
-  tags: string[]
+  categories: API.Category[]
 }>()
 
 const emit = defineEmits<{
@@ -140,16 +136,18 @@ const localPreviewUrl = ref('')
 
 const form = reactive({
   name: '',
-  category: undefined as string | undefined,
-  tags: [] as string[],
+  categoryId: undefined as number | string | undefined,
   introduction: '',
 })
 
 const categoryOptions = computed(() =>
-  props.categories.map((item) => ({ label: item, value: item })),
+  props.categories.map((item) => ({
+    label: item.categoryName,
+    value: item.id,
+  })),
 )
-const tagOptions = computed(() =>
-  props.tags.map((item) => ({ label: item, value: item })),
+const isPublicPicture = computed(() =>
+  String(props.picture?.spaceId ?? '0') === '0',
 )
 const previewUrl = computed(() =>
   sourceMode.value === 'file'
@@ -196,8 +194,7 @@ function resetForm() {
   sourceMode.value = 'file'
   submitError.value = ''
   form.name = props.picture?.name || ''
-  form.category = props.picture?.category || undefined
-  form.tags = [...(props.picture?.tags || [])]
+  form.categoryId = props.picture?.categoryId
   form.introduction = props.picture?.introduction || ''
 }
 
@@ -260,8 +257,7 @@ async function submit() {
   const metadata = {
     id: pictureId,
     name: form.name.trim(),
-    category: form.category,
-    tags: [...new Set(form.tags.map((item) => item.trim()).filter(Boolean))],
+    categoryId: isPublicPicture.value ? form.categoryId : undefined,
     introduction: form.introduction.trim(),
   }
 

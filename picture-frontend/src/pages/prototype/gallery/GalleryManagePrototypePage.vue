@@ -2,7 +2,7 @@
   <div class="manage-prototype">
     <section class="manage-page-head">
       <div class="manage-heading">
-        <h1 class="manage-visually-hidden">我的图片</h1>
+        <h1 class="manage-visually-hidden">{{ isAdminGalleryPage ? '公共图库管理' : '我的图片' }}</h1>
         <div class="manage-status-tabs" role="tablist" aria-label="图片审核状态">
           <button
             v-for="statusTab in statusTabs"
@@ -21,6 +21,7 @@
       </div>
       <div class="manage-page-actions">
         <a-button
+          v-if="!isAdminGalleryPage"
           class="proto-button acid-button"
           type="primary"
           @click="router.push('/gallery/upload')"
@@ -35,7 +36,7 @@
       <div class="manage-search-row">
         <a-input-search
           v-model:value="filters.searchText"
-          placeholder="搜索图片名称、标签..."
+          placeholder="搜索图片名称..."
           allow-clear
           enter-button="搜索"
           :loading="loading"
@@ -43,47 +44,34 @@
         />
       </div>
       <div class="manage-filter-row">
-        <label class="manage-filter-item">
-          <span>图库:</span>
-          <a-select
-            v-model:value="filters.scope"
-            aria-label="图库范围"
-            @change="handleScopeChange"
+        <div class="manage-category-control">
+          <label class="manage-filter-item">
+            <span>主题:</span>
+            <a-select
+              v-model:value="filters.categoryId"
+              :options="categoryOptions"
+              :loading="optionLoading"
+              allow-clear
+              show-search
+              placeholder="全部主题"
+              @change="runSearch"
+            />
+          </label>
+          <a-button
+            v-if="canManageCategories"
+            class="manage-inline-button"
+            @click="categoryCreateOpen = true"
           >
-            <a-select-option value="public">公共图库</a-select-option>
-            <a-select-option value="private" :disabled="!hasPrivateSpace">
-              我的私人空间
-            </a-select-option>
-          </a-select>
-        </label>
-        <label class="manage-filter-item">
-          <span>分类:</span>
-          <a-select
-            v-model:value="filters.category"
-            :options="categoryOptions"
-            :loading="optionLoading"
-            allow-clear
-            show-search
-            placeholder="全部分类"
-            @change="runSearch"
-          />
-        </label>
-        <label class="manage-filter-item manage-tag-filter">
-          <span>标签:</span>
-          <a-select
-            v-model:value="filters.tags"
-            mode="multiple"
-            :options="tagOptions"
-            :loading="optionLoading"
-            :max-tag-count="1"
-            allow-clear
-            placeholder="全部标签"
-            @change="runSearch"
-          />
-        </label>
+            新增主题
+          </a-button>
+        </div>
         <label class="manage-filter-item manage-sort-item">
           <span>排序:</span>
-          <a-select v-model:value="filters.sortOrder" aria-label="排序方式" @change="runSearch">
+          <a-select
+            v-model:value="filters.sortOrder"
+            aria-label="排序方式"
+            @change="runSearch"
+          >
             <a-select-option value="descend">最新上传</a-select-option>
             <a-select-option value="ascend">最早上传</a-select-option>
           </a-select>
@@ -125,7 +113,11 @@
       </template>
     </a-alert>
 
-    <section class="manage-table proto-section">
+    <div
+      class="manage-content-layout"
+      :class="{ 'is-admin-gallery': isAdminGalleryPage }"
+    >
+      <section class="manage-table proto-section">
       <div class="manage-table-head">
         <div class="proto-flex proto-gap-12">
           <a-checkbox
@@ -137,6 +129,13 @@
           <span>选择当前页</span>
         </div>
         <div class="manage-batch-actions">
+          <a-button
+            class="proto-button ghost-button"
+            :disabled="!selectedIds.length || categoryBatchLoading"
+            @click="openCategoryBatchManage"
+          >
+            批量设置主题
+          </a-button>
           <a-button class="proto-button ghost-button" @click="handleBatchManage">
             批量管理
           </a-button>
@@ -164,6 +163,7 @@
         :description="emptyDescription"
       >
         <a-button
+          v-if="!isAdminGalleryPage"
           class="proto-button acid-button"
           type="primary"
           @click="router.push('/gallery/upload')"
@@ -178,6 +178,7 @@
             v-for="picture in pictures"
             :key="String(picture.id)"
             :picture="picture"
+            :category-name="getCategoryName(picture.categoryId)"
             :show-manage-controls="true"
             :selected="selectedIds.includes(normalizeId(picture.id))"
             :status-text="statusText(picture.pictureCheck)"
@@ -190,8 +191,14 @@
         </template>
 
         <template v-else>
-          <article v-for="picture in pictures" :key="String(picture.id)" class="manage-row">
-            <div class="manage-select">
+          <article
+            v-for="picture in pictures"
+            :key="String(picture.id)"
+            class="manage-row"
+            :class="{ 'is-selected': selectedIds.includes(normalizeId(picture.id)) }"
+            @click="handleListPictureClick(picture)"
+          >
+            <div class="manage-select" @click.stop>
               <a-checkbox
                 :checked="selectedIds.includes(normalizeId(picture.id))"
                 @change="(event: any) => toggleOne(picture.id, event.target.checked)"
@@ -202,7 +209,7 @@
               type="button"
               class="manage-thumb proto-image-wrap"
               :aria-label="`查看 ${picture.name || '图片'} 详情`"
-              @click="openDetail(picture.id)"
+              @click.stop="handleListPictureClick(picture)"
             >
               <img
                 v-if="picture.thumbnailUrl || picture.url"
@@ -221,8 +228,8 @@
               </div>
               <p>{{ picture.introduction || '暂无图片简介' }}</p>
               <div class="manage-tags">
-                <a-tag v-if="picture.category" class="proto-tag acid-tag">
-                  {{ picture.category }}
+                 <a-tag v-if="getCategoryName(picture.categoryId)" class="proto-tag acid-tag">
+                  {{ getCategoryName(picture.categoryId) }}
                 </a-tag>
                 <a-tag v-for="tag in picture.tags || []" :key="tag" class="proto-tag">
                   {{ tag }}
@@ -236,7 +243,7 @@
             <div class="manage-meta" aria-label="图片属性">
               <div class="manage-meta-item">
                 <span>图库范围</span>
-                <strong>{{ picture.spaceId && String(picture.spaceId) !== '0' ? '私人空间' : '公共图库' }}</strong>
+                <strong>公共图库</strong>
               </div>
               <div class="manage-meta-item">
                 <span>尺寸</span>
@@ -252,7 +259,7 @@
               </div>
             </div>
 
-            <div class="manage-action-cell">
+            <div class="manage-action-cell" @click.stop>
               <a-button type="link" @click="openDetail(picture.id)">详情</a-button>
               <a-button type="link" @click="openEditor(picture, 'edit')">编辑</a-button>
               <a-button
@@ -282,21 +289,64 @@
           :page-size="pageSize"
           :total="total"
           :show-size-changer="false"
-          show-less-items
+           show-less-items
           :show-total="(value: number, range: [number, number]) => `${range[0]}–${range[1]} / ${value}`"
           @change="handlePageChange"
         />
       </div>
-    </section>
+      </section>
+
+    </div>
 
     <PictureManageEditorModal
       v-model:open="editorOpen"
       :mode="editorMode"
       :picture="activePicture"
       :categories="categories"
-      :tags="tags"
       @success="handleEditorSuccess"
     />
+    <a-modal
+      v-model:open="categoryCreateOpen"
+      title="新增公共图库主题"
+      ok-text="创建主题"
+      cancel-text="取消"
+      :confirm-loading="categoryCreateLoading"
+      @ok="submitCategoryCreate"
+    >
+      <a-form layout="vertical" class="proto-form">
+        <a-form-item label="主题名称" required>
+          <a-input
+            v-model:value="newCategoryName"
+            :maxlength="64"
+            show-count
+            placeholder="例如：自然风光"
+            @press-enter="submitCategoryCreate"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="categoryBatchOpen"
+      title="批量设置图片主题"
+      ok-text="保存主题"
+      cancel-text="取消"
+      :confirm-loading="categoryBatchLoading"
+      @ok="submitCategoryBatch"
+    >
+      <p class="manage-category-batch-hint">已选择 {{ selectedIds.length }} 张公共图库图片。</p>
+      <a-form layout="vertical" class="proto-form">
+        <a-form-item label="目标主题" required>
+          <a-select
+            v-model:value="selectedCategoryId"
+            :options="categoryOptions"
+            :loading="optionLoading"
+            show-search
+            placeholder="请选择主题"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -310,16 +360,17 @@ import {
 } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  adminSetCategoryBatch,
   deletePicture,
-  listPictureCategory,
   queryPicturePage,
+  setCategoryBatch,
 } from '../../../api/pictureController'
+import { createCategory, listCategory } from '../../../api/categoryController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import PictureManageEditorModal from './components/PictureManageEditorModal.vue'
 import PictureGalleryCard from './components/PictureGalleryCard.vue'
 
 type PictureStatus = 0 | 1 | 2
-type PictureScope = 'public' | 'private'
 type EditorMode = 'edit' | 'reupload'
 type ViewMode = 'grid' | 'list'
 
@@ -333,8 +384,7 @@ const countLoading = ref(false)
 const authChecking = ref(true)
 const loadError = ref('')
 const pictures = ref<API.PictureVO[]>([])
-const categories = ref<string[]>([])
-const tags = ref<string[]>([])
+const categories = ref<API.Category[]>([])
 const total = ref(0)
 const current = ref(1)
 const pageSize = 15
@@ -342,6 +392,12 @@ const selectedIds = ref<string[]>([])
 const editorOpen = ref(false)
 const editorMode = ref<EditorMode>('edit')
 const activePicture = ref<API.PictureVO | null>(null)
+const categoryCreateOpen = ref(false)
+const categoryCreateLoading = ref(false)
+const newCategoryName = ref('')
+const categoryBatchOpen = ref(false)
+const categoryBatchLoading = ref(false)
+const selectedCategoryId = ref<string | undefined>()
 const viewMode = ref<ViewMode>('grid')
 const statusTotals = reactive<Record<PictureStatus, number | null>>({
   0: null,
@@ -352,30 +408,25 @@ const statusTotals = reactive<Record<PictureStatus, number | null>>({
 const filters = reactive({
   searchText: '',
   pictureCheck: 1 as PictureStatus,
-  scope: 'public' as PictureScope,
-  category: undefined as string | undefined,
-  tags: [] as string[],
+  categoryId: undefined as string | undefined,
   sortOrder: 'descend' as 'ascend' | 'descend',
 })
 
 const categoryOptions = computed(() =>
-  categories.value.map((item) => ({ label: item, value: item })),
-)
-const tagOptions = computed(() =>
-  tags.value.map((item) => ({ label: item, value: item })),
+  categories.value.map((item) => ({
+    label: item.categoryName,
+    value: normalizeId(item.id),
+  })),
 )
 const statusTabs = computed(() => [
   { value: 1 as PictureStatus, label: '已通过', count: statusTotals[1] },
   { value: 0 as PictureStatus, label: '待审核', count: statusTotals[0] },
   { value: 2 as PictureStatus, label: '未通过', count: statusTotals[2] },
 ])
-const hasPrivateSpace = computed(() => {
-  const spaceId = loginUserStore.loginUser?.spaceId
-  return Boolean(spaceId && String(spaceId) !== '0')
-})
-const scopeText = computed(() =>
-  filters.scope === 'private' ? '我的私人空间' : '公共图库',
-)
+const isAdmin = computed(() => loginUserStore.loginUser?.userLevel === 'admin')
+const isAdminGalleryPage = computed(() => Boolean(route.meta.publicGalleryAdmin))
+const canManageCategories = computed(() => isAdmin.value && isAdminGalleryPage.value)
+const scopeText = computed(() => '公共图库')
 const allSelected = computed(() =>
   pictures.value.length > 0 &&
   pictures.value.every((picture) => selectedIds.value.includes(normalizeId(picture.id))),
@@ -410,8 +461,8 @@ async function ensureCurrentUser() {
 }
 
 /**
- * 统一生成“我的图片”查询参数，列表和顶部状态统计共用同一套空间范围。
- * 统计故意不带搜索、分类和标签条件，只随公共图库/私人空间切换。
+ * 统一生成公共图库查询参数。
+ * 普通用户只查询自己上传的公共图片；管理员页面查询全部公共图片。
  */
 function buildPictureQuery(
   pictureCheck: PictureStatus,
@@ -422,8 +473,8 @@ function buildPictureQuery(
   const query: API.PictureQueryRequest = {
     current: includeListFilters ? current.value : 1,
     pageSize: size,
-    userId: currentUser?.id,
-    spaceId: filters.scope === 'private' ? currentUser?.spaceId : 0,
+    userId: isAdminGalleryPage.value ? undefined : currentUser?.id,
+    spaceId: 0,
     pictureCheck,
     sortFiled: 'createtime',
     sortOrder: filters.sortOrder,
@@ -431,8 +482,7 @@ function buildPictureQuery(
 
   if (includeListFilters) {
     query.searchText = filters.searchText.trim() || undefined
-    query.category = filters.category
-    query.tags = filters.tags.length ? [...filters.tags] : undefined
+    query.categoryId = filters.categoryId
   }
 
   return query
@@ -441,10 +491,6 @@ function buildPictureQuery(
 async function loadPictures() {
   const currentUser = loginUserStore.loginUser
   if (!currentUser?.id) return
-
-  if (filters.scope === 'private' && !hasPrivateSpace.value) {
-    filters.scope = 'public'
-  }
 
   loading.value = true
   loadError.value = ''
@@ -503,20 +549,26 @@ async function loadStatusCounts() {
 async function loadOptions() {
   optionLoading.value = true
   try {
-    const res = await listPictureCategory()
-    if (res.data?.code === 200) {
-      categories.value = res.data.data?.categorys || []
-      tags.value = res.data.data?.tags || []
+    const res = await listCategory()
+    if (res.data?.code !== 200) {
+      throw new Error(res.data?.message || '主题加载失败')
     }
+    categories.value = res.data.data || []
   } catch {
-    message.warning('分类和标签暂时加载失败，仍可按关键词查询')
+    categories.value = []
+    message.warning('主题暂时加载失败，仍可按关键词查询')
   } finally {
     optionLoading.value = false
   }
 }
 
 function normalizeId(id?: number | string) {
-  return String(id || '').trim()
+  return id === undefined || id === null ? '' : String(id).trim()
+}
+
+function getCategoryName(categoryId?: number | string) {
+  const category = categories.value.find((item) => normalizeId(item.id) === normalizeId(categoryId))
+  return category?.categoryName || ''
 }
 
 function statusText(status?: number) {
@@ -541,20 +593,10 @@ function handleStatusTabClick(status: PictureStatus) {
   void loadPictures()
 }
 
-function handleScopeChange() {
-  if (filters.scope === 'private' && !hasPrivateSpace.value) {
-    filters.scope = 'public'
-  }
-  current.value = 1
-  void Promise.all([loadPictures(), loadStatusCounts()])
-}
-
 function resetFilters() {
   filters.searchText = ''
   filters.pictureCheck = 1
-  filters.scope = 'public'
-  filters.category = undefined
-  filters.tags = []
+  filters.categoryId = undefined
   filters.sortOrder = 'descend'
   current.value = 1
   void Promise.all([loadPictures(), loadStatusCounts()])
@@ -566,6 +608,77 @@ function handleBatchManage() {
     return
   }
   confirmBatchDelete()
+}
+
+function handleListPictureClick(picture: API.PictureVO) {
+  openDetail(picture.id)
+}
+
+function openCategoryBatchManage() {
+  if (!selectedIds.value.length) {
+    message.info('请先选择公共图库图片')
+    return
+  }
+  selectedCategoryId.value = undefined
+  categoryBatchOpen.value = true
+}
+
+async function submitCategoryCreate() {
+  if (!canManageCategories.value) {
+    message.error('只有管理员可以新增公共图库主题')
+    return
+  }
+  const categoryName = newCategoryName.value.trim()
+  if (!categoryName) {
+    message.warning('请输入主题名称')
+    return
+  }
+
+  categoryCreateLoading.value = true
+  try {
+    const res = await createCategory({ categoryName })
+    if (res.data?.code !== 200 || !res.data.data) {
+      throw new Error(res.data?.message || '主题创建失败')
+    }
+    categoryCreateOpen.value = false
+    newCategoryName.value = ''
+    await loadOptions()
+    message.success('主题已创建')
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || error?.message || '主题创建失败')
+  } finally {
+    categoryCreateLoading.value = false
+  }
+}
+
+async function submitCategoryBatch() {
+  if (!selectedIds.value.length || !selectedCategoryId.value) {
+    message.warning('请选择目标主题')
+    return
+  }
+
+  categoryBatchLoading.value = true
+  try {
+    const request = {
+      pictureIds: [...selectedIds.value],
+      categoryId: selectedCategoryId.value,
+    }
+    const res = isAdminGalleryPage.value
+      ? await adminSetCategoryBatch(request)
+      : await setCategoryBatch(request)
+    if (res.data?.code !== 200 || res.data.data === false) {
+      throw new Error(res.data?.message || '批量设置主题失败')
+    }
+    const changedCount = selectedIds.value.length
+    categoryBatchOpen.value = false
+    selectedCategoryId.value = undefined
+    message.success(`已为 ${changedCount} 张图片设置主题`)
+    await loadPictures()
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || error?.message || '批量设置主题失败')
+  } finally {
+    categoryBatchLoading.value = false
+  }
 }
 
 function toggleOne(id: number | string | undefined, checked: boolean) {
@@ -846,6 +959,10 @@ onMounted(async () => {
 
 .manage-row:last-child { border-bottom: 0; }
 .manage-row:hover { background: rgba(186, 255, 61, .08); }
+.manage-row.is-selected {
+  background: rgba(186, 255, 61, .16);
+  box-shadow: inset 0 0 0 2px var(--proto-acid);
+}
 
 .manage-thumb {
   width: 132px;
@@ -1037,6 +1154,11 @@ onMounted(async () => {
   color: var(--proto-ink);
 }
 
+.manage-status-tab:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
 .manage-status-tab.is-active {
   border-bottom-color: var(--proto-acid);
 }
@@ -1129,6 +1251,25 @@ onMounted(async () => {
   background: rgba(255, 255, 255, .60) !important;
 }
 
+.manage-category-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.manage-inline-button {
+  height: 40px;
+  padding-inline: 12px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.manage-category-batch-hint {
+  margin: 0 0 16px;
+  color: var(--proto-muted);
+  font-size: 13px;
+}
+
 .manage-tag-filter :deep(.ant-select) {
   width: 174px;
 }
@@ -1171,6 +1312,168 @@ onMounted(async () => {
 .manage-table {
   padding-top: 21px;
   padding-bottom: 28px;
+}
+
+.manage-content-layout {
+  display: block;
+}
+
+.manage-content-layout.is-private {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.manage-tag-panel {
+  position: sticky;
+  top: 16px;
+  min-width: 0;
+  padding: 17px 14px 14px;
+  border: 1px solid rgba(17, 20, 22, .09);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .66);
+}
+
+.manage-tag-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.manage-tag-panel-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--proto-muted);
+  font-size: 10px;
+}
+
+.manage-tag-panel h2 {
+  margin: 0;
+  color: var(--proto-ink);
+  font-size: 17px;
+  letter-spacing: -.04em;
+}
+
+.manage-tag-panel-count {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--proto-acid);
+  color: var(--proto-ink);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.manage-tag-panel-hint,
+.manage-tag-create-hint {
+  margin: 9px 0 14px;
+  color: var(--proto-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.manage-tag-options {
+  display: grid;
+  gap: 5px;
+}
+
+.manage-tag-option {
+  width: 100%;
+  min-height: 35px;
+  padding: 7px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--proto-ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  transition: background-color .2s ease, border-color .2s ease;
+}
+
+.manage-tag-option:hover,
+.manage-tag-option.is-selected {
+  border-color: rgba(141, 187, 34, .46);
+  background: rgba(186, 255, 61, .18);
+  color: var(--proto-ink);
+}
+
+.manage-tag-check {
+  color: #568000;
+  font-weight: 800;
+}
+
+.manage-tag-panel-loading {
+  padding: 14px 9px;
+  color: var(--proto-muted);
+  font-size: 11px;
+}
+
+.manage-tag-panel :deep(.ant-empty) {
+  margin: 16px 0;
+}
+
+.manage-tag-panel :deep(.ant-empty-description) {
+  color: var(--proto-muted);
+  font-size: 11px;
+}
+
+.manage-tag-create-button {
+  height: 35px;
+  margin-top: 14px;
+  border-radius: 7px;
+  border-style: dashed;
+  color: var(--proto-ink);
+  font-size: 12px;
+}
+
+.manage-tag-create-button:hover {
+  border-color: var(--proto-ink) !important;
+  color: var(--proto-ink) !important;
+}
+
+.manage-tag-binding-bar {
+  position: sticky;
+  z-index: 10;
+  bottom: 14px;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(17, 20, 22, .12);
+  border-radius: 10px;
+  background: rgba(246, 247, 242, .96);
+  box-shadow: 0 8px 24px rgba(17, 20, 22, .12);
+}
+
+.manage-tag-binding-summary,
+.manage-tag-binding-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.manage-tag-binding-summary {
+  color: var(--proto-muted);
+  font-size: 12px;
+}
+
+.manage-tag-binding-summary strong {
+  color: var(--proto-ink);
+}
+
+.manage-tag-binding-actions :deep(.ant-btn) {
+  border-radius: 7px;
+  font-size: 12px;
 }
 
 .manage-table-head {
@@ -1225,6 +1528,11 @@ onMounted(async () => {
 }
 
 @media (max-width: 920px) {
+  .manage-content-layout.is-private {
+    grid-template-columns: 170px minmax(0, 1fr);
+    gap: 16px;
+  }
+
   .manage-list.is-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1240,6 +1548,38 @@ onMounted(async () => {
 }
 
 @media (max-width: 720px) {
+  .manage-content-layout.is-private {
+    display: block;
+  }
+
+  .manage-tag-panel {
+    position: static;
+    margin-bottom: 14px;
+  }
+
+  .manage-tag-options {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .manage-tag-option {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
+  .manage-tag-binding-bar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 11px;
+  }
+
+  .manage-tag-binding-summary,
+  .manage-tag-binding-actions {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
   .manage-page-head {
     align-items: stretch;
     flex-direction: column;
@@ -1271,6 +1611,14 @@ onMounted(async () => {
   .manage-filter-item {
     flex: 1 1 calc(50% - 10px);
     justify-content: space-between;
+  }
+
+  .manage-category-control {
+    flex: 1 1 calc(50% - 10px);
+  }
+
+  .manage-category-control .manage-filter-item {
+    flex: 1 1 auto;
   }
 
   .manage-filter-item :deep(.ant-select),

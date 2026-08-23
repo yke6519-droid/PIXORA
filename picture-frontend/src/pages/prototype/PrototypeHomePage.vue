@@ -100,7 +100,7 @@
           />
           <span class="home-library-overlay">
             <strong>{{ picture.name || '未命名图片' }}</strong>
-            <span>{{ picture.category || '未分类' }} · {{ picture.createdUser?.username || '未知用户' }}</span>
+            <span>{{ getCategoryName(picture.categoryId) }} · {{ picture.createdUser?.username || '未知用户' }}</span>
           </span>
         </button>
       </div>
@@ -173,6 +173,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { queryPicturePageCache } from '../../api/pictureController'
+import { listCategory } from '../../api/categoryController'
 import { useLoginUserStore } from '../../stores/useLoginUserStore'
 
 const router = useRouter()
@@ -180,6 +181,7 @@ const loginUserStore = useLoginUserStore()
 const loading = ref(false)
 const loadError = ref('')
 const pictureList = ref<API.PictureVO[]>([])
+const categories = ref<API.Category[]>([])
 const total = ref(0)
 
 // 管理入口只对当前登录的管理员展示，普通用户和匿名访客不会看到后台功能。
@@ -216,6 +218,23 @@ async function loadPublicPictures() {
   }
 }
 
+async function loadCategories() {
+  try {
+    const res = await listCategory()
+    if (res.data?.code === 200) {
+      categories.value = res.data.data || []
+    }
+  } catch {
+    // 主题加载失败不影响首页图片展示。
+    categories.value = []
+  }
+}
+
+function getCategoryName(categoryId?: number | string) {
+  const category = categories.value.find((item) => String(item.id) === String(categoryId))
+  return category?.categoryName || '未分类'
+}
+
 function pictureImage(picture?: API.PictureVO) {
   return picture?.thumbnailUrl || picture?.url || ''
 }
@@ -229,6 +248,7 @@ function openDetail(id?: number | string) {
 
 onMounted(() => {
   void loadPublicPictures()
+  void loadCategories()
   if (!loginUserStore.loginUser) {
     void loginUserStore.fetchLoginUser()
   }

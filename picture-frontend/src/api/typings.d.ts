@@ -36,6 +36,12 @@ declare namespace API {
     data?: boolean;
   };
 
+  type BaseResponseCategory = {
+    code?: number;
+    message?: string;
+    data?: Category;
+  };
+
   type BaseResponseIPagePictureVO = {
     code?: number;
     message?: string;
@@ -66,6 +72,24 @@ declare namespace API {
     data?: AvatarReviewVO[];
   };
 
+  type BaseResponseListCategory = {
+    code?: number;
+    message?: string;
+    data?: Category[];
+  };
+
+  type BaseResponseListTag = {
+    code?: number;
+    message?: string;
+    data?: Tag[];
+  };
+
+  type BaseResponseTag = {
+    code?: number;
+    message?: string;
+    data?: Tag;
+  };
+
   type BaseResponsePictureListVO = {
     code?: number;
     message?: string;
@@ -76,12 +100,6 @@ declare namespace API {
     code?: number;
     message?: string;
     data?: PicturePageVO;
-  };
-
-  type BaseResponsePictureTagCategory = {
-    code?: number;
-    message?: string;
-    data?: PictureTagCategory;
   };
 
   type BaseResponsePictureUploadVO = {
@@ -220,17 +238,60 @@ declare namespace API {
     id?: number | string;
     name?: string;
     introduction?: string;
-    category?: string;
+    categoryId?: number | string;
     searchText?: string;
-    tags?: string[];
+    tagIds?: Array<number | string>;
     pictureCheck?: number;
     userId?: number | string;
     spaceId?: number | string;
   };
 
-  type PictureTagCategory = {
-    tags?: string[];
-    categorys?: string[];
+  type Category = {
+    id?: number | string;
+    categoryName?: string;
+    sortOrder?: number;
+    isSystem?: number;
+    createTime?: string;
+    updateTime?: string;
+  };
+
+  type CategoryCreateRequest = {
+    categoryName: string;
+  };
+
+  type Tag = {
+    id?: number | string;
+    spaceId?: number | string;
+    tagName?: string;
+    normalizedName?: string;
+    status?: number;
+    createdBy?: number | string;
+    createTime?: string;
+    updateTime?: string;
+  };
+
+  type TagCreateRequest = {
+    spaceId: number | string;
+    tagName: string;
+  };
+
+  type TagRenameRequest = {
+    tagId: number | string;
+    tagName: string;
+  };
+
+  type TagIdRequest = {
+    tagId: number | string;
+  };
+
+  type listTagParams = {
+    spaceId: number | string;
+  };
+
+  type PictureTagBatchRequest = {
+    spaceId?: number | string;
+    pictureIds?: Array<number | string>;
+    tagIds?: Array<number | string>;
   };
 
   /** 保存公共图片到当前用户个人空间的请求参数。 */
@@ -243,17 +304,20 @@ declare namespace API {
     id?: number | string;
     name?: string;
     introduction?: string;
-    category?: string;
-    tags?: string[];
+    categoryId?: number | string;
     spaceId?: number | string;
+  };
+
+  type PictureCategoryBatchRequest = {
+    pictureIds: Array<number | string>;
+    categoryId: number | string;
   };
 
   type PictureUploadByBatchRequest = {
     searchText?: string;
     count?: number;
     name?: string;
-    category?: string;
-    tags?: string[];
+    categoryId?: number | string;
   };
 
   type PictureUploadFailVO = {
@@ -276,7 +340,7 @@ declare namespace API {
     thumbnailUrl?: string;
     name?: string;
     introduction?: string;
-    category?: string;
+    categoryId?: number | string;
     tags?: string[];
     picsize?: number | string;
     picwidth?: number;
@@ -332,8 +396,7 @@ declare namespace API {
     url?: string;
     id?: number | string;
     name?: string;
-    category?: string;
-    tags?: string[];
+    categoryId?: number | string;
     introduction?: string;
   };
 
@@ -430,8 +493,7 @@ declare namespace API {
   type uploadPicParams = {
     url?: string;
     name?: string;
-    category?: string;
-    tags?: string[];
+    categoryId?: number | string;
     introduction?: string;
     spaceId?: number | string;
   };

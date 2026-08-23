@@ -1,12 +1,17 @@
 <template>
   <article
     class="gallery-card proto-surface"
-    :class="{ 'is-list': viewMode === 'list', 'is-manage': showManageControls }"
+    :class="{
+      'is-list': viewMode === 'list',
+      'is-manage': showManageControls,
+      'is-selected': selectionMode && selected,
+    }"
     role="button"
     tabindex="0"
-    @click="emit('open')"
-    @keydown.enter="emit('open')"
-    @keydown.space.prevent="emit('open')"
+    :aria-pressed="selectionMode ? selected : undefined"
+    @click="handleCardClick"
+    @keydown.enter="handleCardClick"
+    @keydown.space.prevent="handleCardClick"
   >
     <div class="gallery-card-image">
       <img
@@ -81,7 +86,7 @@
       <div v-if="viewMode === 'list'" class="gallery-card-list-copy">
         <div class="gallery-card-list-head">
           <strong>{{ picture.name || '未命名图片' }}</strong>
-          <span>{{ picture.category || '未分类' }}</span>
+          <span v-if="categoryName">{{ categoryName }}</span>
         </div>
         <p>{{ picture.introduction || '暂无图片简介' }}</p>
       </div>
@@ -103,8 +108,10 @@ type ViewMode = 'grid' | 'list'
 const props = withDefaults(
   defineProps<{
     picture: API.PictureVO
+    categoryName?: string
     viewMode?: ViewMode
     showManageControls?: boolean
+    selectionMode?: boolean
     selected?: boolean
     statusText?: string
     statusClass?: string
@@ -113,6 +120,7 @@ const props = withDefaults(
   {
     viewMode: 'grid',
     showManageControls: false,
+    selectionMode: false,
     selected: false,
     statusText: '',
     statusClass: '',
@@ -141,6 +149,14 @@ function handleSelectChange(event: any) {
   emit('select', Boolean(event.target.checked))
 }
 
+function handleCardClick() {
+  if (props.selectionMode) {
+    emit('select', !props.selected)
+    return
+  }
+  emit('open')
+}
+
 function handleMenuClick(event: { key: string }) {
   emit('menu', String(event.key))
 }
@@ -161,6 +177,11 @@ function handleMenuClick(event: { key: string }) {
 .gallery-card:hover {
   border-color: rgba(17, 20, 22, .25);
   box-shadow: var(--proto-shadow);
+}
+
+.gallery-card.is-selected {
+  border-color: var(--proto-acid);
+  box-shadow: 0 0 0 3px rgba(186, 255, 61, .26);
 }
 
 .gallery-card:focus-visible {

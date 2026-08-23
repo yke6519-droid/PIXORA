@@ -32,6 +32,36 @@ export async function adminCheckPictureBatch(
   });
 }
 
+/** 管理员批量设置公共图库图片主题。 */
+export async function adminSetCategoryBatch(
+  body: API.PictureCategoryBatchRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseBoolean>("/picture/adminSetCategoryBatch", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 当前用户批量设置自己上传的公共图库图片主题。 */
+export async function setCategoryBatch(
+  body: API.PictureCategoryBatchRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseBoolean>("/picture/setCategoryBatch", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 此处后端没有提供注释 POST /picture/adminFetchPictureBatch */
 export async function adminFetchPictureBatch(
   body: API.PictureUploadByBatchRequest,
@@ -182,14 +212,6 @@ export async function reloadPicture(
     data: formData,
     ...(options || {}),
   })
-}
-
-/** 此处后端没有提供注释 GET /picture/tag_category */
-export async function listPictureCategory(options?: { [key: string]: any }) {
-  return request<API.BaseResponsePictureTagCategory>("/picture/tag_category", {
-    method: "GET",
-    ...(options || {}),
-  });
 }
 
 /** 此处后端没有提供注释 POST /picture/updatePicture */

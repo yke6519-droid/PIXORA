@@ -28,7 +28,7 @@
           <a-form-item name="phone" :rules="phoneRules"><a-input v-model:value="form.phone" aria-label="手机号" placeholder="请输入手机号" size="large" /></a-form-item>
         </div>
         <div class="register-actions">
-          <a-button class="proto-button ghost-button" size="large" @click="router.push('/user/login')">返回登录</a-button>
+          <a-button class="proto-button ghost-button" size="large" @click="handleBack">返回</a-button>
           <a-button html-type="submit" :loading="loading" class="proto-button acid-button" type="primary" size="large">创建账号</a-button>
         </div>
       </a-form>
@@ -41,10 +41,15 @@ import { reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { userRegister } from '../../../api/userController'
+import { goBack } from '../../../utils/navigation'
 
 const router = useRouter()
 const loading = ref(false)
 const form = reactive<API.RegisterRequest>({ username: '', useraccount: '', userpassword: '', reUserPassword: '', gender: 0, phone: '' })
+
+function handleBack() {
+  goBack(router, '/user/login')
+}
 const usernameRules = [
   { required: true, message: '请输入用户名' },
   { max: 20, message: '用户名不能超过 20 位' },

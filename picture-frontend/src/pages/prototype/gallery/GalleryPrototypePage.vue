@@ -19,18 +19,18 @@
             <small>{{ categoryCountLoading ? '…' : formatCount(allPictureTotal) }}</small>
           </button>
 
-          <!-- 分类接口只返回名称，数量由公共图库分页接口按分类统计后展示。 -->
+          <!-- 主题接口返回主题 ID 和名称，数量由公共图库分页接口统计。 -->
           <button
             v-for="item in categories"
-            :key="item"
+            :key="item.id"
             type="button"
             class="gallery-category-item"
-            :class="{ 'is-active': category === item }"
-            @click="selectCategory(item)"
+            :class="{ 'is-active': category === normalizeId(item.id) }"
+            @click="selectCategory(normalizeId(item.id))"
           >
-            <component :is="categoryIcon(item)" aria-hidden="true" />
-            <span>{{ item }}</span>
-            <small>{{ categoryCountLoading ? '…' : formatCount(categoryCounts[item] ?? null) }}</small>
+            <component :is="categoryIcon(item.categoryName || '')" aria-hidden="true" />
+            <span>{{ item.categoryName }}</span>
+            <small>{{ categoryCountLoading ? '…' : formatCount(categoryCounts[normalizeId(item.id)] ?? null) }}</small>
           </button>
 
           <span v-if="!categories.length" class="gallery-muted gallery-category-empty">暂无可用分类</span>
@@ -58,27 +58,6 @@
         </section>
 
         <section class="gallery-toolbar" aria-label="图库筛选和视图设置">
-          <div class="gallery-tag-list" aria-label="按标签筛选">
-            <a-checkable-tag
-              v-for="tag in visibleTags"
-              :key="tag"
-              :checked="selectedTags.includes(tag)"
-              @change="(checked: boolean) => toggleTag(tag, checked)"
-            >
-              {{ tag }}
-            </a-checkable-tag>
-            <button
-              v-if="tags.length > 8"
-              type="button"
-              class="gallery-more-tags"
-              @click="showAllTags = !showAllTags"
-            >
-              {{ showAllTags ? '收起' : '更多' }}
-              <DownOutlined :class="{ 'is-open': showAllTags }" aria-hidden="true" />
-            </button>
-            <span v-if="!tags.length" class="gallery-muted">暂无可用标签</span>
-          </div>
-
           <div class="gallery-toolbar-actions">
             <a-button
               class="gallery-tool-button"
@@ -143,6 +122,7 @@
               v-for="picture in pictureList"
               :key="picture.id"
               :picture="picture"
+              :category-name="getCategoryName(picture.categoryId)"
               :view-mode="viewMode"
               @open="openDetail(picture.id)"
             />
@@ -184,7 +164,6 @@ import {
   AppstoreOutlined,
   BoxPlotOutlined,
   CameraOutlined,
-  DownOutlined,
   EditOutlined,
   FilterOutlined,
   MenuOutlined,
@@ -195,7 +174,8 @@ import {
   UpOutlined,
 } from '@ant-design/icons-vue'
 import { useRouter } from 'vue-router'
-import { queryPicturePageCache, listPictureCategory } from '../../../api/pictureController'
+import { queryPicturePageCache } from '../../../api/pictureController'
+import { listCategory } from '../../../api/categoryController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import PictureGalleryCard from './components/PictureGalleryCard.vue'
 
@@ -212,24 +192,25 @@ const current = ref(1)
 const pageSize = ref(10)
 const searchText = ref('')
 const category = ref('')
-const selectedTags = ref<string[]>([])
-const categories = ref<string[]>([])
-const tags = ref<string[]>([])
+const categories = ref<API.Category[]>([])
 const sortOrder = ref<'latest' | 'size'>('latest')
 const viewMode = ref<'grid' | 'list'>('grid')
-const showAllTags = ref(false)
 const filterOpen = ref(false)
 
 const isLoggedIn = computed(() => Boolean(loginUserStore.loginUser))
 const maxPageSize = computed(() => isLoggedIn.value ? 20 : 10)
 const pageSizeOptions = computed(() => isLoggedIn.value ? ['10', '20'] : ['10'])
-const visibleTags = computed(() => showAllTags.value ? tags.value : tags.value.slice(0, 8))
-const hasActiveFilters = computed(() => Boolean(searchText.value.trim() || category.value || selectedTags.value.length))
+const selectedCategoryName = computed(() => {
+  const selectedCategory = categories.value.find(
+    (item) => normalizeId(item.id) === category.value,
+  )
+  return selectedCategory?.categoryName || ''
+})
+const hasActiveFilters = computed(() => Boolean(searchText.value.trim() || category.value))
 const filterSummary = computed(() => {
   const values: string[] = []
   if (searchText.value.trim()) values.push(`关键词：${searchText.value.trim()}`)
-  if (category.value) values.push(`分类：${category.value}`)
-  if (selectedTags.value.length) values.push(`标签：${selectedTags.value.join('、')}`)
+  if (selectedCategoryName.value) values.push(`主题：${selectedCategoryName.value}`)
   return values.length ? values.join(' · ') : '未设置额外筛选'
 })
 
@@ -241,8 +222,7 @@ async function loadGallery() {
       current: current.value,
       pageSize: pageSize.value,
       searchText: searchText.value.trim() || undefined,
-      category: category.value || undefined,
-      tags: selectedTags.value.length ? [...selectedTags.value] : undefined,
+       categoryId: category.value || undefined,
       pictureCheck: 1,
       spaceId: 0,
       sortFiled: sortOrder.value === 'size' ? 'picsize' : 'createtime',
@@ -265,14 +245,13 @@ async function loadGallery() {
 
 async function loadCategories() {
   try {
-    const res = await listPictureCategory()
+    const res = await listCategory()
     if (res.data?.code === 200) {
-      categories.value = res.data.data?.categorys || []
-      tags.value = res.data.data?.tags || []
+      categories.value = res.data.data || []
       await loadCategoryCounts()
     }
   } catch {
-    message.warning('分类和标签暂时加载失败，仍可使用关键词查询')
+    message.warning('主题暂时加载失败，仍可使用关键词查询')
   }
 }
 
@@ -280,11 +259,11 @@ async function loadCategories() {
  * 查询公共图库的总数。
  * 统计请求只取1条记录，total仍由后端分页结果提供，不把当前页面图片数量当成分类总数。
  */
-async function queryPublicPictureCount(categoryName?: string) {
+async function queryPublicPictureCount(categoryId?: string) {
   const res = await queryPicturePageCache({
     current: 1,
     pageSize: 1,
-    category: categoryName || undefined,
+    categoryId: categoryId || undefined,
     pictureCheck: 1,
     spaceId: 0,
     sortFiled: 'createtime',
@@ -302,12 +281,12 @@ async function queryPublicPictureCount(categoryName?: string) {
 async function loadCategoryCounts() {
   categoryCountLoading.value = true
   try {
-    const categoryNames = categories.value.filter(Boolean)
+    const categoryItems = categories.value.filter((item) => item.id !== undefined && item.id !== null)
     const [allCount, ...categoryEntries] = await Promise.all([
       queryPublicPictureCount(),
-      ...categoryNames.map(async (categoryName) => [
-        categoryName,
-        await queryPublicPictureCount(categoryName),
+      ...categoryItems.map(async (item) => [
+        normalizeId(item.id),
+        await queryPublicPictureCount(normalizeId(item.id)),
       ] as const),
     ])
     allPictureTotal.value = allCount
@@ -323,6 +302,17 @@ async function loadCategoryCounts() {
 
 function formatCount(value: number | null) {
   return value === null ? '—' : value.toLocaleString()
+}
+
+function normalizeId(id?: number | string) {
+  return id === undefined || id === null ? '' : String(id)
+}
+
+function getCategoryName(categoryId?: number | string) {
+  const categoryItem = categories.value.find(
+    (item) => normalizeId(item.id) === normalizeId(categoryId),
+  )
+  return categoryItem?.categoryName || ''
 }
 
 function categoryIcon(name: string) {
@@ -344,19 +334,10 @@ function selectCategory(value: string) {
   runSearch()
 }
 
-function toggleTag(tag: string, checked: boolean) {
-  selectedTags.value = checked
-    ? [...new Set([...selectedTags.value, tag])]
-    : selectedTags.value.filter((item) => item !== tag)
-  runSearch()
-}
-
 function resetFilters() {
   searchText.value = ''
   category.value = ''
-  selectedTags.value = []
   sortOrder.value = 'latest'
-  showAllTags.value = false
   filterOpen.value = false
   current.value = 1
   void loadGallery()

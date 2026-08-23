@@ -24,6 +24,7 @@
               <a-menu @click="handleAdminMenuClick">
                 <a-menu-item key="/admin/users">用户管理</a-menu-item>
                 <a-menu-item key="/admin/pictures/review">图片审核</a-menu-item>
+                <a-menu-item key="/admin/public-gallery">公共图库管理</a-menu-item>
                 <a-menu-item key="/admin/avatars/review">头像审核</a-menu-item>
                 <a-menu-item key="/admin/pictures/import">批量抓图</a-menu-item>
                 <a-menu-item key="/admin/spaces">空间运营</a-menu-item>
@@ -84,6 +85,7 @@
                   <a-menu-divider />
                   <a-menu-item key="/admin/users">用户管理</a-menu-item>
                   <a-menu-item key="/admin/pictures/review">图片审核</a-menu-item>
+                  <a-menu-item key="/admin/public-gallery">公共图库管理</a-menu-item>
                   <a-menu-item key="/admin/avatars/review">头像审核</a-menu-item>
                   <a-menu-item key="/admin/pictures/import">批量抓图</a-menu-item>
                   <a-menu-item key="/admin/spaces">空间运营</a-menu-item>
@@ -96,7 +98,13 @@
     </a-layout-header>
 
     <a-layout-content class="prototype-page pixora-page" :class="pageClasses">
-      <RouterView />
+      <RouterView v-slot="{ Component }">
+        <!-- 只缓存图片列表页，返回详情时保留分页、筛选和视图状态。 -->
+        <KeepAlive>
+          <component v-if="route.meta.keepAlive" :is="Component" :key="route.fullPath" />
+        </KeepAlive>
+        <component v-if="!route.meta.keepAlive" :is="Component" :key="route.fullPath" />
+      </RouterView>
     </a-layout-content>
 
     <a-drawer

@@ -8,6 +8,9 @@ import * as pictureController from "./pictureController";
 import * as fileController from "./fileController";
 import * as mainController from "./mainController";
 import * as notificationController from "./notificationController";
+import * as categoryController from "./categoryController";
+import * as tagController from "./tagController";
+import * as pictureTagController from "./pictureTagController";
 export default {
   userController,
   spaceController,
@@ -15,4 +18,7 @@ export default {
   fileController,
   mainController,
   notificationController,
+  categoryController,
+  tagController,
+  pictureTagController,
 };

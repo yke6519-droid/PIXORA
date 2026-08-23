@@ -91,7 +91,22 @@
               <strong>{{ toNumber(space.usedCount) }}</strong>
               <span>/ {{ toNumber(space.maxCount) }} 张</span>
             </div>
-            <a-button class="proto-button ghost-button" @click="openLevel(space)">调整等级</a-button>
+            <div class="space-admin-actions">
+              <a-button class="proto-button ghost-button" @click="openTagManage(space)">管理标签</a-button>
+              <a-button class="proto-button ghost-button" @click="openLevel(space)">调整等级</a-button>
+            </div>
+            <div class="space-admin-tags" aria-label="空间标签">
+              <span class="space-admin-tags-label">空间标签</span>
+              <a-tag
+                v-for="tag in getSpaceTags(space.id)"
+                :key="normalizeId(tag.id)"
+                class="space-admin-tag"
+                :class="tag.status === 1 ? 'is-active' : 'is-disabled'"
+              >
+                {{ tag.tagName }}
+              </a-tag>
+              <span v-if="!getSpaceTags(space.id).length" class="space-admin-no-tags">暂无标签</span>
+            </div>
           </article>
         </div>
 
@@ -135,6 +150,15 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <SpaceTagManageModal
+      v-if="selectedTagSpace"
+      v-model:open="tagManageOpen"
+      :space-id="selectedTagSpace.id!"
+      :max-tag-count="maxTagCount(selectedTagSpace.spaceLevel)"
+      admin-mode
+      @changed="handleTagManageChanged"
+    />
   </div>
 </template>
 
@@ -143,9 +167,11 @@ import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { alterLevelById, querySpacePage } from '../../../api/spaceController'
+import { listManageTag } from '../../../api/tagController'
 import { getCurrentUser } from '../../../api/userController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import { formatSpaceLevel } from '../prototypeData'
+import SpaceTagManageModal from '../space/components/SpaceTagManageModal.vue'
 
 type SpaceLevel = 0 | 1 | 2
 type LevelFilter = 'all' | SpaceLevel
@@ -160,6 +186,7 @@ const loading = ref(false)
 const actionLoading = ref(false)
 const loadError = ref('')
 const spaces = ref<API.SpaceVO[]>([])
+const tagsBySpaceId = ref<Record<string, API.Tag[]>>({})
 const total = ref(0)
 const current = ref(1)
 const pageSize = 10
@@ -167,6 +194,8 @@ const levelFilter = ref<LevelFilter>('all')
 const levelOpen = ref(false)
 const selectedSpace = ref<API.SpaceVO | null>(null)
 const selectedLevel = ref<SpaceLevel>(0)
+const tagManageOpen = ref(false)
+const selectedTagSpace = ref<API.SpaceVO | null>(null)
 
 const currentPictureCount = computed(() => spaces.value.reduce((sum, space) => sum + toNumber(space.usedCount), 0))
 const currentUsedSize = computed(() => spaces.value.reduce((sum, space) => sum + toNumber(space.usedSize), 0))
@@ -205,6 +234,16 @@ function holderName(space: API.SpaceVO) {
 
 function levelText(level?: number) {
   return formatSpaceLevel(level ?? 0)
+}
+
+function maxTagCount(level?: number) {
+  if ((level ?? 0) >= 2) return 30
+  if (level === 1) return 20
+  return 10
+}
+
+function getSpaceTags(spaceId?: number | string) {
+  return tagsBySpaceId.value[normalizeId(spaceId)] || []
 }
 
 async function ensureAdmin() {
@@ -257,6 +296,7 @@ async function loadSpaces() {
     if (res.data?.code !== 200) throw new Error(res.data?.message || '空间列表加载失败')
     spaces.value = res.data.data?.spaceVOList || []
     total.value = toNumber(res.data.data?.total)
+    await loadSpaceTags(spaces.value)
   } catch (error: any) {
     spaces.value = []
     total.value = 0
@@ -264,6 +304,27 @@ async function loadSpaces() {
   } finally {
     loading.value = false
   }
+}
+
+/** 管理员列表直接展示当前页空间的全部标签，包括已停用标签。 */
+async function loadSpaceTags(spaceList: API.SpaceVO[]) {
+  const nextTags: Record<string, API.Tag[]> = {}
+  await Promise.all(
+    spaceList.map(async (space) => {
+      const spaceId = normalizeId(space.id)
+      if (!spaceId) return
+      try {
+        const res = await listManageTag({ spaceId })
+        if (res.data?.code === 200) {
+          nextTags[spaceId] = res.data.data || []
+        }
+      } catch {
+        // 标签加载失败不影响管理员查看空间基础运营数据。
+        nextTags[spaceId] = []
+      }
+    }),
+  )
+  tagsBySpaceId.value = nextTags
 }
 
 async function changeLevel() {
@@ -286,6 +347,17 @@ function openLevel(space: API.SpaceVO) {
   selectedSpace.value = space
   selectedLevel.value = (space.spaceLevel ?? 0) as SpaceLevel
   levelOpen.value = true
+}
+
+function openTagManage(space: API.SpaceVO) {
+  selectedTagSpace.value = space
+  tagManageOpen.value = true
+}
+
+/** 标签状态变化后，只刷新当前空间的标签，列表中的颜色会立即同步。 */
+async function handleTagManageChanged() {
+  if (!selectedTagSpace.value) return
+  await loadSpaceTags([selectedTagSpace.value])
 }
 
 async function saveLevel() {
@@ -333,7 +405,7 @@ onMounted(() => {
 .space-admin-filter { width: 148px; }
 .space-admin-loading { padding: 22px; }
 .space-admin-list { border-top: 2px solid var(--proto-ink); }
-.space-admin-row { min-height: 96px; padding: 14px 0; display: grid; grid-template-columns: 1.2fr 1.05fr .75fr .55fr 105px; gap: 16px; align-items: center; border-bottom: 1px solid var(--proto-line); }
+.space-admin-row { min-height: 96px; padding: 14px 0; display: grid; grid-template-columns: 1.2fr 1.05fr .75fr .55fr 190px; gap: 16px; align-items: center; border-bottom: 1px solid var(--proto-line); }
 .space-admin-name strong, .space-admin-name small { display: block; }
 .space-admin-name strong { font-size: 16px; letter-spacing: -.04em; }
 .space-admin-name small { margin-top: 6px; color: var(--proto-muted); font-size: 11px; }
@@ -344,9 +416,16 @@ onMounted(() => {
 .space-admin-level small { display: block; margin-top: 4px; color: var(--proto-muted); font-size: 10px; }
 .space-admin-count strong { font-size: 24px; line-height: 1; letter-spacing: -.08em; }
 .space-admin-count span { color: var(--proto-muted); font-size: 11px; }
+.space-admin-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.space-admin-tags { grid-column: 1 / -1; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding-top: 10px; border-top: 1px solid rgba(17,20,22,.08); }
+.space-admin-tags-label { margin-right: 3px; color: var(--proto-muted); font-size: 11px; }
+.space-admin-tag.ant-tag { margin: 0; border: 1px solid transparent; border-radius: 4px; font-size: 11px; line-height: 22px; }
+.space-admin-tag.is-active.ant-tag { border-color: rgba(76,126,171,.34); background: var(--proto-blue); color: #173754; }
+.space-admin-tag.is-disabled.ant-tag { border-color: rgba(199,55,61,.45); background: rgba(199,55,61,.13); color: #a52e35; }
+.space-admin-no-tags { color: var(--proto-muted); font-size: 11px; }
 .space-admin-pagination { display: flex; justify-content: flex-end; padding-top: 18px; }
 .space-admin-pagination :deep(.ant-pagination-item-active) { border-color: var(--proto-ink); background: var(--proto-ink); }
 .space-admin-pagination :deep(.ant-pagination-item-active a) { color: var(--proto-paper); }
-@media (max-width: 950px) { .space-admin-row { grid-template-columns: 1.15fr 1fr .75fr 95px; } .space-admin-row > .proto-button { grid-column: 4; grid-row: 1 / span 2; } }
-@media (max-width: 650px) { .space-admin-metrics { grid-template-columns: 1fr; } .space-admin-table-head { align-items: flex-start; flex-direction: column; } .space-admin-filter { width: 100%; } .space-admin-row { grid-template-columns: 1fr 1fr; gap: 12px; } .space-admin-row > .proto-button { grid-column: 2; grid-row: auto; } }
+@media (max-width: 950px) { .space-admin-row { grid-template-columns: 1.15fr 1fr .75fr 180px; } .space-admin-actions { grid-column: 4; grid-row: 1 / span 2; } }
+@media (max-width: 650px) { .space-admin-metrics { grid-template-columns: 1fr; } .space-admin-table-head { align-items: flex-start; flex-direction: column; } .space-admin-filter { width: 100%; } .space-admin-row { grid-template-columns: 1fr 1fr; gap: 12px; } .space-admin-actions { grid-column: 2; grid-row: auto; justify-content: flex-start; } }
 </style>

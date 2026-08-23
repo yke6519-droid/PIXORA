@@ -1,9 +1,9 @@
 <template>
   <div class="detail-prototype">
     <section class="detail-head">
-      <button class="detail-back-button" type="button" @click="router.push('/gallery')">
+      <button class="detail-back-button" type="button" @click="handleBack">
         <span aria-hidden="true">←</span>
-        <span>返回公共图库</span>
+        <span>返回</span>
       </button>
     </section>
 
@@ -19,7 +19,7 @@
     <a-result v-else-if="errorMessage" class="detail-state detail-result" status="warning" title="图片详情暂时无法打开" :sub-title="errorMessage">
       <template #extra>
         <a-button class="proto-button acid-button" type="primary" @click="fetchPictureDetail">重新加载</a-button>
-        <a-button class="proto-button ghost-button" @click="router.push('/gallery')">返回图库</a-button>
+          <a-button class="proto-button ghost-button" @click="handleBack">返回</a-button>
       </template>
     </a-result>
 
@@ -59,7 +59,7 @@
             <a-button class="detail-more-button" type="text" aria-label="更多操作">···</a-button>
             <template #overlay>
               <a-menu @click="handleMoreMenuClick">
-                <a-menu-item key="back">返回公共图库</a-menu-item>
+                <a-menu-item key="back">返回</a-menu-item>
                 <a-menu-item key="manage">进入图片管理</a-menu-item>
                 <a-menu-item v-if="canSaveToSpace" key="save" :disabled="saving || saved">
                   {{ saved ? '已保存到我的空间' : '保存到我的空间' }}
@@ -68,16 +68,16 @@
             </template>
           </a-dropdown>
         </div>
-        <div v-if="picture.tags?.length" class="detail-tags">
+        <div v-if="isPrivatePicture && picture.tags?.length" class="detail-tags">
           <a-tag v-for="tag in picture.tags" :key="tag" class="detail-tag">{{ tag }}</a-tag>
         </div>
 
         <section class="detail-metadata" aria-labelledby="detail-metadata-title">
           <h2 id="detail-metadata-title">图片信息</h2>
           <dl class="detail-metadata-list">
-            <div class="detail-metadata-row">
+            <div v-if="!isPrivatePicture" class="detail-metadata-row">
               <dt>分类</dt>
-              <dd>{{ picture.category || '未分类' }}</dd>
+              <dd>{{ categoryName || '未分类' }}</dd>
             </div>
             <div class="detail-metadata-row">
               <dt>所属空间</dt>
@@ -156,10 +156,12 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getPictureById, save2Space } from '../../../api/pictureController'
+import { listCategory } from '../../../api/categoryController'
 import { createSpace } from '../../../api/spaceController'
 import SpaceNameModal from '../space/components/SpaceNameModal.vue'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import { pictureStatusText } from '../prototypeData'
+import { goBack } from '../../../utils/navigation'
 
 const route = useRoute()
 const router = useRouter()
@@ -167,15 +169,34 @@ const loginUserStore = useLoginUserStore()
 const loading = ref(true)
 const errorMessage = ref('')
 const picture = ref<API.PictureVO | null>(null)
+const categories = ref<API.Category[]>([])
 const saving = ref(false)
 const saved = ref(false)
 const createSpaceOpen = ref(false)
 const creatingSpace = ref(false)
 
+function handleBack() {
+  goBack(router, '/gallery')
+}
+
 const statusClass = computed(() => {
   if (picture.value?.pictureCheck === 1) return 'pass'
   if (picture.value?.pictureCheck === 2) return 'refuse'
   return 'wait'
+})
+
+const categoryName = computed(() => {
+  const pictureCategoryId = picture.value?.categoryId
+  const categoryItem = categories.value.find(
+    (item) => String(item.id) === String(pictureCategoryId),
+  )
+  return categoryItem?.categoryName || ''
+})
+
+// 标签只属于个人空间，公共图库详情不展示标签区域。
+const isPrivatePicture = computed(() => {
+  const spaceId = picture.value?.spaceId
+  return spaceId !== undefined && spaceId !== null && String(spaceId) !== '' && String(spaceId) !== '0'
 })
 
 // 只有审核通过的公共图片才展示“保存到我的空间”入口。
@@ -226,6 +247,17 @@ async function fetchPictureDetail() {
     errorMessage.value = error?.response?.data?.message || error?.message || '图片详情加载失败，请确认后端服务已启动'
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchCategories() {
+  try {
+    const res = await listCategory()
+    if (res.data?.code === 200) {
+      categories.value = res.data.data || []
+    }
+  } catch {
+    // 主题加载失败时仍然展示图片详情，其余信息不受影响。
   }
 }
 
@@ -298,7 +330,7 @@ async function handleCreateSpace(spaceName: string) {
 function handleMoreMenuClick(info: { key: string | number }) {
   const action = String(info.key)
   if (action === 'back') {
-    void router.push('/gallery')
+    handleBack()
     return
   }
   if (action === 'manage') {
@@ -351,6 +383,7 @@ function formatSpaceName(spaceId?: number | string) {
 }
 
 onMounted(() => {
+  void fetchCategories()
   void fetchPictureDetail()
 })
 

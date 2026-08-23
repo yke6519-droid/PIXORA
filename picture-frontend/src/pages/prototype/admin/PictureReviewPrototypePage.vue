@@ -119,7 +119,7 @@
             </div>
             <div class="review-meta review-meta-secondary">
               <span>{{ formatSize(picture.picsize) }} · {{ picture.picwidth || '—' }}×{{ picture.picheight || '—' }}</span>
-              <span>{{ picture.category || '未分类' }}</span>
+              <span>{{ pictureClassification(picture) }}</span>
             </div>
             <div class="review-card-actions">
               <a-button class="proto-button ghost-button" @click="openReview(picture)">审核</a-button>
@@ -177,7 +177,7 @@
           <strong>{{ reviewPicture.name || '未命名图片' }}</strong>
           <p>{{ reviewPicture.introduction || '上传者未填写图片简介。' }}</p>
           <span class="proto-mono">
-            {{ reviewPicture.category || '未分类' }} / {{ parseTags(reviewPicture.tags).join(' · ') || '无标签' }}
+            {{ pictureClassification(reviewPicture) }}
           </span>
         </div>
       </div>
@@ -215,6 +215,7 @@ import {
   adminCheckPicture,
   queryAll,
 } from '../../../api/pictureController'
+import { listCategory } from '../../../api/categoryController'
 import { getCurrentUser } from '../../../api/userController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import { pictureStatusText } from '../prototypeData'
@@ -245,6 +246,7 @@ const loading = ref(false)
 const actionLoading = ref(false)
 const loadError = ref('')
 const pictures = ref<API.PictureVO[]>([])
+const categories = ref<API.Category[]>([])
 const selectedIds = ref<string[]>([])
 const activeTab = ref<ReviewTab>('pending')
 const current = ref(1)
@@ -289,16 +291,17 @@ function formatSize(value?: number | string) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
-function parseTags(value?: string | string[]) {
-  if (!value) return []
-  if (Array.isArray(value)) return value.map(String).filter(Boolean)
-  try {
-    const parsed = JSON.parse(value)
-    if (Array.isArray(parsed)) return parsed.map(String)
-  } catch {
-    // 兼容历史数据：标签字段不是合法 JSON 时，仍允许按逗号展示。
+function getCategoryName(categoryId?: number | string) {
+  const category = categories.value.find((item) => normalizeId(item.id) === normalizeId(categoryId))
+  return category?.categoryName || ''
+}
+
+function pictureClassification(picture: API.PictureVO) {
+  const spaceId = normalizeId(picture.spaceId)
+  if (spaceId && spaceId !== '0') {
+    return picture.tags?.join(' · ') || '无标签'
   }
-  return value.split(/[,，]/).map((item) => item.trim()).filter(Boolean)
+  return getCategoryName(picture.categoryId) || '未分类'
 }
 
 /** 优先展示后端脱敏后的用户名和账号，只有旧数据缺字段时才回退到用户 ID。 */
@@ -348,8 +351,7 @@ async function ensureAdmin() {
       return false
     }
     authorized.value = true
-    await loadPage()
-    await loadCounts()
+    await Promise.all([loadPage(), loadCounts(), loadCategories()])
     return true
   } catch (error: any) {
     authorized.value = false
@@ -357,6 +359,18 @@ async function ensureAdmin() {
     return false
   } finally {
     authChecking.value = false
+  }
+}
+
+async function loadCategories() {
+  try {
+    const res = await listCategory()
+    if (res.data?.code === 200) {
+      categories.value = res.data.data || []
+    }
+  } catch {
+    // 主题加载失败时仍可继续审核图片。
+    categories.value = []
   }
 }
 

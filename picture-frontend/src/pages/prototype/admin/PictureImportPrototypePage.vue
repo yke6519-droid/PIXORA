@@ -55,32 +55,24 @@
                 <a-input v-model:value="form.name" placeholder="为空时使用 searchText" />
               </a-form-item>
             </div>
-            <a-form-item label="分类（可选）">
+            <a-form-item label="公共主题（可选）">
               <a-select
-                v-model:value="form.category"
+                v-model:value="form.categoryId"
                 allow-clear
                 :loading="optionsLoading"
-                placeholder="选择分类（可不填）"
+                placeholder="选择公共主题（可不填）"
                 style="width: 100%"
               >
-                <a-select-option v-for="category in categories" :key="category" :value="category">
-                  {{ category }}
+                <a-select-option v-for="category in categories" :key="category.id" :value="category.id">
+                  {{ category.categoryName }}
                 </a-select-option>
               </a-select>
             </a-form-item>
-            <a-form-item label="标签（可选）">
-              <div class="import-tags">
-                <a-checkable-tag
-                  v-for="tag in tags"
-                  :key="tag"
-                  :checked="form.tags?.includes(tag)"
-                  @change="(checked: boolean) => toggleTag(tag, checked)"
-                >
-                  {{ tag }}
-                </a-checkable-tag>
-                <span v-if="!tags.length" class="import-no-options">暂无可选标签</span>
-              </div>
-            </a-form-item>
+            <a-alert
+              type="info"
+              show-icon
+              message="公共图库只使用管理员维护的主题；个人空间标签在图片入库后单独管理。"
+            />
             <div class="import-submit-row">
               <span>提交后，成功图片会显示在右侧</span>
               <a-button
@@ -178,7 +170,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { adminFetchPictureBatch, listPictureCategory } from '../../../api/pictureController'
+import { adminFetchPictureBatch } from '../../../api/pictureController'
+import { listCategory } from '../../../api/categoryController'
 import { getCurrentUser } from '../../../api/userController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 
@@ -191,8 +184,7 @@ const accessError = ref('')
 const optionsLoading = ref(false)
 const submitting = ref(false)
 const loadError = ref('')
-const categories = ref<string[]>([])
-const tags = ref<string[]>([])
+const categories = ref<API.Category[]>([])
 const importedMessage = ref('等待执行')
 const importedPictures = ref<API.PictureVO[]>([])
 const targetCount = ref(0)
@@ -204,8 +196,7 @@ const form = reactive<API.PictureUploadByBatchRequest>({
   searchText: 'minimal architecture',
   count: 6,
   name: '',
-  category: undefined,
-  tags: [],
+  categoryId: undefined,
 })
 const pendingCount = computed(() => Math.max(targetCount.value - successCount.value, 0))
 
@@ -245,25 +236,17 @@ async function ensureAdmin() {
 async function loadOptions() {
   optionsLoading.value = true
   try {
-    const res = await listPictureCategory()
+    const res = await listCategory()
     if (res.data?.code === 200) {
-      categories.value = res.data.data?.categorys || []
-      tags.value = res.data.data?.tags || []
+      categories.value = res.data.data || []
     } else {
-      loadError.value = res.data?.message || '分类和标签加载失败，仍可提交无分类任务'
+      loadError.value = res.data?.message || '公共主题加载失败，仍可提交无主题任务'
     }
   } catch (error: any) {
-    loadError.value = error?.response?.data?.message || error?.message || '分类和标签加载失败，仍可提交无分类任务'
+    loadError.value = error?.response?.data?.message || error?.message || '公共主题加载失败，仍可提交无主题任务'
   } finally {
     optionsLoading.value = false
   }
-}
-
-function toggleTag(tag: string, checked: boolean) {
-  const currentTags = form.tags || []
-  form.tags = checked
-    ? [...new Set([...currentTags, tag])]
-    : currentTags.filter((item) => item !== tag)
 }
 
 /** 将后端返回的字节数转换为适合列表展示的文件大小。 */
@@ -307,8 +290,7 @@ async function submitImport() {
       searchText,
       count,
       name: form.name?.trim() || undefined,
-      category: form.category || undefined,
-      tags: form.tags?.length ? [...form.tags] : undefined,
+      categoryId: form.categoryId || undefined,
     })
     if (res.data?.code !== 200) throw new Error(res.data?.message || '批量抓图失败')
     const result = res.data.data
@@ -372,9 +354,6 @@ onMounted(() => {
 .import-form-card :deep(.ant-input::placeholder), .import-form-card :deep(.ant-input-number-input::placeholder) { color: rgba(241,242,237,.48); }
 .import-form-card :deep(.ant-input-number-input) { color: var(--proto-paper); }
 .import-form-card :deep(.ant-select-selection-placeholder), .import-form-card :deep(.ant-select-arrow) { color: rgba(241,242,237,.5); }
-.import-tags { display: flex; flex-wrap: wrap; gap: 7px; min-height: 26px; }
-.import-tags :deep(.ant-tag-checkable) { padding: 4px 9px; border-radius: 3px; color: rgba(241,242,237,.72); font-size: 11px; }
-.import-tags :deep(.ant-tag-checkable-checked) { background: var(--proto-acid); color: var(--proto-ink); }
 .import-no-options { color: rgba(241,242,237,.55); font-size: 11px; }
 .import-submit-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 17px; padding-top: 14px; border-top: 1px solid rgba(241,242,237,.18); }
 .import-submit-row > span { color: rgba(241,242,237,.55); font-size: 10px; line-height: 1.4; }

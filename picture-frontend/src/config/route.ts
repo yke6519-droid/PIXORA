@@ -13,6 +13,7 @@ const routes: RouteRecordRaw[] = [
         path: 'gallery',
         name: 'gallery',
         component: () => import('../pages/prototype/gallery/GalleryPrototypePage.vue'),
+        meta: { keepAlive: true },
       },
       {
         path: 'gallery/detail/:id',
@@ -30,7 +31,7 @@ const routes: RouteRecordRaw[] = [
         path: 'gallery/manage',
         name: 'gallery-manage',
         component: () => import('../pages/prototype/gallery/GalleryManagePrototypePage.vue'),
-        meta: { requiresAuth: true },
+        meta: { requiresAuth: true, keepAlive: true },
       },
       {
         path: 'user/login',
@@ -54,7 +55,7 @@ const routes: RouteRecordRaw[] = [
         path: 'space',
         name: 'space',
         component: () => import('../pages/prototype/space/SpacePrototypePage.vue'),
-        meta: { requiresAuth: true },
+        meta: { requiresAuth: true, keepAlive: true },
       },
       {
         path: 'admin/users',
@@ -66,7 +67,13 @@ const routes: RouteRecordRaw[] = [
         path: 'admin/pictures/review',
         name: 'admin-picture-review',
         component: () => import('../pages/prototype/admin/PictureReviewPrototypePage.vue'),
-        meta: { requiresAuth: true, requiresAdmin: true },
+        meta: { requiresAuth: true, requiresAdmin: true, keepAlive: true },
+      },
+      {
+        path: 'admin/public-gallery',
+        name: 'admin-public-gallery',
+        component: () => import('../pages/prototype/gallery/GalleryManagePrototypePage.vue'),
+        meta: { requiresAuth: true, requiresAdmin: true, publicGalleryAdmin: true, keepAlive: true },
       },
       {
         path: 'admin/avatars/review',
@@ -106,6 +113,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'space', component: () => import('../pages/prototype/space/SpacePrototypePage.vue') },
       { path: 'admin/users', component: () => import('../pages/prototype/admin/UserAdminPrototypePage.vue') },
       { path: 'admin/pictures/review', component: () => import('../pages/prototype/admin/PictureReviewPrototypePage.vue') },
+      { path: 'admin/public-gallery', component: () => import('../pages/prototype/gallery/GalleryManagePrototypePage.vue'), meta: { publicGalleryAdmin: true } },
       { path: 'admin/avatars/review', component: () => import('../pages/prototype/admin/AvatarReviewPrototypePage.vue') },
       { path: 'admin/pictures/import', component: () => import('../pages/prototype/admin/PictureImportPrototypePage.vue') },
       { path: 'admin/spaces', component: () => import('../pages/prototype/admin/SpaceAdminPrototypePage.vue') },

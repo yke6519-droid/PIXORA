@@ -205,9 +205,9 @@
             />
           </a-form-item>
 
-          <a-form-item label="图片分类" name="category">
+          <a-form-item v-if="form.target === 'public'" label="图片主题" name="categoryId">
             <a-select
-              v-model:value="form.category"
+              v-model:value="form.categoryId"
               :options="categoryOptions"
               :loading="categoryLoading"
               allow-clear
@@ -216,15 +216,11 @@
             />
           </a-form-item>
 
-          <a-form-item label="图片标签" name="tags">
-            <a-select
-              v-model:value="form.tags"
-              mode="tags"
-              :options="tagOptions"
-              :loading="categoryLoading"
-              :max-tag-count="3"
-              allow-clear
-              placeholder="选择或输入标签后回车"
+          <a-form-item v-else label="图片标签">
+            <a-alert
+              type="info"
+              show-icon
+              message="图片上传完成后，再到个人空间中管理标签。"
             />
           </a-form-item>
 
@@ -366,10 +362,11 @@ import {
 } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  listPictureCategory,
   uploadPic,
 } from '../../../api/pictureController'
+import { listCategory } from '../../../api/categoryController'
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
+import { goBack } from '../../../utils/navigation'
 
 type UploadSourceMode = 'file' | 'url'
 type UploadTarget = 'public' | 'space'
@@ -395,23 +392,20 @@ const submitting = ref(false)
 const submitError = ref('')
 const pageNotice = ref('')
 const uploadResult = ref<API.PictureUploadVO | null>(null)
-const categories = ref<string[]>([])
-const tags = ref<string[]>([])
+const categories = ref<API.Category[]>([])
 
 const form = reactive({
   name: '',
-  category: undefined as string | undefined,
+  categoryId: undefined as number | string | undefined,
   target: 'public' as UploadTarget,
-  tags: [] as string[],
   introduction: '',
 })
 
 const categoryOptions = computed(() =>
-  categories.value.map((item) => ({ label: item, value: item })),
-)
-
-const tagOptions = computed(() =>
-  tags.value.map((item) => ({ label: item, value: item })),
+  categories.value.map((item) => ({
+    label: item.categoryName,
+    value: item.id,
+  })),
 )
 
 const hasUploadResult = computed(() => uploadResult.value !== null)
@@ -514,17 +508,16 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
 async function loadCategoryOptions() {
   categoryLoading.value = true
   try {
-    const res = await listPictureCategory()
+    const res = await listCategory()
     if (res.data?.code !== 200) {
-      throw new Error(res.data?.message || '分类与标签加载失败')
+      throw new Error(res.data?.message || '主题加载失败')
     }
-    categories.value = res.data.data?.categorys || []
-    tags.value = res.data.data?.tags || []
+    categories.value = res.data.data || []
   } catch (error: any) {
     pageNotice.value =
       error?.response?.data?.message ||
       error?.message ||
-      '分类与标签暂时无法加载，仍可上传图片'
+      '主题暂时无法加载，仍可上传图片'
   } finally {
     categoryLoading.value = false
   }
@@ -586,13 +579,14 @@ async function submitUpload() {
 
   submitting.value = true
   try {
-    const metadata: Record<string, string | string[]> = {}
+    const metadata: Record<string, number | string> = {}
     const name = form.name.trim()
     const introduction = form.introduction.trim()
 
     if (name) metadata.name = name
-    if (form.category) metadata.category = form.category
-    if (form.tags.length) metadata.tags = [...new Set(form.tags.map((item) => item.trim()).filter(Boolean))]
+    if (form.target === 'public' && form.categoryId !== undefined) {
+      metadata.categoryId = form.categoryId
+    }
     if (introduction) metadata.introduction = introduction
     if (sourceMode.value === 'url') metadata.url = imageUrl.value.trim()
 
@@ -664,7 +658,7 @@ function selectNextPreview() {
 
 function cancelUpload() {
   if (submitting.value) return
-  void router.push('/gallery')
+  goBack(router, route.query.target === 'space' ? '/space' : '/gallery')
 }
 
 function clearSelectedFile() {
