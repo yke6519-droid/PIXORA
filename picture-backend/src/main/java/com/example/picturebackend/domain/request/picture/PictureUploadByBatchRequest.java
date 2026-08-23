@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.util.List;
 
 /**
  * 批量导入图片请求体
@@ -23,14 +22,9 @@ public class PictureUploadByBatchRequest implements Serializable {
      * 创建图片的名字前缀
      */
     private String name;
-    /**
-     * 分类
-     */
-    private String category;
-    /**
-     * 标签
-     */
-    private List<String> tags;
+    /** 公共图库主题 id。 */
+    private Long categoryId;
+
     @TableField(exist = false)
     private static final long serialVersionUID = 3191241716373120793L;
 }

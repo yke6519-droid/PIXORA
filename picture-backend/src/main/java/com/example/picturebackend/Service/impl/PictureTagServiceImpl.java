@@ -260,7 +260,7 @@ public class PictureTagServiceImpl extends ServiceImpl<PictureTagMapper, Picture
         if (idList.isEmpty()) {
             return Collections.emptyMap();
         }
-        return tagMapper.selectBatchIds(idList).stream()
+        return tagMapper.selectByIds(idList).stream()
                 .collect(Collectors.toMap(Tag::getId, tag -> tag));
     }
 

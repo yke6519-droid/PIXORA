@@ -27,19 +27,16 @@ public class PictureQueryRequest extends PageRequest {
      */
     private String introduction;
 
-    /**
-     * 分类
-     */
-    private String category;
+    /** 公共图库主题 id。 */
+    private Long categoryId;
+
+    /** 个人空间标签 id；阶段 4B 接入关联查询。 */
+    private List<Long> tagIds;
+
     /**
      * 查询文本
      */
     private String searchText;
-
-    /**
-     * 标签
-     */
-    private List<String> tags;
 
     /**
      * 审核状态

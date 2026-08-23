@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.util.List;
 
 @Data
 public class PictureUploadRequest implements Serializable {
@@ -21,15 +20,8 @@ public class PictureUploadRequest implements Serializable {
      */
     private String name;
 
-    /**
-     * 图片分类
-     */
-    private String category;
-
-    /**
-     * 图片标签
-     */
-    private List<String> tags;
+    /** 公共图库主题 id；个人空间图片为空。 */
+    private Long categoryId;
 
     /**
      * 图片简介

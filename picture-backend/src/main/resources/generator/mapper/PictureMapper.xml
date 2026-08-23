@@ -10,9 +10,7 @@
         <result property="thumbnailUrl" column="thumbnailUrl"/>
             <result property="name" column="name" />
             <result property="introduction" column="introduction" />
-            <result property="category" column="category" />
             <result property="categoryId" column="categoryId" />
-            <result property="tags" column="tags" />
             <result property="picsize" column="picSize" />
             <result property="picwidth" column="picWidth" />
             <result property="picheight" column="picHeight" />
@@ -27,7 +25,7 @@
 
     <sql id="Base_Column_List">
         id
-        ,url,thumbnailUrl,name,introduction,category,categoryId,tags,
+        ,url,thumbnailUrl,name,introduction,categoryId,
         picSize,picWidth,picHeight,picScale,picFormat,
         userId,createTime,updateTime,editTime,isDelete
     </sql>

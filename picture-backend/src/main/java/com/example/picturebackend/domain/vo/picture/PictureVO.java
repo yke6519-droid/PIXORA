@@ -31,16 +31,10 @@ public class PictureVO {
      */
     private String introduction;
 
-    /**
-     * 分类
-     */
-    private String category;
+    /** 公共图库主题 id；个人空间图片为空。 */
+    private Long categoryId;
 
-    /**
-     * 标签数组
-     * 与Picture实体类不同
-     * 这里方便前端展示 所以用List
-     */
+    /** 标签名称数组，由 picture_tag 关联查询后返回。 */
     private List<String> tags;
 
     /**

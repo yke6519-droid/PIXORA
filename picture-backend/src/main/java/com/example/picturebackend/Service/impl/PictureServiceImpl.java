@@ -5,7 +5,6 @@ import cn.hutool.core.date.DateTime;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -16,16 +15,22 @@ import com.example.picturebackend.Exception.BusinessException;
 import com.example.picturebackend.Exception.ErrorCode;
 import com.example.picturebackend.Exception.ThrowExceptionUtils;
 import com.example.picturebackend.Service.PictureService;
+import com.example.picturebackend.Service.CategoryService;
 import com.example.picturebackend.Service.SpaceService;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.Service.UserNotificationService;
 import com.example.picturebackend.Mapper.PictureMapper;
+import com.example.picturebackend.Mapper.PictureTagMapper;
+import com.example.picturebackend.Mapper.TagMapper;
 import com.example.picturebackend.constant.PictureConstant;
 import com.example.picturebackend.constant.UserConstant;
 import com.example.picturebackend.constant.NotificationConstant;
 import com.example.picturebackend.domain.dto.file.UploadPictureResult;
+import com.example.picturebackend.domain.MyEnums.TagStatus;
 import com.example.picturebackend.domain.po.Picture;
+import com.example.picturebackend.domain.po.PictureTag;
 import com.example.picturebackend.domain.po.Space;
+import com.example.picturebackend.domain.po.Tag;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.picture.*;
 import com.example.picturebackend.domain.request.notification.NotificationCreateRequest;
@@ -43,7 +48,6 @@ import com.example.picturebackend.manager.upload.UrlPictureUpload;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
-import org.checkerframework.checker.units.qual.m;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -93,6 +97,15 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Autowired
     @Resource
     private SpaceService spaceService;
+
+    @Resource
+    private CategoryService categoryService;
+
+    @Resource
+    private PictureTagMapper pictureTagMapper;
+
+    @Resource
+    private TagMapper tagMapper;
 
     /**
      * 上传图片到存储对象
@@ -206,16 +219,16 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                         "空间使用量更新失败");
             }
 
-            // 更新图片的元数据（名称、分类、标签、简介）为请求中的新信息。
+            // 更新图片的元数据（名称、主题、简介）为请求中的新信息。
             if (StrUtil.isNotBlank(pictureUploadRequest.getName())) {
                 picture.setName(pictureUploadRequest.getName());
             }
-            if (StrUtil.isNotBlank(pictureUploadRequest.getCategory())) {
-                picture.setCategory(pictureUploadRequest.getCategory());
-            }
-            if (CollUtil.isNotEmpty(pictureUploadRequest.getTags())) {
-                picture.setTags(JSONUtil.toJsonStr(pictureUploadRequest.getTags()));
-            }
+            picture.setCategoryId(
+                resolveCategoryIdForExistingPicture(
+                    oldPicture,
+                    pictureUploadRequest.getCategoryId()
+                )
+            );
             if (StrUtil.isNotBlank(pictureUploadRequest.getIntroduction())) {
                 picture.setIntroduction(pictureUploadRequest.getIntroduction());
             }
@@ -308,7 +321,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
 
         multiCacheManager.invalidatePicturePageCache();
-        return PictureVO.obj2VO(picture);
+        return buildPictureVO(picture);
     }
 
     /**
@@ -425,19 +438,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             picture.setUserid(loginUser.getId());
 
             String name = pictureUploadRequest.getName();
-            String category = pictureUploadRequest.getCategory();
-            List<String> tags = pictureUploadRequest.getTags();
             String introduction = pictureUploadRequest.getIntroduction();
 
             // 用请求中的新信息覆盖旧数据。
             if (StrUtil.isNotBlank(name)) {
                 picture.setName(name);
-            }
-            if (StrUtil.isNotBlank(category)) {
-                picture.setCategory(category);
-            }
-            if (CollUtil.isNotEmpty(tags)) {
-                picture.setTags(JSONUtil.toJsonStr(tags));
             }
             if (StrUtil.isNotBlank(introduction)) {
                 picture.setIntroduction(introduction);
@@ -445,13 +450,15 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
             // 校验空间。
             Long spaceId = pictureUploadRequest.getSpaceId();
-            if (spaceId != null) {
+            long normalizedSpaceId = normalizeSpaceId(spaceId);
+            picture.setSpaceId(normalizedSpaceId);
+            picture.setCategoryId(resolveCategoryIdForNewPicture(
+                    normalizedSpaceId,
+                    pictureUploadRequest.getCategoryId()));
+            if (normalizedSpaceId > 0) {
                 // 校验空间权限和空间使用量。
                 spaceService.SpaceAuthCheck(spaceId, loginUser);
                 spaceService.checkUsage(spaceId, picture, uploadPictureResult);
-
-                // 给当前Picture绑定spaceId。
-                picture.setSpaceId(spaceId);
 
                 // 更新空间容量和图片数量。
                 Space space = spaceService.getById(spaceId);
@@ -570,6 +577,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             boolean result = this.removeById(id);
             //2. 再更新空间的容量 并 删除COS中的对象
             if (result) {
+                deletePictureTagRelations(id);
                 space.setUsedSize(Math.max(0L, defaultLong(space.getUsedSize()) - defaultLong(picture.getPicsize())));
                 space.setUsedCount(Math.max(0L, defaultLong(space.getUsedCount()) - 1L));
                 ThrowExceptionUtils.throwIF(
@@ -593,6 +601,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         boolean result = this.removeById(id);
         // 清除缓存，保证数据一致性
         if (result) {
+            deletePictureTagRelations(id);
             // 公共图片由图片所属用户或管理员主动删除时，同步清理 COS 对象。
             this.deleteCosPicture(picture);
             multiCacheManager.invalidatePicturePageCache();
@@ -623,6 +632,12 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
     }
 
+    /** 图片实体删除时同步清理关联记录，避免 picture_tag 留下孤儿数据。 */
+    private void deletePictureTagRelations(Long pictureId) {
+        pictureTagMapper.delete(new QueryWrapper<PictureTag>()
+                .eq("pictureId", pictureId));
+    }
+
     /**
      * 根据id更新图片信息
      */
@@ -650,8 +665,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Picture updatePicture = new Picture();
         // 编辑接口不允许改变图片归属空间，避免请求体越权迁移图片。
         BeanUtils.copyProperties(pictureUpdateRequest, updatePicture, "spaceId");
-        String tagStr = JSONUtil.toJsonStr(pictureUpdateRequest.getTags());
-        updatePicture.setTags(tagStr);
+        updatePicture.setCategoryId(resolveCategoryIdForExistingPicture(
+                picture,
+                pictureUpdateRequest.getCategoryId()));
         updatePicture.setUpdatetime(DateTime.now());
         boolean result = this.updateById(updatePicture);
         // 清除缓存，保证数据一致性
@@ -678,9 +694,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Long id = pictureQueryRequest.getId();
         String name = pictureQueryRequest.getName();
         String introduction = pictureQueryRequest.getIntroduction();
-        String category = pictureQueryRequest.getCategory();
+        Long categoryId = pictureQueryRequest.getCategoryId();
         String searchText = pictureQueryRequest.getSearchText();
-        List<String> tags = pictureQueryRequest.getTags();
+        List<Long> tagIds = pictureQueryRequest.getTagIds();
         Long userId = pictureQueryRequest.getUserId();
         Integer pictureCheck = pictureQueryRequest.getPictureCheck();
         Integer current = pictureQueryRequest.getCurrent();
@@ -702,25 +718,20 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         queryWrapper.eq(ObjectUtil.isNotNull(userId), "userId", userId);
         // 管理员审核页按审核状态筛选；不传时保持 queryAll 查询全部图片的原有语义。
         queryWrapper.eq(ObjectUtil.isNotNull(pictureCheck), "pictureCheck", pictureCheck);
-        queryWrapper.eq(StrUtil.isNotBlank(category), "category", category);
+        queryWrapper.eq(ObjectUtil.isNotNull(categoryId), "categoryId", categoryId);
         queryWrapper.like(StrUtil.isNotBlank(name), "name", name);
         queryWrapper.like(StrUtil.isNotBlank(introduction), "introduction", introduction);
         queryWrapper.orderBy(StrUtil.isNotEmpty(sortFiled), sortOrder.equals("ascend"), sortFiled);
 
-        // 接收到List<String>格式的tags，转化为对JSON的查询
-        if (CollUtil.isNotEmpty(tags)) {
-            queryWrapper.and(pictureQueryWrapper -> {
-                for (String tag : tags) {
-                    pictureQueryWrapper.apply("JSON_VALID(tags) AND JSON_CONTAINS(tags, JSON_QUOTE({0}))", tag);
-                }
-            });
-        }
+        applyActiveTagFilters(queryWrapper, tagIds);
 
         IPage<Picture> pictureIpage = this.page(new Page<Picture>(current, pageSize), queryWrapper);
 
+        Map<Long, List<String>> tagNamesByPictureId = loadActiveTagNamesByPictureIds(
+                pictureIpage.getRecords().stream().map(Picture::getId).collect(Collectors.toList()));
         List<PictureVO> pictureVOs = pictureIpage.getRecords().stream().map(
             picture -> {
-                PictureVO pictureVO =  PictureVO.obj2VO(picture);
+                PictureVO pictureVO = buildPictureVO(picture, tagNamesByPictureId);
                 pictureVO.setCreatedUser(userService.getSaftyUser(
                     userService.getById(picture.getUserid()))
                 );
@@ -825,10 +836,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         // 当前页统一批量查询创建者，避免每张图片都单独访问一次用户表。
         Map<Long, UserVO> createdUserVOMap = getCreatedUserVOMap(picturePage.getRecords());
 
+        // 标签一次性批量读取，避免分页中每张图片单独查询标签。
+        Map<Long, List<String>> tagNamesByPictureId = loadActiveTagNamesByPictureIds(
+                picturePage.getRecords().stream().map(Picture::getId).collect(Collectors.toList()));
+
         // 转换为VO列表；图片字段和标签只在内存中处理，创建者从批量查询结果映射。
         List<PictureVO> pictureVOList = picturePage.getRecords().stream()
                 .map(picture -> {
-                    PictureVO pictureVO = buildPictureVO(picture);
+                    PictureVO pictureVO = buildPictureVO(picture, tagNamesByPictureId);
                     pictureVO.setCreatedUser(createdUserVOMap.get(picture.getUserid()));
                     return pictureVO;
                 })
@@ -889,9 +904,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Picture updatePicture = new Picture();
         // 编辑接口不允许改变图片归属空间，避免请求体越权迁移图片。
         BeanUtils.copyProperties(pictureUpdateRequest, updatePicture, "spaceId");
-        String tagsStr = JSONUtil.toJsonStr(pictureUpdateRequest.getTags());
-        System.out.println("转换后的tags："+tagsStr);
-        updatePicture.setTags(tagsStr);
+        updatePicture.setCategoryId(resolveCategoryIdForExistingPicture(
+                picture,
+                pictureUpdateRequest.getCategoryId()));
         updatePicture.setUpdatetime(DateTime.now());
         boolean result = this.updateById(updatePicture);
         // 清除缓存，保证数据一致性
@@ -920,8 +935,18 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
      * 分页查询会复用该方法，避免在批量查询用户后再次逐条查用户。
      */
     private PictureVO buildPictureVO(Picture picture) {
+        return buildPictureVO(picture, loadActiveTagNamesByPictureIds(Collections.singletonList(picture.getId())));
+    }
+
+    /** 只转换图片自身字段和已批量加载的有效标签。 */
+    private PictureVO buildPictureVO(Picture picture, Map<Long, List<String>> tagNamesByPictureId) {
         PictureVO pictureVO = PictureVO.obj2VO(picture);
-        fillPictureTags(picture, pictureVO);
+        // 用Pictureid拿到map中对应的标签列表
+        List<String> tagNames = tagNamesByPictureId.get(picture.getId());
+        if (tagNames == null) {
+            tagNames = Collections.emptyList();
+        }
+        pictureVO.setTags(tagNames);
         return pictureVO;
     }
 
@@ -947,22 +972,53 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     }
 
     /**
-     * 将数据库中的JSON标签转换为前端使用的字符串列表。
+     * 从图片标签关联表批量加载可用标签名称。
+     * 停用标签仍保留关联记录，但不进入正常图片展示结果。
      */
-    private void fillPictureTags(Picture picture, PictureVO pictureVO) {
-
-        // 将tags从JSON字符串转为List<String>
-        if (StrUtil.isNotBlank(picture.getTags())) {
-            try {
-                List<String> tagList = JSONUtil.toList(picture.getTags(), String.class);
-                pictureVO.setTags(tagList);
-            } catch (Exception e) {
-                // JSON解析失败时，将原始字符串作为单个标签
-                List<String> tagList = new ArrayList<>();
-                tagList.add(picture.getTags());
-                pictureVO.setTags(tagList);
-            }
+    private Map<Long, List<String>> loadActiveTagNamesByPictureIds(Collection<Long> pictureIds) {
+        List<Long> distinctPictureIds = pictureIds == null
+                ? Collections.emptyList()
+                : pictureIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (distinctPictureIds.isEmpty()) {
+            return Collections.emptyMap();
         }
+
+        List<PictureTag> relations = pictureTagMapper.selectList(new QueryWrapper<PictureTag>()
+                .in("pictureId", distinctPictureIds));
+        Set<Long> tagIds = relations.stream()
+                .map(PictureTag::getTagId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (tagIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<Long, Tag> activeTagMap = tagMapper.selectByIds(tagIds).stream()
+                .filter(tag -> TagStatus.ACTIVE.getValue().equals(tag.getStatus()))
+                .collect(Collectors.toMap(Tag::getId, tag -> tag));
+        // 封装最后的结果
+        Map<Long, List<String>> tagNamesByPictureId = new LinkedHashMap<>();
+        for (PictureTag relation : relations) {
+            Tag tag = activeTagMap.get(relation.getTagId());
+
+            // 停用标签不会进入图片的正常展示结果。
+            if (tag == null) {
+                continue;
+            }
+
+            Long pictureId = relation.getPictureId();
+            List<String> tagNames = tagNamesByPictureId.get(pictureId);
+            if (tagNames == null) {
+                tagNames = new ArrayList<>();
+                tagNamesByPictureId.put(pictureId, tagNames);
+            }
+
+            tagNames.add(tag.getTagName());
+        }
+        return tagNamesByPictureId;
     }
 
     /**
@@ -984,10 +1040,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             return pictureVOPage;
         }
 
-        // 封装对象VO列表
-        List<PictureVO> pictureVOS = pictures.stream().map(picture -> {
-            return PictureVO.obj2VO(picture);
-        }).collect(Collectors.toList());
+        Map<Long, List<String>> tagNamesByPictureId = loadActiveTagNamesByPictureIds(
+                pictures.stream().map(Picture::getId).collect(Collectors.toList()));
+
+        // 封装对象 VO 列表
+        List<PictureVO> pictureVOS = pictures.stream()
+                .map(picture -> buildPictureVO(picture, tagNamesByPictureId))
+                .collect(Collectors.toList());
 
         // 将图片中的userid都取出来
         Set<Long> userIdSet = pictures.stream().map(Picture::getUserid).collect(Collectors.toSet());
@@ -1255,17 +1314,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             String uuid = UUID.randomUUID().toString().replace("-", "").substring(0, 4);// 长度：8
             pictureUploadRequest.setName(name+": "+uuid);
             pictureUploadRequest.setIntroduction(searchText+"相关图片");
-            // 如果有标签和分类的话，也要附进去
-            String category = pictureUploadByBatchRequest.getCategory();
-            List<String> tags = pictureUploadByBatchRequest.getTags();
-
-            if (StrUtil.isNotBlank(category)){
-                pictureUploadRequest.setCategory(category);
-            }
-
-            if (CollUtil.isNotEmpty(tags)){
-                pictureUploadRequest.setTags(tags);
-            }
+            // 管理员批量导入只传公共图库主题；标签在图片入库后单独绑定。
+            pictureUploadRequest.setCategoryId(pictureUploadByBatchRequest.getCategoryId());
 
             System.out.println("正在上传图片");
             // 调用URL上传接口 并自动过审
@@ -1313,9 +1363,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Long id = pictureQueryRequest.getId();
         String name = pictureQueryRequest.getName();
         String introduction = pictureQueryRequest.getIntroduction();
-        String category = pictureQueryRequest.getCategory();
+        Long categoryId = pictureQueryRequest.getCategoryId();
         String searchText = pictureQueryRequest.getSearchText();
-        List<String> tags = pictureQueryRequest.getTags();
+        List<Long> tagIds = pictureQueryRequest.getTagIds();
         Long userId = pictureQueryRequest.getUserId();
         String sortField = pictureQueryRequest.getSortFiled();
         String sortOrder = pictureQueryRequest.getSortOrder();
@@ -1343,20 +1393,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
         queryWrapper.eq(ObjectUtil.isNotNull(id),"id",id);
         queryWrapper.eq(ObjectUtil.isNotNull(userId),"userId",userId);
-        queryWrapper.eq(StrUtil.isNotBlank(category), "category", category);
+        queryWrapper.eq(ObjectUtil.isNotNull(categoryId), "categoryId", categoryId);
         queryWrapper.like(StrUtil.isNotBlank(name), "name", name);
         queryWrapper.like(StrUtil.isNotBlank(introduction), "introduction", introduction);
         queryWrapper.orderBy(StrUtil.isNotEmpty(sortField), sortOrder.equals("ascend"), sortField);
         queryWrapper.lambda().eq(Picture::getPictureCheck, pictureCheck);
 
-        // 接收到List<String>格式的tags，转化为对JSON的查询
-        if (CollUtil.isNotEmpty(tags)){
-            queryWrapper.and(pictureQueryWrapper -> {
-                for (String tag : tags){
-                    pictureQueryWrapper.apply("JSON_VALID(tags) AND JSON_CONTAINS(tags, JSON_QUOTE({0}))", tag);
-                }
-            });
-        }
+        applyActiveTagFilters(queryWrapper, tagIds);
         return queryWrapper;
     }
 
@@ -1375,6 +1418,73 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 !loginUser.getUserLevel().equals(UserConstant.ADMIN_ROLE) && !loginUser.getId().equals(picture.getUserid()),
                 ErrorCode.NO_AUTH_ERROR
         );
+    }
+
+    /**
+     * 给图片查询追加“包含全部指定有效标签”的条件。
+     * 停用标签虽然保留历史关联，但不参与正常筛选。
+     */
+    private void applyActiveTagFilters(QueryWrapper<Picture> queryWrapper, List<Long> tagIds) {
+        if (CollUtil.isEmpty(tagIds)) {
+            return;
+        }
+        List<Long> distinctTagIds = tagIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        ThrowExceptionUtils.throwIF(
+                distinctTagIds.isEmpty(),
+                ErrorCode.PARAMS_ERROR,
+                "标签 id 不能为空");
+        for (Long tagId : distinctTagIds) {
+            ThrowExceptionUtils.throwIF(
+                    tagId <= 0,
+                    ErrorCode.PARAMS_ERROR,
+                    "标签 id 不合法");
+            queryWrapper.apply(
+                    "EXISTS (SELECT 1 FROM picture_tag pt "
+                            + "INNER JOIN tag t ON t.id = pt.tagId "
+                            + "WHERE pt.pictureId = picture.id "
+                            + "AND pt.tagId = {0} "
+                            + "AND t.status = {1})",
+                    tagId,
+                    TagStatus.ACTIVE.getValue());
+        }
+    }
+
+    /** 新建图片时解析主题：公共图库默认进入“未分类”，个人空间不使用主题。 */
+    private Long resolveCategoryIdForNewPicture(long spaceId, Long requestedCategoryId) {
+        if (spaceId > 0) {
+            ThrowExceptionUtils.throwIF(
+                    requestedCategoryId != null,
+                    ErrorCode.PARAMS_ERROR,
+                    "个人空间图片不能设置公共主题");
+            return null;
+        }
+        Long categoryId = requestedCategoryId == null ? 1L : requestedCategoryId;
+        categoryService.getRequired(categoryId);
+        return categoryId;
+    }
+
+    /** 编辑或重传图片时解析主题：公共图片未传值时保留原主题。 */
+    private Long resolveCategoryIdForExistingPicture(Picture picture, Long requestedCategoryId) {
+        long spaceId = normalizeSpaceId(picture.getSpaceId());
+        // 校验是否在个人空间
+        if (spaceId > 0) {
+            ThrowExceptionUtils.throwIF(
+                    requestedCategoryId != null,
+                    ErrorCode.PARAMS_ERROR,
+                    "个人空间图片不能设置公共主题");
+            return null;
+        }
+        // 在公共图库时，判断主题id是否合法
+        Long categoryId = requestedCategoryId == null ? picture.getCategoryId() : requestedCategoryId;
+
+        if (categoryId == null) {
+            categoryId = 1L;
+        }
+        categoryService.getRequired(categoryId);
+        return categoryId;
     }
 
     private static long normalizeSpaceId(Long spaceId) {
@@ -1480,6 +1590,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             // 6.1 封装新的信息
             newPicture.setId(newPictureId);
             newPicture.setSpaceId(save2SpaceRequest.getSpaceId());
+            // 保存到个人空间后不继承公共图库主题；标签也不复制，后续由用户重新管理。
+            newPicture.setCategoryId(null);
             newPicture.setSourcePictureId(oldPicture.getId());
             newPicture.setUrl(targetUrl);
             newPicture.setThumbnailUrl(thumbnailUrl);

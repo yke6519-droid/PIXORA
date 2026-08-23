@@ -6,7 +6,6 @@ import com.example.picturebackend.domain.po.UserNotification;
 import com.example.picturebackend.domain.request.notification.NotificationCreateRequest;
 import com.example.picturebackend.domain.request.notification.NotificationPublishRequest;
 import com.example.picturebackend.domain.request.notification.NotificationQueryRequest;
-import com.example.picturebackend.domain.request.notification.NotificationReadRequest;
 import com.example.picturebackend.domain.vo.notification.NotificationVO;
 
 import java.util.List;

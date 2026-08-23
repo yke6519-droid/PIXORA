@@ -3,7 +3,6 @@ package com.example.picturebackend.domain.request.picture;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.util.List;
 
 /**
  * 图片更新请求体
@@ -27,15 +26,8 @@ public class PictureUpdateRequest implements Serializable {
      */
     private String introduction;
 
-    /**
-     * 分类
-     */
-    private String category;
-
-    /**
-     * 标签（JSON数组字符串）
-     */
-    private List<String> tags;
+    /** 公共图库主题 id；个人空间图片不使用主题。 */
+    private Long categoryId;
 
     /**
      * 图片空间

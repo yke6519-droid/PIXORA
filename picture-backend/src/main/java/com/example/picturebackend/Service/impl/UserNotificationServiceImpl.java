@@ -223,7 +223,7 @@ public class UserNotificationServiceImpl
         if (pictureIds.isEmpty()) {
             return Map.of();
         }
-        return pictureMapper.selectBatchIds(pictureIds).stream()
+        return pictureMapper.selectByIds(pictureIds).stream()
                 .filter(picture -> picture.getId() != null && picture.getName() != null)
                 .collect(Collectors.toMap(Picture::getId, Picture::getName, (left, right) -> left));
     }

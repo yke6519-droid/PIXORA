@@ -15,7 +15,6 @@ import com.example.picturebackend.annotation.AuthCheck;
 import com.example.picturebackend.constant.PictureConstant;
 import com.example.picturebackend.constant.UserConstant;
 import com.example.picturebackend.domain.po.Picture;
-import com.example.picturebackend.domain.po.PictureTagCategory;
 import com.example.picturebackend.domain.po.User;
 import com.example.picturebackend.domain.request.BaseResponse;
 import com.example.picturebackend.domain.request.picture.*;
@@ -31,7 +30,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 
 import lombok.extern.slf4j.Slf4j;
 
-import org.apache.tomcat.util.descriptor.web.ErrorPage;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -41,7 +39,6 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 
@@ -82,8 +79,7 @@ public class PictureController {
             @RequestPart(value = "fileList", required = false) List<MultipartFile> fileList,
             @RequestParam(value = "url", required = false) String url,
             @RequestParam(value = "name", required = false) String name,
-            @RequestParam(value = "category", required = false) String category,
-            @RequestParam(value = "tags", required = false) List<String> tags,
+            @RequestParam(value = "categoryId", required = false) Long categoryId,
             @RequestParam(value = "introduction", required = false) String introduction,
             @RequestParam(value = "spaceId", required = false) Long spaceId,
             HttpServletRequest request) {
@@ -94,8 +90,7 @@ public class PictureController {
         // 构建请求对象
         PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
         pictureUploadRequest.setName(name);
-        pictureUploadRequest.setCategory(category);
-        pictureUploadRequest.setTags(tags);
+        pictureUploadRequest.setCategoryId(categoryId);
         pictureUploadRequest.setIntroduction(introduction);
         pictureUploadRequest.setSpaceId(spaceId);
         
@@ -134,12 +129,15 @@ public class PictureController {
 
             // 将整个文件列表交给 Service；批量缓存只在所有文件处理结束后清理一次。
             PictureUploadVO batchUploadVO = pictureService.uploadPicture2DBBatch(
-                    fileList, pictureUploadRequest, currentUser);
+                    fileList, pictureUploadRequest, currentUser
+            );
             return ResponseUtils.success(batchUploadVO);
 
         } else if (hasUrl) {
             totalCount++;
-            PictureVO pictureVO = pictureService.uploadPicture2DB(url, pictureUploadRequest, currentUser);
+            PictureVO pictureVO = pictureService.uploadPicture2DB(
+                url, pictureUploadRequest, currentUser
+            );
             successPictureVOs.add(pictureVO);
         } else {
             ThrowExceptionUtils.throwIF(
@@ -165,8 +163,7 @@ public class PictureController {
      * @param file
      * @param pictureId
      * @param name
-     * @param category
-     * @param tags
+     * @param categoryId 公共图库主题 id
      * @param introduction
      * @param request
      * @return
@@ -177,9 +174,8 @@ public class PictureController {
         @RequestParam(value = "url", required = false) String url,
         @RequestParam(value = "id", required = false) Long pictureId,
         @RequestParam(value = "name", required = false) String name,
-        @RequestParam(value = "category", required = false) String category,
-        @RequestParam(value = "tags", required = false) List<String> tags,
-        @RequestParam(value = "introduction", required = false) String introduction,
+         @RequestParam(value = "categoryId", required = false) Long categoryId,
+         @RequestParam(value = "introduction", required = false) String introduction,
         HttpServletRequest request){
         
         User currentUser = userService.getCurrentUser(request);
@@ -223,8 +219,7 @@ public class PictureController {
         PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
         pictureUploadRequest.setId(pictureId);
         pictureUploadRequest.setName(name);
-        pictureUploadRequest.setCategory(category);
-        pictureUploadRequest.setTags(tags);
+        pictureUploadRequest.setCategoryId(categoryId);
         pictureUploadRequest.setIntroduction(introduction);
 
         // 上传图片
@@ -448,21 +443,5 @@ public class PictureController {
         PictureVO pictureVO = pictureService.save2Space(save2SpaceRequest,loginUser);
         return ResponseUtils.success(pictureVO);
     }
-    
-    /**
-     * 分类标签表
-     * 目前种类较少，不选择存库
-     * @return
-     */
-    @GetMapping("tag_category")
-    public BaseResponse<PictureTagCategory> listPictureCategory() {
-        PictureTagCategory pictureTagCategory = new PictureTagCategory();
-        List<String> tags = Arrays.asList("热门", "搞笑", "艺术", "壁纸");
-        List<String> categorys = Arrays.asList("模板", "表情包", "海报", "动漫", "游戏");
-        pictureTagCategory.setTags(tags);
-        pictureTagCategory.setCategorys(categorys);
-        return ResponseUtils.success(pictureTagCategory);
-    }
-
     
 }
