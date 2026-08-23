@@ -13,4 +13,7 @@ public interface CategoryService extends IService<Category> {
 
     /** 获取主题，不存在时抛出业务异常。 */
     Category getRequired(Long categoryId);
+
+    /** 创建管理员维护的公共图库主题。 */
+    Category createSystemCategory(String categoryName);
 }
