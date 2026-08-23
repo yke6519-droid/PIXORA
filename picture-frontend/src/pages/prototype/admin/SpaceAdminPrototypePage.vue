@@ -229,7 +229,7 @@ function formatDate(value?: string) {
 }
 
 function holderName(space: API.SpaceVO) {
-  return space.createdUser?.username || space.createdUser?.useraccount || `用户 #${normalizeId(space.userId) || '未知'}`
+  return space.createdUser?.username || `用户 #${normalizeId(space.userId) || '未知'}`
 }
 
 function levelText(level?: number) {

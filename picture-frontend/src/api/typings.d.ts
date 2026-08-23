@@ -348,7 +348,7 @@ declare namespace API {
     picscale?: number;
     picformat?: string;
     userId?: number | string;
-    createdUser?: UserVO;
+    createdUser?: UserPictureVO;
     createtime?: string;
     updatetime?: string;
     pictureCheck?: number;
@@ -443,7 +443,7 @@ declare namespace API {
     maxCount?: number | string;
     usedCount?: number | string;
     userId?: number | string;
-    createdUser?: UserVO;
+    createdUser?: UserSpaceVO;
     createTime?: string;
     updateTime?: string;
   };
@@ -522,5 +522,19 @@ declare namespace API {
     profile?: string;
     userLevel?: string;
     userStatus?: number;
+  };
+
+  /** 图片创建者的公开展示信息。 */
+  type UserPictureVO = {
+    id?: number | string;
+    username?: string;
+    avatarurl?: string;
+  };
+
+  /** 空间持有人的公开展示信息。 */
+  type UserSpaceVO = {
+    id?: number | string;
+    username?: string;
+    avatarurl?: string;
   };
 }

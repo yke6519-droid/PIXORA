@@ -304,12 +304,10 @@ function pictureClassification(picture: API.PictureVO) {
   return getCategoryName(picture.categoryId) || '未分类'
 }
 
-/** 优先展示后端脱敏后的用户名和账号，只有旧数据缺字段时才回退到用户 ID。 */
+/** 图片接口只返回上传者昵称和头像，昵称缺失时回退到用户 ID。 */
 function uploaderLabel(picture: API.PictureVO) {
   const username = picture.createdUser?.username?.trim()
-  const useraccount = picture.createdUser?.useraccount?.trim()
-  if (username && useraccount) return `${username} · ${useraccount}`
-  return username || useraccount || (picture.userId != null ? `用户 ${picture.userId}` : '未知用户')
+  return username || (picture.userId != null ? `用户 ${picture.userId}` : '未知用户')
 }
 
 function tabCount(tab: ReviewTab) {
