@@ -32,8 +32,6 @@ public interface UserService extends IService<User> {
 
     Boolean userRegister(RegisterRequest registerRequest);
 
-    String passwordEncrypt(String password);
-
     boolean updateSelf(Long id, HttpServletRequest request, UpdateSelfRequest updateSelfRequest);
 
     boolean addUser(AddUserRequest addUserRequest);

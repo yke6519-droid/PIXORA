@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS `user` (
     `userAccount` varchar(256) NOT NULL COMMENT '用户账号',
     `avatarUrl` varchar(1024) DEFAULT NULL COMMENT '头像',
     `gender` tinyint DEFAULT NULL COMMENT '性别',
-    `userPassword` varchar(50) NOT NULL DEFAULT '123456' COMMENT '用户密码',
+    `userPassword` varchar(100) NOT NULL COMMENT '用户密码 BCrypt 哈希',
     `phone` varchar(128) NOT NULL COMMENT '电话号码',
     `userLevel` varchar(64) NOT NULL DEFAULT 'user' COMMENT '用户级别：user-普通用户，admin-管理员，vip-VIP',
     `userStatus` tinyint NOT NULL DEFAULT '0' COMMENT '用户状态，0-正常，1-封禁',

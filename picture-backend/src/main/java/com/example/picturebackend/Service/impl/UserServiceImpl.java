@@ -2,6 +2,7 @@ package com.example.picturebackend.Service.impl;
 
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.crypto.digest.BCrypt;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -30,7 +31,6 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.DigestUtils;
 
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
@@ -119,11 +119,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 "当前账号已存在!"
         );
 
-        // 7. 给密码加密
-        String encryptPassword = this.passwordEncrypt(password);
-        registerRequest.setUserpassword(encryptPassword);
+        // 7. 密码只以 BCrypt 哈希形式写入数据库
         User user = new User();
         BeanUtils.copyProperties(registerRequest,user);
+        user.setUserpassword(hashPassword(password));
 
         // 8. 注册用户统一从后端写入默认等级和正常状态，避免依赖不同数据库环境的默认值。
         user.setUserLevel(UserConstant.DEFAULT_ROLE);
@@ -152,10 +151,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         //2. 登录校验
         ThrowExceptionUtils.throwIF(
-                !userPassword.equals(
-                        // 对传入的密码进行加密处理
-                        this.passwordEncrypt(userLoginRequest.getUserpassword())
-                ),
+                !BCrypt.checkpw(userLoginRequest.getUserpassword(), userPassword),
                 ErrorCode.PARAMS_ERROR,
                 "登录密码错误");
         
@@ -164,7 +160,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .eq("userAccount",userLoginRequest.getUseraccount());
 
         User user = this.getOne(queryUserWrapper);
-        System.out.println("----------------------------user = " + user);
 
         // 判断当前用户是否被封禁
         ThrowExceptionUtils.throwIF(
@@ -175,7 +170,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         //3. 将脱敏后的用户信息存入Session
         UserVO saftyUser = this.getSaftyUser(user);
-        System.out.println("----------------------------saftyUser = " + saftyUser);
         request.getSession().setAttribute(UserConstant.CURRENT_USER_SESSION_KEY,saftyUser);
 
         return "登录成功";
@@ -209,14 +203,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     /**
-     * 密码加密工具类
-     * @param password
-     * @return
+     * 将原始密码转换为不可逆的 BCrypt 哈希。
+     * 每次都会生成随机盐，强度与迁移 SQL 中的 10 保持一致。
      */
-    @Override
-    public String passwordEncrypt(String password) {
-        String salt = "盐";
-        return DigestUtils.md5DigestAsHex((salt + password).getBytes());
+    private String hashPassword(String password) {
+        return BCrypt.hashpw(password, BCrypt.gensalt(10));
     }
 
     @Override
@@ -260,7 +251,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setUserStatus(UserStatus.NORMAL.getValue());
         user.setCreatetime(LocalDateTime.now());
         user.setUpdatetime(LocalDateTime.now());
-        user.setUserpassword(this.passwordEncrypt(initPassword));
+        user.setUserpassword(hashPassword(initPassword));
         return this.save(user);
     }
 
