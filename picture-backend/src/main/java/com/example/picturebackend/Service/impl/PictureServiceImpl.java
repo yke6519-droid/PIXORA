@@ -45,13 +45,7 @@ import com.example.picturebackend.manager.MultiCacheManager;
 import com.example.picturebackend.manager.upload.FilePictureUpload;
 import com.example.picturebackend.manager.upload.PictureUploadTemplate;
 import com.example.picturebackend.manager.upload.UrlPictureUpload;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
+import com.example.picturebackend.manager.source.ImageSourceAdapter;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -92,7 +86,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Resource
     private CosManager cosManager;
 
-    private static final Gson GSON = new Gson();
+    @Resource
+    private ImageSourceAdapter imageSourceAdapter;
 
     @Autowired
     @Resource
@@ -195,7 +190,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
             // 私人空间需要按新旧图片大小差额更新容量。
             if (normalizedOldSpaceId > 0) {
-                Space space = spaceService.getById(oldSpaceId);
+                // 锁定空间记录，避免重新上传与上传、删除并发时覆盖空间容量。
+                Space space = spaceService.getByIdForUpdate(oldSpaceId);
                 ThrowExceptionUtils.throwIF(
                         space == null,
                         ErrorCode.NOT_FOUND_ERROR,
@@ -456,16 +452,16 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                     normalizedSpaceId,
                     pictureUploadRequest.getCategoryId()));
             if (normalizedSpaceId > 0) {
-                // 校验空间权限和空间使用量。
+                // 先校验空间权限，再锁定空间记录完成容量校验和更新。
                 spaceService.SpaceAuthCheck(spaceId, loginUser);
-                spaceService.checkUsage(spaceId, picture, uploadPictureResult);
-
-                // 更新空间容量和图片数量。
-                Space space = spaceService.getById(spaceId);
+                Space space = spaceService.getByIdForUpdate(spaceId);
                 ThrowExceptionUtils.throwIF(
                         space == null,
                         ErrorCode.NOT_FOUND_ERROR,
                         "空间不存在");
+                spaceService.checkUsage(space, picture);
+
+                // 更新空间容量和图片数量。
                 space.setUsedSize(defaultLong(space.getUsedSize()) + defaultLong(picture.getPicsize()));
                 space.setUsedCount(defaultLong(space.getUsedCount()) + 1L);
                 ThrowExceptionUtils.throwIF(
@@ -1336,89 +1332,74 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         ThrowExceptionUtils.throwIF(StrUtil.isBlank(searchText),
                 ErrorCode.PARAMS_ERROR,"搜索关键词为空");
 
-        ThrowExceptionUtils.throwIF(count>20,ErrorCode.PARAMS_ERROR,"抓取上限为20条");
+        ThrowExceptionUtils.throwIF(count == null || count < 1 || count > 20,
+                ErrorCode.PARAMS_ERROR,"抓取数量必须为1到20条");
         
-        //2. 抓取内容
-        //2.1 构造抓取URL
-        String fetchUrl = String.format("https://cn.bing.com/images/async?q=%s&mmasync=1",searchText);
-        Document document;
+        //2. 从 Openverse 获取候选，放大候选数以覆盖下载失败的图片。
+        int candidateCount = Math.min(count * 2, 40);
+        List<String> imgUrlList;
         try {
-            //2.2 利用Jsoup，先.connect链接对应的URL，再.get()拿到对应的Document
-            document = Jsoup.connect(fetchUrl).get();
+            imgUrlList = imageSourceAdapter.search(searchText, candidateCount);
         } catch (IOException e) {
-            log.error("获取页面失败",e);
-            throw new BusinessException(ErrorCode.OPERATION_ERROR,"获取页面失败");
+            log.error("Openverse 搜索失败", e);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "获取图片失败");
         }
 
-        //3. 解析内容
-        // Document:可以理解为全面的HTML，根据class类名，id获取到其中的内容；
-        // 3.1. 找到所有图片容器 a.iusc
-        Elements items = document.select("a.iusc");
-        List<String> imgUrlList = new ArrayList<>();
-        // 3.2 解析并验证地址
-        for (Element item : items) {
-            // 限定抓取张数
-            if (imgUrlList.size() >= count) {
-                break;
-            }
-            String mJson = item.attr("m");
-            if (mJson.isEmpty()) continue;
-            // Gson 解析
-            Map<String, Object> map = GSON.fromJson(mJson, new TypeToken<Map<String, Object>>() {}.getType());
-            String realUrl = (String) map.get("murl");
-            if (realUrl != null && !realUrl.isBlank()) {
-                imgUrlList.add(realUrl);
-            }else {
-                log.error("第"+(imgUrlList.size()+1)+"次图片拉取失败");
-            }
+        //3. 逐张上传。单张失败时继续处理后面的图片。
+        int successCount = 0;
+        List<PictureVO> pictureVOList = new ArrayList<>();
+        if (imgUrlList == null) {
+            imgUrlList = new ArrayList<>();
         }
 
-        //4. 校验抓取到的内容
-        ThrowExceptionUtils.throwIF(CollUtil.isEmpty(imgUrlList),
-                ErrorCode.OPERATION_ERROR, "未抓取到有效图片");
-
-        //5. 上传图片（复用已经写好的用管理员URL上传图片）
-        Integer number = 0;
-        PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
         String name = pictureUploadByBatchRequest.getName();
-        if(StrUtil.isBlank(name)){
+        if (StrUtil.isBlank(name)) {
             name = searchText;
         }
 
-        List<PictureVO> pictureVOList = new ArrayList<>();
-
-        // 循环处理并上传图片
         for (String inputSource : imgUrlList) {
-            // 用关键词当做图片名称，防止图片名称为乱码 加上uuid 防止重名
-            String uuid = UUID.randomUUID().toString().replace("-", "").substring(0, 4);// 长度：8
-            pictureUploadRequest.setName(name+": "+uuid);
-            pictureUploadRequest.setIntroduction(searchText+"相关图片");
-            // 管理员批量导入只传公共图库主题；标签在图片入库后单独绑定。
-            pictureUploadRequest.setCategoryId(pictureUploadByBatchRequest.getCategoryId());
+            // 已经成功上传到用户需要的数量时，不再继续上传。
+            if (successCount >= count) {
+                break;
+            }
+            if (StrUtil.isBlank(inputSource)) {
+                continue;
+            }
 
-            System.out.println("正在上传图片");
-            // 调用URL上传接口 并自动过审
+            PictureUploadRequest uploadRequest = new PictureUploadRequest();
+            String uuid = UUID.randomUUID().toString().replace("-", "").substring(0, 4);
+            uploadRequest.setName(name + ": " + uuid);
+            uploadRequest.setIntroduction(searchText + "相关图片");
+
+            // 管理员批量拉取只能上传到公共图库。
+            uploadRequest.setSpaceId(0L);
+            // 没有选择主题时，默认归入“未分类”。
+            Long categoryId = pictureUploadByBatchRequest.getCategoryId();
+            if (categoryId == null) {
+                uploadRequest.setCategoryId(1L);
+            } else {
+                uploadRequest.setCategoryId(categoryId);
+            }
+
             try {
-                // URL 批量抓取复用单张保存逻辑，但关闭单条缓存清理，统一在循环结束后清理。
                 PictureVO pictureVO = this.uploadPicture2DBInternal(
-                        inputSource, pictureUploadRequest, loginUser, false);
+                        inputSource, uploadRequest, loginUser, false);
                 if (pictureVO != null) {
-                    log.debug("图片上传成功，id= "+pictureVO.getId());
-                    number++;
+                    pictureVOList.add(pictureVO);
+                    successCount++;
                 }
-                pictureVOList.add(pictureVO);
-            }catch (Exception e){
-                log.error("图片上传失败",e);
+            } catch (Exception e) {
+                log.error("图片上传失败，继续处理下一张", e);
             }
         }
-        
+
         PictureListVO pictureListVO = new PictureListVO();
         pictureListVO.setPictureList(pictureVOList);
-        pictureListVO.setTargetCount(imgUrlList.size());
-        pictureListVO.setSuccessCount(number);
+        pictureListVO.setTargetCount(count);
+        pictureListVO.setSuccessCount(successCount);
 
         // 批量上传完成后，清除缓存保证数据一致性
-        if (number > 0) {
+        if (successCount > 0) {
             multiCacheManager.invalidatePicturePageCache();
         }
         return pictureListVO;

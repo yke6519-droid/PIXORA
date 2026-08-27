@@ -17,7 +17,6 @@ import com.example.picturebackend.Service.SpaceService;
 import com.example.picturebackend.Service.UserService;
 import com.example.picturebackend.constant.SpaceConstant;
 import com.example.picturebackend.constant.UserConstant;
-import com.example.picturebackend.domain.dto.file.UploadPictureResult;
 import com.example.picturebackend.domain.po.Picture;
 import com.example.picturebackend.domain.po.Space;
 import com.example.picturebackend.domain.po.User;
@@ -332,38 +331,10 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
     }
 
     @Override
-    public void checkUsage(Long spaceId, Picture picture, UploadPictureResult uploadPictureResult){
-
-        // 校验参数
-        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(spaceId),
-            ErrorCode.PARAMS_ERROR, "spaceId is null");
-
-        ThrowExceptionUtils.throwIF(ObjectUtil.isNull(picture),
-            ErrorCode.PARAMS_ERROR,"picture is null");
-
-        Space space = this.getById(spaceId);
-
-        Long usedCount = space.getUsedCount();
-        Long maxCount = space.getMaxCount();
-
-        Long usedSize = space.getUsedSize();
-        Long maxSize = space.getMaxSize();
-
-        // 这里只负责校验空间使用量；上传流程统一在入库失败时清理COS对象，
-        // 避免容量校验和外层异常补偿重复删除同一批对象。
-        if (usedCount >= maxCount || usedSize >= maxSize 
-            || usedSize+picture.getPicsize() >= maxSize) {
-            ThrowExceptionUtils.throwIF(usedCount >= maxCount,
-                ErrorCode.OPERATION_ERROR ,"空间图片张数已达上限");
-            
-            ThrowExceptionUtils.throwIF(
-            usedSize >= maxSize || usedSize+picture.getPicsize() >= maxSize,
-            ErrorCode.OPERATION_ERROR ,"空间容量已达上限");
-        }
-    }
-
-    @Override
     public void checkUsage(Space space, Picture picture){
+        ThrowExceptionUtils.throwIF(space == null || picture == null,
+            ErrorCode.PARAMS_ERROR, "空间和图片不能为空");
+
         Long maxCount = space.getMaxCount();
         Long usedCount = space.getUsedCount();
         Long maxSize = space.getMaxSize();
