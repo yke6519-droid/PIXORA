@@ -17,5 +17,8 @@ public class PictureListVO {
     Integer targetCount;
 
     Integer successCount;
+
+    /** 批量任务是否因为达到时间上限而提前结束。 */
+    Boolean timedOut;
     
 }

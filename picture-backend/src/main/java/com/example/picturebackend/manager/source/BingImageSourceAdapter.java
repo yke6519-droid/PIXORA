@@ -3,6 +3,7 @@ package com.example.picturebackend.manager.source;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.example.picturebackend.constant.PictureConstant;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -23,7 +24,12 @@ public class BingImageSourceAdapter implements ImageSourceAdapter {
 
     @Override
     public List<String> search(String keyword, int candidateCount) throws IOException {
-        if (candidateCount <= 0) {
+        return search(keyword, candidateCount, PictureConstant.IMAGE_REQUEST_TIMEOUT_MILLIS);
+    }
+
+    @Override
+    public List<String> search(String keyword, int candidateCount, long timeoutMillis) throws IOException {
+        if (candidateCount <= 0 || timeoutMillis <= 0) {
             return new ArrayList<>();
         }
 
@@ -32,7 +38,8 @@ public class BingImageSourceAdapter implements ImageSourceAdapter {
         Document document = Jsoup.connect(fetchUrl)
                 .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36")
                 .referrer("https://cn.bing.com/")
-                .timeout(20000)
+                .timeout((int) Math.max(1L,
+                        Math.min(PictureConstant.IMAGE_REQUEST_TIMEOUT_MILLIS, timeoutMillis)))
                 .get();
 
         String pageText = document.text().toLowerCase(Locale.ROOT);

@@ -6,6 +6,7 @@ import com.qcloud.cos.auth.BasicCOSCredentials;
 import com.qcloud.cos.auth.COSCredentials;
 import com.qcloud.cos.http.HttpProtocol;
 import com.qcloud.cos.region.Region;
+import com.example.picturebackend.constant.PictureConstant;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -54,6 +55,11 @@ public class CosClientConfig {
         ClientConfig clientConfig = new ClientConfig(Region);
         // 这里建议设置使用 https 协议
         clientConfig.setHttpProtocol(HttpProtocol.https);
+        // COS 单次请求也设置上限，避免上传重试把批量任务拖过截止时间。
+        clientConfig.setConnectionTimeout(PictureConstant.IMAGE_REQUEST_TIMEOUT_MILLIS);
+        clientConfig.setSocketTimeout(PictureConstant.IMAGE_REQUEST_TIMEOUT_MILLIS);
+        clientConfig.setRequestTimeout(PictureConstant.IMAGE_REQUEST_TIMEOUT_MILLIS);
+        clientConfig.setMaxErrorRetry(0);
         // 3 生成 cos 客户端。
         return new COSClient(cred, clientConfig);
     }

@@ -42,6 +42,7 @@ import com.example.picturebackend.domain.vo.picture.PictureVO;
 import com.example.picturebackend.domain.vo.picture.UserPictureVO;
 import com.example.picturebackend.manager.CosManager;
 import com.example.picturebackend.manager.MultiCacheManager;
+import com.example.picturebackend.manager.batch.BatchImportContext;
 import com.example.picturebackend.manager.upload.FilePictureUpload;
 import com.example.picturebackend.manager.upload.LocalImageSafetyChecker;
 import com.example.picturebackend.manager.upload.PictureUploadTemplate;
@@ -115,6 +116,18 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
      */
     @Override
     public UploadPictureResult uploadPicture2COS(Object inputSource, PictureUploadRequest pictureUploadRequest, User loginUser) {
+        return uploadPicture2COS(
+                inputSource,
+                pictureUploadRequest,
+                loginUser,
+                PictureConstant.IMAGE_REQUEST_TIMEOUT_MILLIS);
+    }
+
+    /** 批量抓图使用当前任务剩余时间，避免单张下载突破任务截止时间。 */
+    private UploadPictureResult uploadPicture2COS(Object inputSource,
+                                                  PictureUploadRequest pictureUploadRequest,
+                                                  User loginUser,
+                                                  long timeoutMillis) {
         // 校验参数
         ThrowExceptionUtils.throwIF(
                 loginUser == null,
@@ -141,7 +154,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             pictureUploadTemplate = urlPictureUpload;
         }
 
-        UploadPictureResult uploadPictureResult = pictureUploadTemplate.uploadPicture(inputSource, uploadPathPrefix);
+        UploadPictureResult uploadPictureResult = pictureUploadTemplate.uploadPicture(
+                inputSource, uploadPathPrefix, timeoutMillis);
 
         System.out.println("uploadPictureResult"+uploadPictureResult);
         
@@ -413,6 +427,20 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                                                PictureUploadRequest pictureUploadRequest,
                                                User loginUser,
                                                boolean invalidateCache) {
+        return uploadPicture2DBInternal(
+                inputSource,
+                pictureUploadRequest,
+                loginUser,
+                invalidateCache,
+                PictureConstant.IMAGE_REQUEST_TIMEOUT_MILLIS);
+    }
+
+    /** 批量抓图专用上传入口，使用任务剩余时间下载远程图片。 */
+    private PictureVO uploadPicture2DBInternal(Object inputSource,
+                                               PictureUploadRequest pictureUploadRequest,
+                                               User loginUser,
+                                               boolean invalidateCache,
+                                               long timeoutMillis) {
         // 参数校验
         ThrowExceptionUtils.throwIF(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
         ThrowExceptionUtils.throwIF(pictureUploadRequest == null, ErrorCode.PARAMS_ERROR, "上传参数不能为空");
@@ -424,7 +452,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         // 上传到COS并获取上传结果；后续入库或空间更新失败时会清理这些对象。
         UploadPictureResult uploadPictureResult = null;
         try {
-            uploadPictureResult = this.uploadPicture2COS(inputSource, pictureUploadRequest, loginUser);
+            uploadPictureResult = this.uploadPicture2COS(
+                    inputSource, pictureUploadRequest, loginUser, timeoutMillis);
             ThrowExceptionUtils.throwIF(
                     uploadPictureResult == null,
                     ErrorCode.OPERATION_ERROR,
@@ -1338,18 +1367,24 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
         ThrowExceptionUtils.throwIF(count == null || count < 1 || count > 20,
                 ErrorCode.PARAMS_ERROR,"抓取数量必须为1到20条");
+
+        // 后端比前端提前约2秒结束，留出时间返回已经成功入库的图片。
+        BatchImportContext batchImportContext = new BatchImportContext();
         
         //2. 从 Openverse 获取候选，放大候选数以覆盖下载失败的图片。
         int candidateCount = Math.min(count * 2, 40);
         List<String> imgUrlList = new ArrayList<>();
-        try {
-            List<String> result = imageSourceAdapter.search(searchText, candidateCount);
-            if (result != null) {
-                imgUrlList.addAll(result);
+        if (!batchImportContext.isTimeout()) {
+            try {
+                List<String> result = imageSourceAdapter.search(
+                        searchText, candidateCount, batchImportContext.getRemainingMillis());
+                if (result != null) {
+                    imgUrlList.addAll(result);
+                }
+            } catch (IOException e) {
+                // Openverse 暂时不可用时，继续走 Bing 兜底，不让整个批次直接失败。
+                log.warn("Openverse 搜索失败，准备使用 Bing 兜底", e);
             }
-        } catch (IOException e) {
-            // Openverse 暂时不可用时，继续走 Bing 兜底，不让整个批次直接失败。
-            log.warn("Openverse 搜索失败，准备使用 Bing 兜底", e);
         }
 
         //3. 逐张上传。单张失败时继续处理后面的图片。
@@ -1362,19 +1397,22 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Set<String> usedImageUrlSet = new HashSet<>();
         int successCount = uploadImageUrlList(
                 "Openverse", imgUrlList, count, name, searchText,
-                pictureUploadByBatchRequest, loginUser, pictureVOList, usedImageUrlSet);
+                pictureUploadByBatchRequest, loginUser, pictureVOList, usedImageUrlSet,
+                batchImportContext);
 
         //4. Openverse 不足时，再向 Bing 请求剩余数量的候选。
-        if (successCount < count) {
+        if (successCount < count && !batchImportContext.isTimeout()) {
             int needCount = count - successCount;
             int bingCandidateCount = Math.min(needCount * 2, 40);
             try {
                 List<String> bingUrlList = bingImageSourceAdapter == null
                         ? new ArrayList<>()
-                        : bingImageSourceAdapter.search(searchText, bingCandidateCount);
+                        : bingImageSourceAdapter.search(
+                        searchText, bingCandidateCount, batchImportContext.getRemainingMillis());
                 successCount = uploadImageUrlList(
                         "Bing", bingUrlList, count, name, searchText,
-                        pictureUploadByBatchRequest, loginUser, pictureVOList, usedImageUrlSet);
+                        pictureUploadByBatchRequest, loginUser, pictureVOList, usedImageUrlSet,
+                        batchImportContext);
             } catch (IOException e) {
                 log.warn("Bing 搜索失败，批量导入结束", e);
             }
@@ -1384,6 +1422,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         pictureListVO.setPictureList(pictureVOList);
         pictureListVO.setTargetCount(count);
         pictureListVO.setSuccessCount(successCount);
+        pictureListVO.setTimedOut(batchImportContext.isTimeout());
 
         // 批量上传完成后，清除缓存保证数据一致性
         if (successCount > 0) {
@@ -1401,13 +1440,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                                    PictureUploadByBatchRequest batchRequest,
                                    User loginUser,
                                    List<PictureVO> pictureVOList,
-                                   Set<String> usedImageUrlSet) {
+                                   Set<String> usedImageUrlSet,
+                                   BatchImportContext batchImportContext) {
         int blockedCount = 0;
         if (imageUrlList == null) {
             imageUrlList = new ArrayList<>();
         }
         for (String inputSource : imageUrlList) {
-            if (pictureVOList.size() >= targetCount) {
+            if (pictureVOList.size() >= targetCount || batchImportContext.isTimeout()) {
                 break;
             }
             if (StrUtil.isBlank(inputSource) || usedImageUrlSet.contains(inputSource)) {
@@ -1431,7 +1471,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
             try {
                 PictureVO pictureVO = this.uploadPicture2DBInternal(
-                        inputSource, uploadRequest, loginUser, false);
+                        inputSource, uploadRequest, loginUser, false,
+                        batchImportContext.getRemainingMillis());
                 if (pictureVO != null) {
                     pictureVOList.add(pictureVO);
                 }

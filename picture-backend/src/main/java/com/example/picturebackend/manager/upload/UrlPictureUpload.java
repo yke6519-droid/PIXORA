@@ -22,6 +22,11 @@ import java.util.List;
 public class UrlPictureUpload extends PictureUploadTemplate {
     @Override
     protected void vailPic(Object inputSource) {
+        vailPic(inputSource, PictureConstant.IMAGE_REQUEST_TIMEOUT_MILLIS);
+    }
+
+    @Override
+    protected void vailPic(Object inputSource, long timeoutMillis) {
         String fileURL = (String) inputSource;
         // 校验是否为空
         ThrowExceptionUtils.throwIF(StrUtil.isBlank(fileURL), ErrorCode.PARAMS_ERROR,"文件URL为空！");
@@ -37,7 +42,10 @@ public class UrlPictureUpload extends PictureUploadTemplate {
         // 发送 HEAD请求 验证文件是否存在
         HttpResponse httpResponse = null;
         try {
-            httpResponse = HttpUtil.createRequest(Method.HEAD, fileURL).execute();
+            int timeout = (int) Math.max(1L, Math.min(Integer.MAX_VALUE, timeoutMillis));
+            httpResponse = HttpUtil.createRequest(Method.HEAD, fileURL)
+                    .timeout(timeout)
+                    .execute();
             // 为正常返回则无需其他判断
             if (httpResponse.getStatus() != HttpStatus.HTTP_OK){
                 return; // 这里是为了兼容性，因此直接返回不报错；
@@ -92,5 +100,12 @@ public class UrlPictureUpload extends PictureUploadTemplate {
     protected void processFile(Object inputSource, File file) {
         String fileURL = (String) inputSource;
         HttpUtil.downloadFile(fileURL,file);
+    }
+
+    @Override
+    protected void processFile(Object inputSource, File file, long timeoutMillis) {
+        String fileURL = (String) inputSource;
+        int timeout = (int) Math.max(1L, Math.min(Integer.MAX_VALUE, timeoutMillis));
+        HttpUtil.downloadFile(fileURL, file, timeout);
     }
 }

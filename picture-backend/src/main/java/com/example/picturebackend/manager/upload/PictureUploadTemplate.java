@@ -30,6 +30,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 业务层面的
@@ -54,8 +55,22 @@ public abstract class PictureUploadTemplate {
      * @return
      */
     public UploadPictureResult uploadPicture(Object inputSource, String uploadPrefix) {
+        return uploadPicture(inputSource, uploadPrefix, PictureConstant.IMAGE_REQUEST_TIMEOUT_MILLIS);
+    }
+
+    /** 支持批量任务传入当前剩余时间，避免下载请求超过任务截止时间。 */
+    public UploadPictureResult uploadPicture(Object inputSource, String uploadPrefix, long timeoutMillis) {
+        if (timeoutMillis <= 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "图片处理已超时");
+        }
+        long uploadDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+
         // 1. 校验图片
-        vailPic(inputSource);
+        long remainingMillis = getRemainingMillis(uploadDeadlineNanos);
+        if (remainingMillis <= 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "图片处理已超时");
+        }
+        vailPic(inputSource, remainingMillis);
         
         // 2. 图片上传地址
         String uuid = RandomUtil.randomString(16);
@@ -80,7 +95,11 @@ public abstract class PictureUploadTemplate {
             String tempSuffix = fileSuffix.isBlank() ? ".tmp" : "." + fileSuffix;
             file = File.createTempFile("pixora-upload-", tempSuffix);
             // 3.2 处理文件来源
-            processFile(inputSource,file);
+            remainingMillis = getRemainingMillis(uploadDeadlineNanos);
+            if (remainingMillis <= 0) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "图片处理已超时");
+            }
+            processFile(inputSource, file, remainingMillis);
             
             // URL 来源可能没有 Content-Length，下载完成后再做一次硬性大小校验。
             ThrowExceptionUtils.throwIF(
@@ -91,6 +110,11 @@ public abstract class PictureUploadTemplate {
 
             // 下载完成后再检查文件头，避免把 HTML、脚本等伪装内容上传到 COS。
             LocalImageSafetyChecker.check(inputSource, file);
+
+            // 下载刚好跨过截止时间时，不再进入 COS 上传阶段。
+            if (System.nanoTime() >= uploadDeadlineNanos) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "图片处理已超时");
+            }
 
             // 4. 上传对象存储，并获取上传对象结果
             uploadAttempted = true;
@@ -173,9 +197,25 @@ public abstract class PictureUploadTemplate {
     
     protected abstract void vailPic(Object inputSource);
 
+    /** 网络图片可以覆盖此方法使用剩余时间，本地文件沿用旧校验逻辑。 */
+    protected void vailPic(Object inputSource, long timeoutMillis) {
+        vailPic(inputSource);
+    }
+
     protected abstract String getOriginalFilename(Object inputSource);
 
     protected abstract void processFile(Object inputSource,File file) throws IOException;
+
+    /** 本地文件沿用旧逻辑，网络文件由子类使用传入的超时时间。 */
+    protected void processFile(Object inputSource, File file, long timeoutMillis) throws IOException {
+        processFile(inputSource, file);
+    }
+
+    /** 把任务截止时间转换成 HTTP 客户端可以使用的毫秒数。 */
+    private long getRemainingMillis(long deadlineNanos) {
+        long remainingMillis = TimeUnit.NANOSECONDS.toMillis(deadlineNanos - System.nanoTime());
+        return Math.max(remainingMillis, 0L);
+    }
 
     /**
      * 封装压缩后的返回结果

@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
+import com.example.picturebackend.constant.PictureConstant;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -24,21 +25,28 @@ public class OpenverseImageSourceAdapter implements ImageSourceAdapter {
 
     @Override
     public List<String> search(String keyword, int candidateCount) throws IOException {
+        return search(keyword, candidateCount, PictureConstant.IMAGE_REQUEST_TIMEOUT_MILLIS);
+    }
+
+    @Override
+    public List<String> search(String keyword, int candidateCount, long timeoutMillis) throws IOException {
         List<String> imageUrlList = new ArrayList<>();
-        if (candidateCount <= 0) {
+        if (candidateCount <= 0 || timeoutMillis <= 0) {
             return imageUrlList;
         }
 
         // Openverse 匿名请求每页最多20条，40条候选需要分两页请求。
         int pageSize = Math.min(candidateCount, 20);
         int pageCount = (candidateCount + pageSize - 1) / pageSize;
+        int pageTimeoutMillis = (int) Math.max(1L,
+                Math.min(PictureConstant.IMAGE_REQUEST_TIMEOUT_MILLIS, timeoutMillis / pageCount));
         for (int page = 1; page <= pageCount; page++) {
             String fetchUrl = buildPageUrl(keyword, candidateCount, page);
             HttpResponse response = null;
             try {
                 response = HttpRequest.get(fetchUrl)
                         .header("Accept", "application/json")
-                        .timeout(20000)
+                        .timeout(pageTimeoutMillis)
                         .execute();
                 if (!response.isOk()) {
                     throw new IOException("Openverse 请求失败，HTTP " + response.getStatus());
