@@ -89,6 +89,9 @@ public abstract class PictureUploadTemplate {
                     "图片大小不能超过5MB"
             );
 
+            // 下载完成后再检查文件头，避免把 HTML、脚本等伪装内容上传到 COS。
+            LocalImageSafetyChecker.check(inputSource, file);
+
             // 4. 上传对象存储，并获取上传对象结果
             uploadAttempted = true;
             PutObjectResult putObjectResult = cosManager.putPictureObject(uploadPath, file);

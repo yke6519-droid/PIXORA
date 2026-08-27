@@ -43,6 +43,7 @@ import com.example.picturebackend.domain.vo.picture.UserPictureVO;
 import com.example.picturebackend.manager.CosManager;
 import com.example.picturebackend.manager.MultiCacheManager;
 import com.example.picturebackend.manager.upload.FilePictureUpload;
+import com.example.picturebackend.manager.upload.LocalImageSafetyChecker;
 import com.example.picturebackend.manager.upload.PictureUploadTemplate;
 import com.example.picturebackend.manager.upload.UrlPictureUpload;
 import com.example.picturebackend.manager.source.ImageSourceAdapter;
@@ -86,8 +87,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Resource
     private CosManager cosManager;
 
-    @Resource
+    @Resource(name = "openverseImageSourceAdapter")
     private ImageSourceAdapter imageSourceAdapter;
+
+    @Resource(name = "bingImageSourceAdapter")
+    private ImageSourceAdapter bingImageSourceAdapter;
 
     @Autowired
     @Resource
@@ -1337,59 +1341,42 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         
         //2. 从 Openverse 获取候选，放大候选数以覆盖下载失败的图片。
         int candidateCount = Math.min(count * 2, 40);
-        List<String> imgUrlList;
+        List<String> imgUrlList = new ArrayList<>();
         try {
-            imgUrlList = imageSourceAdapter.search(searchText, candidateCount);
+            List<String> result = imageSourceAdapter.search(searchText, candidateCount);
+            if (result != null) {
+                imgUrlList.addAll(result);
+            }
         } catch (IOException e) {
-            log.error("Openverse 搜索失败", e);
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "获取图片失败");
+            // Openverse 暂时不可用时，继续走 Bing 兜底，不让整个批次直接失败。
+            log.warn("Openverse 搜索失败，准备使用 Bing 兜底", e);
         }
 
         //3. 逐张上传。单张失败时继续处理后面的图片。
-        int successCount = 0;
         List<PictureVO> pictureVOList = new ArrayList<>();
-        if (imgUrlList == null) {
-            imgUrlList = new ArrayList<>();
-        }
-
         String name = pictureUploadByBatchRequest.getName();
         if (StrUtil.isBlank(name)) {
             name = searchText;
         }
 
-        for (String inputSource : imgUrlList) {
-            // 已经成功上传到用户需要的数量时，不再继续上传。
-            if (successCount >= count) {
-                break;
-            }
-            if (StrUtil.isBlank(inputSource)) {
-                continue;
-            }
+        Set<String> usedImageUrlSet = new HashSet<>();
+        int successCount = uploadImageUrlList(
+                "Openverse", imgUrlList, count, name, searchText,
+                pictureUploadByBatchRequest, loginUser, pictureVOList, usedImageUrlSet);
 
-            PictureUploadRequest uploadRequest = new PictureUploadRequest();
-            String uuid = UUID.randomUUID().toString().replace("-", "").substring(0, 4);
-            uploadRequest.setName(name + ": " + uuid);
-            uploadRequest.setIntroduction(searchText + "相关图片");
-
-            // 管理员批量拉取只能上传到公共图库。
-            uploadRequest.setSpaceId(0L);
-            // 没有选择主题时，默认归入“未分类”。
-            Long categoryId = pictureUploadByBatchRequest.getCategoryId();
-            if (categoryId == null) {
-                uploadRequest.setCategoryId(1L);
-            } else {
-                uploadRequest.setCategoryId(categoryId);
-            }
-
+        //4. Openverse 不足时，再向 Bing 请求剩余数量的候选。
+        if (successCount < count) {
+            int needCount = count - successCount;
+            int bingCandidateCount = Math.min(needCount * 2, 40);
             try {
-                PictureVO pictureVO = this.uploadPicture2DBInternal(
-                        inputSource, uploadRequest, loginUser, false);
-                if (pictureVO != null) {
-                    pictureVOList.add(pictureVO);
-                    successCount++;
-                }
-            } catch (Exception e) {
-                log.error("图片上传失败，继续处理下一张", e);
+                List<String> bingUrlList = bingImageSourceAdapter == null
+                        ? new ArrayList<>()
+                        : bingImageSourceAdapter.search(searchText, bingCandidateCount);
+                successCount = uploadImageUrlList(
+                        "Bing", bingUrlList, count, name, searchText,
+                        pictureUploadByBatchRequest, loginUser, pictureVOList, usedImageUrlSet);
+            } catch (IOException e) {
+                log.warn("Bing 搜索失败，批量导入结束", e);
             }
         }
 
@@ -1403,6 +1390,58 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             multiCacheManager.invalidatePicturePageCache();
         }
         return pictureListVO;
+    }
+
+    /** 上传一个来源返回的候选列表，并统计本地安全门拦截数量。 */
+    private int uploadImageUrlList(String sourceName,
+                                   List<String> imageUrlList,
+                                   int targetCount,
+                                   String name,
+                                   String searchText,
+                                   PictureUploadByBatchRequest batchRequest,
+                                   User loginUser,
+                                   List<PictureVO> pictureVOList,
+                                   Set<String> usedImageUrlSet) {
+        int blockedCount = 0;
+        if (imageUrlList == null) {
+            imageUrlList = new ArrayList<>();
+        }
+        for (String inputSource : imageUrlList) {
+            if (pictureVOList.size() >= targetCount) {
+                break;
+            }
+            if (StrUtil.isBlank(inputSource) || usedImageUrlSet.contains(inputSource)) {
+                continue;
+            }
+            usedImageUrlSet.add(inputSource);
+            if (!LocalImageSafetyChecker.isSourceSafe(inputSource)) {
+                blockedCount++;
+                continue;
+            }
+
+            PictureUploadRequest uploadRequest = new PictureUploadRequest();
+            String uuid = UUID.randomUUID().toString().replace("-", "").substring(0, 4);
+            uploadRequest.setName(name + ": " + uuid);
+            uploadRequest.setIntroduction(searchText + "相关图片");
+            // 管理员批量抓取只能上传到公共图库。
+            uploadRequest.setSpaceId(0L);
+            // 没有选择主题时，默认归入“未分类”。
+            Long categoryId = batchRequest.getCategoryId();
+            uploadRequest.setCategoryId(categoryId == null ? 1L : categoryId);
+
+            try {
+                PictureVO pictureVO = this.uploadPicture2DBInternal(
+                        inputSource, uploadRequest, loginUser, false);
+                if (pictureVO != null) {
+                    pictureVOList.add(pictureVO);
+                }
+            } catch (Exception e) {
+                log.warn("{} 图片上传失败，继续处理下一张", sourceName, e);
+            }
+        }
+        log.info("{} 候选 {} 条，本地安全门拦截 {} 条，当前累计成功 {} 条",
+                sourceName, imageUrlList.size(), blockedCount, pictureVOList.size());
+        return pictureVOList.size();
     }
 
     /**

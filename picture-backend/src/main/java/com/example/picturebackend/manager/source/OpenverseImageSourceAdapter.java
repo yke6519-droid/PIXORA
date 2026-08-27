@@ -24,29 +24,52 @@ public class OpenverseImageSourceAdapter implements ImageSourceAdapter {
 
     @Override
     public List<String> search(String keyword, int candidateCount) throws IOException {
-        String fetchUrl = API_URL + "?q=" + URLEncoder.encode(keyword, StandardCharsets.UTF_8)
-                + "&page_size=" + candidateCount
-                + "&mature=false&license=cc0,pdm&size=large&excluded_source=wikimedia";
+        List<String> imageUrlList = new ArrayList<>();
+        if (candidateCount <= 0) {
+            return imageUrlList;
+        }
 
-        HttpResponse response = null;
-        try {
-            response = HttpRequest.get(fetchUrl)
-                    .header("Accept", "application/json")
-                    .timeout(20000)
-                    .execute();
-            if (!response.isOk()) {
-                throw new IOException("Openverse 请求失败，HTTP " + response.getStatus());
-            }
-            return parse(response.body());
-        } catch (IOException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IOException("Openverse 请求失败", e);
-        } finally {
-            if (response != null) {
-                response.close();
+        // Openverse 匿名请求每页最多20条，40条候选需要分两页请求。
+        int pageSize = Math.min(candidateCount, 20);
+        int pageCount = (candidateCount + pageSize - 1) / pageSize;
+        for (int page = 1; page <= pageCount; page++) {
+            String fetchUrl = buildPageUrl(keyword, candidateCount, page);
+            HttpResponse response = null;
+            try {
+                response = HttpRequest.get(fetchUrl)
+                        .header("Accept", "application/json")
+                        .timeout(20000)
+                        .execute();
+                if (!response.isOk()) {
+                    throw new IOException("Openverse 请求失败，HTTP " + response.getStatus());
+                }
+                for (String imageUrl : parse(response.body())) {
+                    if (!imageUrlList.contains(imageUrl)) {
+                        imageUrlList.add(imageUrl);
+                    }
+                    if (imageUrlList.size() >= candidateCount) {
+                        return imageUrlList;
+                    }
+                }
+            } catch (IOException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new IOException("Openverse 请求失败", e);
+            } finally {
+                if (response != null) {
+                    response.close();
+                }
             }
         }
+        return imageUrlList;
+    }
+
+    static String buildPageUrl(String keyword, int candidateCount, int page) {
+        int pageSize = Math.min(candidateCount, 20);
+        return API_URL + "?q=" + URLEncoder.encode(keyword, StandardCharsets.UTF_8)
+                + "&page=" + page
+                + "&page_size=" + pageSize
+                + "&mature=false&license=cc0,pdm&size=large&excluded_source=wikimedia";
     }
 
     static List<String> parse(String json) {
@@ -76,7 +99,7 @@ public class OpenverseImageSourceAdapter implements ImageSourceAdapter {
                 continue;
             }
             // 中国大陆上线时不使用 Wikimedia 图片。
-            if (source.equalsIgnoreCase("wikimedia")) {
+            if (source.toLowerCase(Locale.ROOT).contains("wikimedia")) {
                 continue;
             }
             if (!ALLOW_FILE_TYPES.contains(fileType)) {
