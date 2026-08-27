@@ -102,7 +102,9 @@
               description="提交任务后，结果会显示在这里"
             />
             <div v-else class="import-result-complete">
-              <a-tag class="import-status-tag">执行完成</a-tag>
+              <a-tag class="import-status-tag" :color="importTimedOut ? 'orange' : undefined">
+                {{ importTimedOut ? '已超时，已停止后续抓取' : '执行完成' }}
+              </a-tag>
               <strong>{{ importedMessage }}</strong>
               <small>{{ lastExecutedAt }} · 关键词：{{ lastSearchText }}</small>
               <div class="import-result-stats" aria-label="批量抓图结果统计">
@@ -167,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adminFetchPictureBatch } from '../../../api/pictureController'
@@ -189,6 +191,7 @@ const importedMessage = ref('等待执行')
 const importedPictures = ref<API.PictureVO[]>([])
 const targetCount = ref(0)
 const successCount = ref(0)
+const importTimedOut = ref(false)
 const hasImportResult = ref(false)
 const lastSearchText = ref('')
 const lastExecutedAt = ref('')
@@ -199,6 +202,9 @@ const form = reactive<API.PictureUploadByBatchRequest>({
   categoryId: undefined,
 })
 const pendingCount = computed(() => Math.max(targetCount.value - successCount.value, 0))
+const BATCH_IMPORT_TIMEOUT_MS = 60_000
+let importAbortController: AbortController | null = null
+let importTimeoutId: number | null = null
 
 async function ensureAdmin() {
   authChecking.value = true
@@ -283,14 +289,23 @@ async function submitImport() {
   importedPictures.value = []
   targetCount.value = 0
   successCount.value = 0
+  importTimedOut.value = false
   hasImportResult.value = false
   importedMessage.value = '正在执行抓取任务'
+  const abortController = new AbortController()
+  importAbortController = abortController
+  importTimeoutId = window.setTimeout(() => {
+    abortController.abort()
+  }, BATCH_IMPORT_TIMEOUT_MS)
   try {
     const res = await adminFetchPictureBatch({
       searchText,
       count,
       name: form.name?.trim() || undefined,
       categoryId: form.categoryId || undefined,
+    }, {
+      signal: abortController.signal,
+      timeout: BATCH_IMPORT_TIMEOUT_MS,
     })
     if (res.data?.code !== 200) throw new Error(res.data?.message || '批量抓图失败')
     const result = res.data.data
@@ -299,22 +314,42 @@ async function submitImport() {
     )
     targetCount.value = Number(result?.targetCount || 0)
     successCount.value = Number(result?.successCount || 0)
+    importTimedOut.value = Boolean(result?.timedOut)
     importedPictures.value = pictures
     hasImportResult.value = true
-    importedMessage.value = successCount.value
-      ? `成功入库 ${successCount.value} / 处理 ${targetCount.value} 张`
-      : '本次没有成功落库的图片'
+    if (importTimedOut.value) {
+      importedMessage.value = `任务超时，已保留 ${successCount.value} 张图片`
+    } else {
+      importedMessage.value = successCount.value
+        ? `成功入库 ${successCount.value} / 处理 ${targetCount.value} 张`
+        : '本次没有成功落库的图片'
+    }
     lastSearchText.value = searchText
     lastExecutedAt.value = new Date().toLocaleString('zh-CN', { hour12: false })
-    if (successCount.value > 0) {
+    if (importTimedOut.value) {
+      message.warning(`任务超过1分钟，已停止后续抓取，已保留 ${successCount.value} 张图片`)
+    } else if (successCount.value > 0) {
       message.success(`批量抓图完成，成功入库 ${successCount.value} 张`)
     } else {
       message.warning('批量抓图完成，但没有图片成功落库')
     }
   } catch (error: any) {
-    loadError.value = error?.response?.data?.message || error?.message || '批量抓图失败，请稍后重试'
-    message.error(loadError.value)
+    if (abortController.signal.aborted || error?.code === 'ERR_CANCELED') {
+      importTimedOut.value = true
+      loadError.value = '任务超过1分钟，已中断后续请求；已经入库的图片仍然保留'
+      message.warning(loadError.value)
+    } else {
+      loadError.value = error?.response?.data?.message || error?.message || '批量抓图失败，请稍后重试'
+      message.error(loadError.value)
+    }
   } finally {
+    if (importTimeoutId !== null) {
+      window.clearTimeout(importTimeoutId)
+      importTimeoutId = null
+    }
+    if (importAbortController === abortController) {
+      importAbortController = null
+    }
     submitting.value = false
   }
 }
@@ -325,6 +360,13 @@ function openPictureManage() {
 
 onMounted(() => {
   void ensureAdmin()
+})
+
+onUnmounted(() => {
+  if (importTimeoutId !== null) {
+    window.clearTimeout(importTimeoutId)
+  }
+  importAbortController?.abort()
 })
 </script>
 

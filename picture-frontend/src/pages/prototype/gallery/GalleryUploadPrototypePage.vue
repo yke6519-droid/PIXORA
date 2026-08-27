@@ -234,6 +234,30 @@
             />
           </a-form-item>
 
+          <!-- 这里展示的是整批图片的综合上传进度，不代表当前图片已经处理完成。 -->
+          <div
+            v-if="uploadProgressVisible"
+            class="upload-progress-panel"
+            role="status"
+            aria-live="polite"
+          >
+            <div class="upload-progress-heading">
+              <strong>{{ uploadStageText }}</strong>
+              <span v-if="uploadProgressAvailable">{{ uploadProgress }}%</span>
+            </div>
+            <a-progress
+              v-if="uploadProgressAvailable"
+              :percent="uploadProgress"
+              :status="uploadProgressStatus"
+              :show-info="false"
+            />
+            <div v-else class="upload-progress-indeterminate">
+              <a-spin v-if="submitting" size="small" />
+              <span>{{ submitting ? '正在处理，请稍候...' : uploadStageText }}</span>
+            </div>
+            <small>{{ uploadProgressDetail }}</small>
+          </div>
+
           <a-alert
             v-if="submitError"
             class="upload-submit-alert"
@@ -266,7 +290,7 @@
       </div>
     </section>
 
-    <!-- 后端返回批量结果后留在当前页，便于用户核对成功与失败项。 -->
+    <!-- 上传过程中逐张更新结果，便于用户立即看到已经成功入库的图片。 -->
     <section v-if="hasUploadResult" class="upload-result-section proto-section">
       <div class="upload-result-panel proto-surface proto-rounded">
         <div class="upload-result-heading">
@@ -392,6 +416,11 @@ const submitting = ref(false)
 const submitError = ref('')
 const pageNotice = ref('')
 const uploadResult = ref<API.PictureUploadVO | null>(null)
+const uploadProgress = ref(0)
+const uploadProgressAvailable = ref(false)
+const uploadStage = ref<'idle' | 'uploading' | 'processing' | 'success' | 'failed'>('idle')
+const uploadCompletedCount = ref(0)
+const uploadCurrentFileName = ref('')
 const categories = ref<API.Category[]>([])
 
 const form = reactive({
@@ -414,6 +443,37 @@ const failedUploads = computed(() => uploadResult.value?.failPictureList || [])
 const uploadTotalCount = computed(() => Number(uploadResult.value?.totalCount || 0))
 const uploadSuccessCount = computed(() => Number(uploadResult.value?.successCount || uploadedPictures.value.length))
 const uploadFailCount = computed(() => Number(uploadResult.value?.failCount || failedUploads.value.length))
+const uploadProgressVisible = computed(() => uploadStage.value !== 'idle')
+const uploadProgressStatus = computed(() => {
+  if (uploadStage.value === 'failed') return 'exception'
+  if (uploadStage.value === 'success') return 'success'
+  return 'active'
+})
+const uploadStageText = computed(() => {
+  if (uploadStage.value === 'uploading') {
+    return sourceMode.value === 'url' ? '正在获取网络图片' : '正在上传图片'
+  }
+  if (uploadStage.value === 'processing') return '服务器正在处理'
+  if (uploadStage.value === 'success') return '上传完成'
+  if (uploadStage.value === 'failed') return '上传失败'
+  return '等待上传'
+})
+const uploadProgressDetail = computed(() => {
+  const count = sourceMode.value === 'file' ? selectedFiles.value.length : 1
+  if (uploadStage.value === 'processing') {
+    return uploadCurrentFileName.value
+      ? `正在处理：${uploadCurrentFileName.value}（已完成 ${uploadCompletedCount.value}/${count} 张）`
+      : '文件已经发送完成，正在写入图片信息，请稍候。'
+  }
+  if (uploadStage.value === 'success') {
+    return `成功 ${uploadSuccessCount.value} 张，失败 ${uploadFailCount.value} 张。`
+  }
+  if (uploadStage.value === 'failed') return '可以检查错误信息后重新提交。'
+  if (uploadCurrentFileName.value) {
+    return `正在上传：${uploadCurrentFileName.value}（已完成 ${uploadCompletedCount.value}/${count} 张）`
+  }
+  return `本次共 ${count} 张图片。`
+})
 
 const hasPrivateSpace = computed(() => {
   const spaceId = loginUserStore.loginUser?.spaceId
@@ -499,6 +559,7 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
   }
 
   submitError.value = ''
+  resetUploadProgress()
   return false
 }
 
@@ -578,6 +639,11 @@ async function submitUpload() {
   }
 
   submitting.value = true
+  uploadProgress.value = 0
+  uploadProgressAvailable.value = false
+  uploadStage.value = 'uploading'
+  uploadCompletedCount.value = 0
+  uploadCurrentFileName.value = ''
   try {
     const metadata: Record<string, number | string> = {}
     const name = form.name.trim()
@@ -594,20 +660,91 @@ async function submitUpload() {
       metadata.spaceId = String(loginUserStore.loginUser.spaceId)
     }
 
-    const files = sourceMode.value === 'file' ? selectedFiles.value : undefined
-    const res = await uploadPic({}, metadata, files)
-    if (res.data?.code !== 200) {
-      throw new Error(res.data?.message || '图片上传失败')
+    const successPictureList: API.PictureVO[] = []
+    const failPictureList: API.PictureUploadFailVO[] = []
+    const files = sourceMode.value === 'file' ? selectedFiles.value : []
+    const totalCount = sourceMode.value === 'file' ? files.length : 1
+    const totalBytes = files.reduce((total, file) => total + file.size, 0)
+    let completedBytes = 0
+
+    // URL 上传仍然只有一个请求；本地多图上传则逐张发送，成功一张展示一张。
+    if (sourceMode.value === 'url') {
+      const res = await uploadPic({}, metadata)
+      uploadStage.value = 'processing'
+      if (res.data?.code !== 200) {
+        throw new Error(res.data?.message || '图片上传失败')
+      }
+
+      const result = res.data?.data
+      if (!result) throw new Error(res.data?.message || '上传结果不完整')
+      appendUploadResult(result, successPictureList, failPictureList, totalCount)
+      uploadCompletedCount.value = 1
+    } else {
+      for (const file of files) {
+        uploadCurrentFileName.value = file.name
+        try {
+          let currentFileLoaded = 0
+          const res = await uploadPic({}, metadata, [file], {
+            // 每个请求只包含一张图片，因此可以把当前请求进度折算到整批进度。
+            onUploadProgress: (event: { loaded: number; total?: number }) => {
+              const loaded = Number(event.loaded || 0)
+              const requestTotal = Number(event.total || 0)
+              if (requestTotal <= 0 || totalBytes <= 0) return
+
+              currentFileLoaded = Math.min(loaded, requestTotal)
+              uploadProgressAvailable.value = true
+              const currentFileRatio = currentFileLoaded / requestTotal
+              const uploadedBytes = completedBytes + file.size * currentFileRatio
+              uploadProgress.value = Math.min(
+                99,
+                Math.round((uploadedBytes / totalBytes) * 100),
+              )
+              if (currentFileRatio >= 1) {
+                uploadStage.value = 'processing'
+              }
+            },
+          })
+          uploadStage.value = 'processing'
+          if (res.data?.code !== 200) {
+            throw new Error(res.data?.message || '图片上传失败')
+          }
+
+          const result = res.data?.data
+          if (!result) throw new Error(res.data?.message || '上传结果不完整')
+          appendUploadResult(result, successPictureList, failPictureList, totalCount)
+        } catch (error: any) {
+          // 单张失败不终止后续图片，继续完成本批上传。
+          failPictureList.push({
+            size: file.size,
+            fileName: file.name,
+            message:
+              error?.response?.data?.message ||
+              error?.message ||
+              '图片上传失败，请稍后重试',
+          })
+          updateUploadResult(totalCount, successPictureList, failPictureList)
+        } finally {
+          completedBytes += file.size
+          uploadCompletedCount.value += 1
+          if (totalBytes > 0) {
+            uploadProgress.value = Math.min(
+              99,
+              Math.round((completedBytes / totalBytes) * 100),
+            )
+          }
+          if (uploadCompletedCount.value < totalCount) {
+            uploadStage.value = 'uploading'
+          }
+        }
+      }
     }
 
-    const result = res.data?.data
-    if (!result) throw new Error(res.data?.message || '上传结果不完整')
-
-    uploadResult.value = result
-    const pictures = result.successPictureList || []
-    const successCount = Number(result.successCount || pictures.length)
-    const failCount = Number(result.failCount || result.failPictureList?.length || 0)
-    const totalCount = Number(result.totalCount || successCount + failCount)
+    const successCount = successPictureList.length
+    const failCount = failPictureList.length
+    uploadProgress.value = 100
+    uploadProgressAvailable.value = sourceMode.value === 'file' || uploadProgressAvailable.value
+    uploadStage.value = successCount > 0 ? 'success' : 'failed'
+    updateUploadResult(totalCount, successPictureList, failPictureList)
 
     if (successCount > 0 && failCount > 0) {
       message.warning(`上传完成：成功 ${successCount} 张，失败 ${failCount} 张，共处理 ${totalCount} 张`)
@@ -621,6 +758,7 @@ async function submitUpload() {
       message.warning(`本次共处理 ${totalCount} 张，但没有图片上传成功`)
     }
   } catch (error: any) {
+    uploadStage.value = 'failed'
     submitError.value =
       error?.response?.data?.message ||
       error?.message ||
@@ -628,6 +766,42 @@ async function submitUpload() {
   } finally {
     submitting.value = false
   }
+}
+
+/** 将单张上传接口返回的结果追加到当前批次，并立即刷新结果区域。 */
+function appendUploadResult(
+  result: API.PictureUploadVO,
+  successPictureList: API.PictureVO[],
+  failPictureList: API.PictureUploadFailVO[],
+  totalCount: number,
+) {
+  successPictureList.push(...(result.successPictureList || []))
+  failPictureList.push(...(result.failPictureList || []))
+  updateUploadResult(totalCount, successPictureList, failPictureList)
+}
+
+/** 统一构造当前批次结果，保证成功一张后页面立即出现一张。 */
+function updateUploadResult(
+  totalCount: number,
+  successPictureList: API.PictureVO[],
+  failPictureList: API.PictureUploadFailVO[],
+) {
+  uploadResult.value = {
+    totalCount,
+    successCount: successPictureList.length,
+    failCount: failPictureList.length,
+    successPictureList: [...successPictureList],
+    failPictureList: [...failPictureList],
+  }
+}
+
+/** 重置本次上传的进度，避免新一批图片沿用上一批的状态。 */
+function resetUploadProgress() {
+  uploadProgress.value = 0
+  uploadProgressAvailable.value = false
+  uploadStage.value = 'idle'
+  uploadCompletedCount.value = 0
+  uploadCurrentFileName.value = ''
 }
 
 function openPictureManage() {
@@ -669,6 +843,7 @@ function clearSelectedFile() {
   selectedFiles.value = []
   fileList.value = []
   revokeLocalPreview()
+  resetUploadProgress()
 }
 
 function handlePreviewError() {
@@ -699,6 +874,7 @@ watch(imageUrl, () => {
 
 watch(sourceMode, () => {
   submitError.value = ''
+  resetUploadProgress()
 })
 
 onMounted(() => {
@@ -1999,6 +2175,55 @@ onBeforeUnmount(() => {
 
 .upload-submit-alert {
   margin: 0;
+}
+
+.upload-progress-panel {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid #dfe4dc;
+  border-radius: 7px;
+  background: #f8faf6;
+}
+
+.upload-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--proto-ink);
+  font-size: .75rem;
+}
+
+.upload-progress-heading > span {
+  color: var(--proto-muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.upload-progress-panel :deep(.ant-progress) {
+  margin: 7px 0 2px;
+}
+
+.upload-progress-panel :deep(.ant-progress-bg) {
+  background: var(--proto-acid);
+}
+
+.upload-progress-indeterminate {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 18px;
+  margin-top: 7px;
+  color: var(--proto-muted);
+  font-size: .6875rem;
+}
+
+.upload-progress-panel small {
+  display: block;
+  margin-top: 4px;
+  color: var(--proto-muted);
+  font-size: .6875rem;
+  line-height: 1.4;
 }
 
 .submit-contract {

@@ -433,7 +433,8 @@ const pictureTotal = ref(0)
 const allPictureTotal = ref<number | null>(null)
 const pictureCheck = ref<PictureStatusFilter>('all')
 const current = ref(1)
-const pageSize = 9
+// 个人空间默认每页展示12张；后端接口按请求中的 pageSize 分页，不重复设置固定上限。
+const pageSize = 12
 const statusOptions: Array<{ label: string; value: PictureStatusFilter }> = [
   { label: '全部', value: 'all' as const },
   { label: '已通过', value: 1 },

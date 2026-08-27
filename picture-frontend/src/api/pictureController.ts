@@ -74,6 +74,7 @@ export async function adminFetchPictureBatch(
       headers: {
         "Content-Type": "application/json",
       },
+      timeout: 60_000,
       data: body,
       ...(options || {}),
     }

@@ -235,6 +235,7 @@ declare namespace API {
     pictureList?: PictureVO[];
     targetCount?: number;
     successCount?: number;
+    timedOut?: boolean;
   };
 
   type PicturePageVO = {
