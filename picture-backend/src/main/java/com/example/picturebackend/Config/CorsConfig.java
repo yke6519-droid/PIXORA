@@ -23,6 +23,7 @@ public class CorsConfig {
         corsConfiguration.addAllowedHeader("*");
         corsConfiguration.addAllowedOrigin("http://localhost:5173");
         corsConfiguration.addAllowedOrigin("http://localhost:5174");
+        corsConfiguration.addAllowedOrigin("http://localhost:4173");
         corsConfiguration.addAllowedOrigin("http://localhost:8088");
         /**
          * 再放入source中指定生效的路径
