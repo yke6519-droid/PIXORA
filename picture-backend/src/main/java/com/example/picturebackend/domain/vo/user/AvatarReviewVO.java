@@ -25,6 +25,9 @@ public class AvatarReviewVO implements Serializable {
     /** 待审核的新头像地址。 */
     private String avatarUrl;
 
+    /** 用户当前正在生效的头像地址，用于和申请头像做区分。 */
+    private String currentAvatarUrl;
+
     /** 0 待审核，1 审核通过，2 审核失败。 */
     private Integer status;
 

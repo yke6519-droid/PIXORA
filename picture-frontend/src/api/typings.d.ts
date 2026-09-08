@@ -485,6 +485,7 @@ declare namespace API {
     username?: string;
     useraccount?: string;
     avatarUrl?: string;
+    currentAvatarUrl?: string;
     status?: number;
     submittedAt?: string;
     reviewedAt?: string;

@@ -7,6 +7,8 @@ export interface AvatarReviewItem {
   username: string
   useraccount: string
   avatarUrl: string
+  /** 用户当前正在生效的头像；申请头像仍使用 avatarUrl。 */
+  currentAvatarUrl?: string
   status: AvatarReviewStatus
   submittedAt: string
   checkMessage?: string

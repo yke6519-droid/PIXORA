@@ -1,15 +1,16 @@
 <template>
   <div class="import-prototype">
     <section class="import-page-heading">
-      <div>
-        <h1>批量抓图</h1>
-        <a-tag class="import-role-tag">管理员功能</a-tag>
+      <div class="import-heading-copy">
+        <div class="import-title-row">
+          <h1>批量抓图</h1>
+          <a-tag class="import-limit-tag">单次最多抓取 {{ MAX_IMPORT_COUNT }} 张</a-tag>
+        </div>
+        <p>根据关键词批量抓取图片并保存到公共图库</p>
       </div>
-      <div class="import-limit">
-        <span>单次最多</span>
-        <strong>20</strong>
-        <small>张图片</small>
-      </div>
+      <a-button class="proto-button ghost-button import-manage-button" @click="openPictureManage">
+        图片管理
+      </a-button>
     </section>
 
     <a-spin v-if="authChecking" class="import-auth-loading" tip="正在确认管理员权限..." />
@@ -37,44 +38,58 @@
       />
 
       <section class="import-layout">
-        <section class="import-form-card proto-rounded">
+        <section class="import-form-card proto-surface proto-rounded">
           <div class="import-section-heading">
             <h2>配置抓取任务</h2>
-            <span class="import-section-note">填写搜索条件</span>
+            <span class="import-section-note">填写后开始执行</span>
           </div>
           <!-- 绑定表单模型后，Ant Design Vue 才会在点击提交时触发 finish 回调。 -->
           <a-form :model="form" layout="vertical" class="proto-form" @finish="submitImport">
-            <a-form-item label="搜索词" required>
-              <a-input v-model:value="form.searchText" placeholder="例如：minimal architecture" />
-            </a-form-item>
-            <div class="import-two-col">
-              <a-form-item label="抓取数量" required>
-                <a-input-number v-model:value="form.count" :min="1" :max="20" style="width: 100%" />
+            <div class="import-form-group">
+              <div class="import-form-group-heading">
+                <strong>抓取条件</strong>
+                <span>决定搜索范围和任务规模</span>
+              </div>
+              <a-form-item label="搜索关键词" required>
+                <a-input v-model:value="form.searchText" placeholder="例如：minimal architecture" />
               </a-form-item>
-              <a-form-item label="图片名称（可选）">
-                <a-input v-model:value="form.name" placeholder="为空时使用 searchText" />
+              <a-form-item label="抓取数量" required>
+                <a-input-number
+                  v-model:value="form.count"
+                  :min="1"
+                  :max="MAX_IMPORT_COUNT"
+                  style="width: 100%"
+                />
               </a-form-item>
             </div>
-            <a-form-item label="公共主题（可选）">
-              <a-select
-                v-model:value="form.categoryId"
-                allow-clear
-                :loading="optionsLoading"
-                placeholder="选择公共主题（可不填）"
-                style="width: 100%"
-              >
-                <a-select-option v-for="category in categories" :key="category.id" :value="category.id">
-                  {{ category.categoryName }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-            <a-alert
-              type="info"
-              show-icon
-              message="公共图库只使用管理员维护的主题；个人空间标签在图片入库后单独管理。"
-            />
+
+            <div class="import-form-group import-save-group">
+              <div class="import-form-group-heading">
+                <strong>保存设置</strong>
+                <span>设置图片入库后的基础信息</span>
+              </div>
+              <a-form-item label="图片名称（可选）">
+                <a-input v-model:value="form.name" placeholder="未填写时使用搜索关键词" />
+              </a-form-item>
+              <a-form-item label="公共主题（可选）">
+                <a-select
+                  v-model:value="form.categoryId"
+                  allow-clear
+                  :loading="optionsLoading"
+                  placeholder="选择公共主题（可不填）"
+                  style="width: 100%"
+                >
+                  <a-select-option v-for="category in categories" :key="category.id" :value="category.id">
+                    {{ category.categoryName }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+            </div>
+
+            <p class="import-helper-note">
+              图片会保存到公共图库；个人空间标签可在图片入库后单独管理。
+            </p>
             <div class="import-submit-row">
-              <span>提交后，成功图片会显示在右侧</span>
               <a-button
                 html-type="submit"
                 class="proto-button acid-button import-submit"
@@ -89,79 +104,85 @@
 
         <section class="import-result-panel">
           <div class="import-section-heading">
-            <h2>任务结果</h2>
-            <a-button class="proto-button ghost-button" @click="openPictureManage">图片管理</a-button>
-          </div>
-          <div class="import-result-main proto-surface proto-rounded">
-            <div v-if="submitting" class="import-result-empty">
-              <a-spin tip="正在抓取并上传图片..." />
+            <div>
+              <h2>抓取结果</h2>
+              <p>成功入库的图片会显示在这里</p>
             </div>
-            <a-empty
-              v-else-if="!hasImportResult"
-              class="import-result-empty"
-              description="提交任务后，结果会显示在这里"
-            />
-            <div v-else class="import-result-complete">
-              <a-tag class="import-status-tag" :color="importTimedOut ? 'orange' : undefined">
-                {{ importTimedOut ? '已超时，已停止后续抓取' : '执行完成' }}
-              </a-tag>
-              <strong>{{ importedMessage }}</strong>
-              <small>{{ lastExecutedAt }} · 关键词：{{ lastSearchText }}</small>
-              <div class="import-result-stats" aria-label="批量抓图结果统计">
-                <div class="import-result-stat">
-                  <span>目标数量</span>
-                  <strong>{{ targetCount }}</strong>
+            <span v-if="hasImportResult" class="import-result-count">
+              {{ successCount }} / {{ targetCount }} 张
+            </span>
+          </div>
+
+          <section class="import-result-workspace proto-surface proto-rounded">
+            <div v-if="submitting" class="import-result-state import-loading-state">
+              <a-spin size="large" tip="正在抓取并上传图片..." />
+              <p>任务会依次搜索、下载并保存图片，请保持页面开启。</p>
+            </div>
+            <div v-else-if="!hasImportResult" class="import-result-state import-empty-state">
+              <div class="import-empty-icon" aria-hidden="true">▧</div>
+              <strong>暂无抓取结果</strong>
+              <p>配置左侧任务并开始抓取，结果会显示在这里。</p>
+            </div>
+
+            <template v-else>
+              <div class="import-result-summary">
+                <div class="import-result-message">
+                  <a-tag class="import-status-tag" :class="{ 'is-timeout': importTimedOut }">
+                    {{ importTimedOut ? '异常停止' : '抓取完成' }}
+                  </a-tag>
+                  <div>
+                    <strong>{{ importedMessage }}</strong>
+                    <small>{{ lastExecutedAt }} · 关键词：{{ lastSearchText }}</small>
+                  </div>
                 </div>
-                <div class="import-result-stat">
-                  <span>成功入库</span>
-                  <strong>{{ successCount }}</strong>
-                </div>
-                <div class="import-result-stat">
-                  <span>未成功</span>
-                  <strong>{{ pendingCount }}</strong>
+                <div class="import-result-stats" aria-label="批量抓图结果统计">
+                  <div class="import-result-stat">
+                    <span>目标</span>
+                    <strong>{{ targetCount }}</strong>
+                  </div>
+                  <div class="import-result-stat is-success">
+                    <span>已入库</span>
+                    <strong>{{ successCount }}</strong>
+                  </div>
+                  <div class="import-result-stat">
+                    <span>未成功</span>
+                    <strong>{{ pendingCount }}</strong>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-          <section v-if="importedPictures.length" class="import-picture-results proto-surface proto-rounded">
-            <div class="import-picture-results-head">
-              <h3>已入库图片</h3>
-              <strong>{{ successCount }} 张</strong>
-            </div>
-            <div class="import-picture-grid">
-              <article
-                v-for="picture in importedPictures"
-                :key="String(picture.id)"
-                class="import-picture-card"
-                role="button"
-                tabindex="0"
-                @click="openPictureDetail(picture.id)"
-                @keydown.enter.prevent="openPictureDetail(picture.id)"
-                @keydown.space.prevent="openPictureDetail(picture.id)"
-              >
-                <div class="import-picture-media">
-                  <img
-                    v-if="picture.thumbnailUrl || picture.url"
-                    :src="picture.thumbnailUrl || picture.url"
-                    :alt="picture.name || '批量抓取图片'"
-                  />
-                  <span v-else>暂无预览</span>
-                </div>
-                <div class="import-picture-meta">
-                  <strong>{{ picture.name || '未命名图片' }}</strong>
-                  <small>
-                    {{ picture.picwidth || '--' }} × {{ picture.picheight || '--' }}
-                    · {{ formatPictureSize(picture.picsize) }}
-                  </small>
-                </div>
-              </article>
-            </div>
+
+              <div v-if="importedPictures.length" class="import-picture-grid">
+                <article
+                  v-for="picture in importedPictures"
+                  :key="String(picture.id)"
+                  class="import-picture-card"
+                  role="button"
+                  tabindex="0"
+                  @click="openPictureDetail(picture.id)"
+                  @keydown.enter.prevent="openPictureDetail(picture.id)"
+                  @keydown.space.prevent="openPictureDetail(picture.id)"
+                >
+                  <div class="import-picture-media">
+                    <img
+                      v-if="picture.thumbnailUrl || picture.url"
+                      :src="picture.thumbnailUrl || picture.url"
+                      :alt="picture.name || '批量抓取图片'"
+                    />
+                    <span v-else>暂无预览</span>
+                    <a-tag class="import-picture-status">已入库</a-tag>
+                  </div>
+                  <div class="import-picture-meta">
+                    <strong>{{ picture.name || '未命名图片' }}</strong>
+                    <small>
+                      {{ picture.picwidth || '--' }} × {{ picture.picheight || '--' }}
+                      · {{ formatPictureSize(picture.picsize) }}
+                    </small>
+                  </div>
+                </article>
+              </div>
+              <a-empty v-else class="import-picture-empty" description="本次没有返回可展示的图片" />
+            </template>
           </section>
-          <a-empty
-            v-else-if="hasImportResult"
-            class="import-picture-empty proto-surface proto-rounded"
-            description="本次没有返回可展示的图片"
-          />
         </section>
       </section>
     </template>
@@ -195,6 +216,8 @@ const importTimedOut = ref(false)
 const hasImportResult = ref(false)
 const lastSearchText = ref('')
 const lastExecutedAt = ref('')
+// 前端展示和校验共用同一个上限；后端仍会再次校验，避免绕过页面直接提交非法数量。
+const MAX_IMPORT_COUNT = 20
 const form = reactive<API.PictureUploadByBatchRequest>({
   searchText: 'minimal architecture',
   count: 6,
@@ -279,8 +302,8 @@ async function submitImport() {
     message.warning('请输入搜索词')
     return
   }
-  if (!Number.isInteger(count) || count < 1 || count > 20) {
-    message.warning('抓取数量必须是 1 到 20 之间的整数')
+  if (!Number.isInteger(count) || count < 1 || count > MAX_IMPORT_COUNT) {
+    message.warning(`抓取数量必须是 1 到 ${MAX_IMPORT_COUNT} 之间的整数`)
     return
   }
 
@@ -371,62 +394,195 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.import-prototype {
+  min-width: 0;
+  color: var(--proto-ink);
+  font-family: 'Geist', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
 .import-auth-loading { display: block; min-height: 180px; padding-top: 70px; text-align: center; }
-.import-alert { margin-bottom: 18px; }
-.import-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 24px 0 16px; border-bottom: 1px solid var(--proto-line); }
-.import-page-heading > div:first-child { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
-.import-page-heading h1 { margin: 0; font-size: 42px; line-height: 1; letter-spacing: -.06em; }
-.import-role-tag.ant-tag { margin: 0; border: 0; border-radius: 4px; background: rgba(255,137,106,.18); color: var(--proto-ink); font-size: 11px; font-weight: 700; }
-.import-limit { width: 150px; min-width: 150px; min-height: 68px; padding: 11px 13px; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr; column-gap: 10px; background: var(--proto-acid); }
-.import-limit span, .import-limit strong, .import-limit small { display: block; }
-.import-limit span { font-size: 10px; }
-.import-limit strong { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 40px; line-height: .8; letter-spacing: -.08em; }
-.import-limit small { grid-column: 1; align-self: end; font-size: 10px; opacity: .65; }
-.import-layout { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(0, 1.1fr); gap: var(--prototype-layout-gap); align-items: start; padding-top: 18px; }
-.import-form-card { padding: 20px; background: var(--proto-ink); color: var(--proto-paper); box-shadow: var(--proto-shadow); }
-.import-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 17px; }
-.import-section-heading h2 { margin: 0; color: inherit; font-size: 23px; line-height: 1.1; letter-spacing: -.05em; }
-.import-section-note { color: rgba(241,242,237,.55); font-size: 11px; }
-.import-form-card :deep(.ant-form-item) { margin-bottom: 12px; }
+.import-alert { margin: 18px 0 0; }
+
+.import-page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 0 18px;
+  border-bottom: 1px solid var(--proto-line);
+}
+
+.import-heading-copy { min-width: 0; }
+.import-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.import-page-heading h1 { margin: 0; font-size: 40px; line-height: 1; letter-spacing: -.035em; font-weight: 800; }
+.import-page-heading p { margin: 10px 0 0; color: var(--proto-muted); font-size: 13px; line-height: 1.55; }
+.import-limit-tag.ant-tag {
+  margin: 0;
+  padding: 3px 10px;
+  border: 1px solid rgba(91, 138, 0, .16);
+  border-radius: 999px;
+  background: rgba(186, 255, 61, .16);
+  color: #527b09;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 22px;
+}
+.import-manage-button { flex: 0 0 auto; }
+
+.import-layout {
+  display: grid;
+  grid-template-columns: minmax(380px, 410px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  padding-top: 20px;
+}
+
+.import-form-card {
+  padding: 22px;
+  background: rgba(255, 255, 255, .78);
+  box-shadow: 0 8px 28px rgba(18, 23, 23, .07);
+}
+
+.import-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+.import-section-heading h2 { margin: 0; color: var(--proto-ink); font-size: 20px; line-height: 1.25; letter-spacing: -.025em; font-weight: 800; }
+.import-section-heading p { margin: 5px 0 0; color: var(--proto-muted); font-size: 12px; line-height: 1.5; }
+.import-section-note { color: var(--proto-muted); font-size: 11px; white-space: nowrap; }
+
+.import-form-group + .import-form-group { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--proto-line); }
+.import-form-group-heading { margin-bottom: 13px; }
+.import-form-group-heading strong,
+.import-form-group-heading span { display: block; }
+.import-form-group-heading strong { color: var(--proto-ink); font-size: 14px; font-weight: 800; }
+.import-form-group-heading span { margin-top: 3px; color: var(--proto-muted); font-size: 11px; line-height: 1.5; }
+.import-form-card :deep(.ant-form-item) { margin-bottom: 13px; }
+.import-form-card :deep(.ant-form-item:last-child) { margin-bottom: 0; }
 .import-form-card :deep(.ant-form-item-label) { padding-bottom: 5px; }
-.import-form-card :deep(.ant-form-item-label > label) { color: var(--proto-paper); font-size: 12px; }
-.import-form-card :deep(.ant-form-item-required > label::before) { color: var(--proto-orange); }
-.import-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
-.import-form-card :deep(.ant-input), .import-form-card :deep(.ant-input-number), .import-form-card :deep(.ant-input-affix-wrapper), .import-form-card :deep(.ant-select-selector), .import-form-card :deep(textarea.ant-input) { border-color: rgba(241,242,237,.25) !important; background: rgba(241,242,237,.09) !important; color: var(--proto-paper) !important; }
-.import-form-card :deep(.ant-input::placeholder), .import-form-card :deep(.ant-input-number-input::placeholder) { color: rgba(241,242,237,.48); }
-.import-form-card :deep(.ant-input-number-input) { color: var(--proto-paper); }
-.import-form-card :deep(.ant-select-selection-placeholder), .import-form-card :deep(.ant-select-arrow) { color: rgba(241,242,237,.5); }
-.import-no-options { color: rgba(241,242,237,.55); font-size: 11px; }
-.import-submit-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 17px; padding-top: 14px; border-top: 1px solid rgba(241,242,237,.18); }
-.import-submit-row > span { color: rgba(241,242,237,.55); font-size: 10px; line-height: 1.4; }
-.import-submit { min-width: 128px; }
+.import-form-card :deep(.ant-form-item-label > label) { color: var(--proto-ink); font-size: 12px; font-weight: 700; }
+.import-form-card :deep(.ant-form-item-required > label::before) { color: #b35c32; }
+.import-form-card :deep(.ant-input),
+.import-form-card :deep(.ant-input-number),
+.import-form-card :deep(.ant-select-selector) {
+  min-height: 40px;
+  border-color: rgba(17, 20, 22, .14) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: var(--proto-ink) !important;
+  box-shadow: none !important;
+  font-family: inherit;
+  font-size: 13px;
+}
+.import-form-card :deep(.ant-input-number-input) { height: 38px; color: var(--proto-ink); }
+.import-form-card :deep(.ant-select-selector) { display: flex; align-items: center; }
+.import-form-card :deep(.ant-input:hover),
+.import-form-card :deep(.ant-input-number:hover),
+.import-form-card :deep(.ant-select-selector:hover) { border-color: rgba(79, 121, 0, .55) !important; }
+
+.import-helper-note {
+  margin: 18px 0 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(91, 138, 0, .14);
+  border-radius: 8px;
+  background: rgba(186, 255, 61, .08);
+  color: #596056;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.import-submit-row { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--proto-line); }
+.import-submit { width: 100%; }
+
 .import-result-panel { min-width: 0; }
-.import-result-panel > .import-section-heading { margin-bottom: 12px; }
-.import-result-main { min-height: 204px; padding: 20px; display: flex; flex-direction: column; justify-content: center; }
-.import-result-empty { min-height: 160px; display: grid; place-items: center; }
-.import-result-empty :deep(.ant-empty) { margin: 0; }
-.import-result-complete > strong { display: block; margin-top: 10px; font-size: 27px; line-height: 1.1; letter-spacing: -.05em; }
-.import-result-complete > small { display: block; margin-top: 10px; color: var(--proto-muted); font-size: 11px; line-height: 1.6; }
-.import-status-tag.ant-tag { margin: 0; border: 0; border-radius: 4px; background: rgba(186,255,61,.35); color: var(--proto-ink); font-size: 10px; font-weight: 700; }
-.import-result-stats { margin-top: 22px; padding-top: 13px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; border-top: 1px solid var(--proto-line); }
-.import-result-stat { min-width: 0; }
-.import-result-stat span { display: block; color: var(--proto-muted); font-size: 10px; }
-.import-result-stat strong { display: block; margin-top: 4px; color: var(--proto-ink); font-size: 22px; line-height: 1; }
-.import-picture-results { margin-top: 12px; padding: 16px; }
-.import-picture-results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.import-picture-results-head h3 { margin: 0; font-size: 18px; letter-spacing: -.04em; }
-.import-picture-results-head > strong { color: var(--proto-orange); font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; white-space: nowrap; }
-.import-picture-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; max-height: 326px; overflow: auto; }
-.import-picture-card { min-width: 0; border: 1px solid var(--proto-line); background: rgba(255,255,255,.55); cursor: pointer; transition: border-color 160ms ease, background-color 160ms ease; }
-.import-picture-card:hover { border-color: var(--proto-orange); background: rgba(255,255,255,.85); }
-.import-picture-card:focus-visible { outline: 2px solid var(--proto-orange); outline-offset: 3px; }
-.import-picture-media { aspect-ratio: 4 / 3; display: grid; place-items: center; overflow: hidden; background: rgba(20,24,27,.08); color: var(--proto-muted); font-size: 10px; }
+.import-result-panel > .import-section-heading { min-height: 40px; margin-bottom: 10px; }
+.import-result-count { color: var(--proto-muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.import-result-workspace {
+  min-height: 560px;
+  padding: 20px;
+  background: rgba(255, 255, 255, .78);
+  box-shadow: 0 8px 28px rgba(18, 23, 23, .07);
+}
+
+.import-result-state { min-height: 516px; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
+.import-result-state p { max-width: 42ch; margin: 9px 0 0; color: var(--proto-muted); font-size: 12px; line-height: 1.6; }
+.import-loading-state :deep(.ant-spin-text) { margin-top: 9px; color: var(--proto-ink); font-size: 13px; font-weight: 700; }
+.import-empty-icon { width: 48px; height: 48px; display: grid; place-items: center; margin-bottom: 15px; border: 1px solid var(--proto-line); border-radius: 12px; background: rgba(17, 20, 22, .035); color: #697171; font-size: 25px; }
+.import-empty-state > strong { font-size: 16px; font-weight: 800; }
+
+.import-result-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+  padding-bottom: 17px;
+  border-bottom: 1px solid var(--proto-line);
+}
+.import-result-message { min-width: 0; display: flex; align-items: center; gap: 12px; }
+.import-result-message > div { min-width: 0; }
+.import-result-message strong,
+.import-result-message small { display: block; }
+.import-result-message strong { color: var(--proto-ink); font-size: 15px; font-weight: 800; line-height: 1.45; }
+.import-result-message small { margin-top: 3px; overflow: hidden; color: var(--proto-muted); font-size: 11px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
+.import-status-tag.ant-tag { margin: 0; padding: 2px 9px; border: 0; border-radius: 999px; background: rgba(186,255,61,.24); color: #527b09; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.import-status-tag.is-timeout.ant-tag { background: rgba(255, 137, 106, .16); color: #9a4b31; }
+
+.import-result-stats { flex: 0 0 auto; display: flex; align-items: center; gap: 0; }
+.import-result-stat { min-width: 68px; padding: 0 14px; border-left: 1px solid var(--proto-line); }
+.import-result-stat span,
+.import-result-stat strong { display: block; }
+.import-result-stat span { color: var(--proto-muted); font-size: 10px; }
+.import-result-stat strong { margin-top: 3px; color: var(--proto-ink); font-size: 18px; line-height: 1; }
+.import-result-stat.is-success strong { color: #649b08; }
+
+.import-picture-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.import-picture-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(17, 20, 22, .11);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.import-picture-card:hover { border-color: rgba(79, 121, 0, .46); box-shadow: 0 7px 18px rgba(18, 23, 23, .09); }
+.import-picture-card:focus-visible { outline: 2px solid #4f7900; outline-offset: 3px; }
+.import-picture-media { aspect-ratio: 4 / 3; display: grid; place-items: center; overflow: hidden; position: relative; background: #e9ebe6; color: var(--proto-muted); font-size: 10px; }
 .import-picture-media img { width: 100%; height: 100%; display: block; object-fit: cover; }
-.import-picture-meta { min-width: 0; padding: 9px 10px 10px; }
-.import-picture-meta strong, .import-picture-meta small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.import-picture-meta strong { color: var(--proto-ink); font-size: 12px; font-weight: 600; }
+.import-picture-status.ant-tag { position: absolute; top: 8px; right: 8px; margin: 0; padding: 1px 7px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .9); color: #527b09; font-size: 9px; font-weight: 800; box-shadow: 0 2px 8px rgba(18, 23, 23, .1); }
+.import-picture-meta { min-width: 0; padding: 10px 11px 11px; }
+.import-picture-meta strong,
+.import-picture-meta small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-picture-meta strong { color: var(--proto-ink); font-size: 12px; font-weight: 700; }
 .import-picture-meta small { margin-top: 5px; color: var(--proto-muted); font-family: 'DM Mono', monospace; font-size: 9px; }
-.import-picture-empty { margin: 12px 0 0; padding: 22px 16px; }
-@media (max-width: 980px) { .import-layout { grid-template-columns: 1fr; } .import-picture-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .import-page-heading { align-items: flex-start; flex-direction: column; } .import-limit { width: 100%; } .import-two-col, .import-picture-grid, .import-result-stats { grid-template-columns: 1fr; gap: 0; } .import-picture-card + .import-picture-card, .import-result-stat + .import-result-stat { margin-top: 10px; } .import-submit-row { align-items: stretch; flex-direction: column; } .import-submit { width: 100%; } }
+.import-picture-empty { min-height: 390px; display: grid; place-items: center; }
+
+@media (max-width: 1100px) {
+  .import-layout { grid-template-columns: minmax(340px, 370px) minmax(0, 1fr); }
+  .import-picture-grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); }
+  .import-result-summary { align-items: flex-start; flex-direction: column; }
+  .import-result-stat:first-child { padding-left: 0; border-left: 0; }
+}
+
+@media (max-width: 880px) {
+  .import-layout { grid-template-columns: 1fr; }
+  .import-result-workspace { min-height: 460px; }
+  .import-result-state { min-height: 416px; }
+}
+
+@media (max-width: 620px) {
+  .import-page-heading { align-items: stretch; flex-direction: column; gap: 15px; padding-top: 20px; }
+  .import-page-heading h1 { font-size: 34px; }
+  .import-manage-button { width: 100%; }
+  .import-form-card,
+  .import-result-workspace { padding: 16px; }
+  .import-section-heading { align-items: flex-start; }
+  .import-result-summary { gap: 15px; }
+  .import-result-message { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .import-result-message small { white-space: normal; }
+  .import-result-stats { width: 100%; justify-content: space-between; }
+  .import-result-stat { flex: 1; min-width: 0; padding-inline: 11px; }
+  .import-picture-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+}
+
+@media (max-width: 420px) {
+  .import-picture-grid { grid-template-columns: 1fr; }
+}
 </style>

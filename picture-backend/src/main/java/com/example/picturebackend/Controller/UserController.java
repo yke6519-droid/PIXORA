@@ -177,6 +177,8 @@ public class UserController {
         reviewVO.setUsername(user == null ? "用户已不存在" : user.getUsername());
         reviewVO.setUseraccount(user == null ? String.valueOf(avatarCheck.getUserId()) : user.getUseraccount());
         reviewVO.setAvatarUrl(avatarCheck.getUrl());
+        // 审核记录中的 url 是申请头像，用户表中的 avatarurl 才是当前生效头像。
+        reviewVO.setCurrentAvatarUrl(user == null ? null : user.getAvatarurl());
         reviewVO.setStatus(avatarCheck.getStatus());
         reviewVO.setSubmittedAt(avatarCheck.getCreatetime());
         reviewVO.setReviewedAt(Integer.valueOf(0).equals(avatarCheck.getStatus())

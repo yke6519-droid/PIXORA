@@ -4,19 +4,17 @@
       <div class="avatar-review-heading-copy">
         <h1 class="avatar-review-title">管理员头像审核</h1>
         <p class="avatar-review-description">
-          按头像审核状态查看用户提交的新头像，待审核记录优先处理。
+          审核用户提交的新头像，及时处理待审核请求并查看历史记录。
         </p>
       </div>
-
-      <div class="avatar-review-heading-actions">
-        <div class="avatar-review-counter" aria-label="待审核头像数量">
-          <span>待处理头像</span>
-          <strong>{{ pendingCount }}</strong>
-        </div>
-        <a-button class="proto-button ghost-button" :loading="loading" :disabled="!authorized" @click="loadReviews">
-          刷新数据
-        </a-button>
-      </div>
+      <a-button
+        class="proto-button ghost-button avatar-review-refresh"
+        :loading="loading"
+        :disabled="!authorized"
+        @click="loadReviews"
+      >
+        刷新
+      </a-button>
     </section>
 
     <a-spin v-if="authChecking" class="avatar-review-auth-loading" tip="正在确认管理员权限并加载审核数据..." />
@@ -28,9 +26,7 @@
       :sub-title="accessError || '只有管理员可以审核头像。'"
     >
       <template #extra>
-        <a-button class="proto-button ghost-button" @click="ensureAdmin">
-          重新检查权限
-        </a-button>
+        <a-button class="proto-button ghost-button" @click="ensureAdmin">重新检查权限</a-button>
       </template>
     </a-result>
 
@@ -44,97 +40,122 @@
       </a-alert>
 
       <template v-else>
-        <section class="avatar-review-board" aria-label="头像审核状态分区">
+        <section class="avatar-review-kpis" aria-label="头像审核统计">
           <article
-            v-for="lane in lanes"
-            :key="lane.status"
-            class="avatar-review-lane proto-surface proto-rounded"
-            :class="`lane-${lane.tone}`"
+            v-for="tab in statusTabs"
+            :key="`kpi-${tab.status}`"
+            class="avatar-review-kpi proto-surface proto-rounded"
+            :class="`kpi-${tab.tone}`"
           >
-            <header class="avatar-review-lane-header">
-              <div class="avatar-review-lane-title">
-                <span class="avatar-review-lane-marker" aria-hidden="true"></span>
-                <div>
-                  <h2>{{ lane.label }}</h2>
-                  <p>{{ lane.description }}</p>
-                </div>
-              </div>
-              <strong class="avatar-review-lane-count">
-                {{ itemsByStatus(lane.status).length }}
-              </strong>
-            </header>
-
-            <div v-if="itemsByStatus(lane.status).length" class="avatar-review-list">
-              <article
-                v-for="item in itemsByStatus(lane.status)"
-                :key="item.id"
-                class="avatar-review-item"
-              >
-                <div class="avatar-review-item-heading">
-                  <div class="avatar-review-avatar">
-                    <img :src="item.avatarUrl" :alt="`${item.username}的新头像`" loading="lazy" />
-                  </div>
-                  <div class="avatar-review-user">
-                    <strong>{{ item.username }}</strong>
-                    <span>@{{ item.useraccount }}</span>
-                  </div>
-                  <a-tag class="proto-status" :class="statusClass(item.status)">
-                    {{ statusText(item.status) }}
-                  </a-tag>
-                </div>
-
-                <div class="avatar-review-new-avatar">
-                  <span>待审核头像</span>
-                  <span class="proto-mono">#{{ item.userId }}</span>
-                </div>
-
-                <dl class="avatar-review-meta">
-                  <div>
-                    <dt>提交时间</dt>
-                    <dd>{{ item.submittedAt }}</dd>
-                  </div>
-                  <div v-if="item.reviewedAt">
-                    <dt>审核时间</dt>
-                    <dd>{{ item.reviewedAt }}</dd>
-                  </div>
-                </dl>
-
-                <div v-if="item.status === 2" class="avatar-review-message">
-                  <span>审核意见</span>
-                  {{ item.checkMessage || '管理员未填写原因' }}
-                </div>
-
-                <div v-if="item.status === 0" class="avatar-review-actions">
-                  <a-button
-                    class="proto-button acid-button"
-                    type="primary"
-                    :loading="actionLoading"
-                    @click="approve(item)"
-                  >
-                    通过
-                  </a-button>
-                  <a-button
-                    class="proto-button ghost-button danger-button"
-                    :disabled="actionLoading"
-                    @click="openReject(item)"
-                  >
-                    拒绝
-                  </a-button>
-                </div>
-
-                <div v-else class="avatar-review-result">
-                  <span>{{ item.status === 1 ? '审核结果已生效' : '保留原头像' }}</span>
-                  <span class="proto-mono">{{ item.reviewedAt || '时间未知' }}</span>
-                </div>
-              </article>
+            <span class="avatar-review-kpi-icon" aria-hidden="true">{{ tab.icon }}</span>
+            <div>
+              <strong>{{ itemsByStatus(tab.status).length }}</strong>
+              <h2>{{ tab.label }}</h2>
+              <p>{{ tab.description }}</p>
             </div>
-
-            <a-empty v-else class="avatar-review-empty" :description="`暂无${lane.label}记录`">
-              <template #image>
-                <div class="avatar-review-empty-mark">0</div>
-              </template>
-            </a-empty>
           </article>
+        </section>
+
+        <section class="avatar-review-workspace proto-surface proto-rounded" aria-label="头像审核列表">
+          <nav class="avatar-review-tabs" aria-label="头像审核状态" role="tablist">
+            <button
+              v-for="tab in statusTabs"
+              :key="tab.status"
+              type="button"
+              class="avatar-review-tab"
+              :class="{ active: activeStatus === tab.status }"
+              role="tab"
+              :aria-selected="activeStatus === tab.status"
+              @click="activeStatus = tab.status"
+            >
+              <span>{{ tab.label }}</span>
+              <strong>{{ itemsByStatus(tab.status).length }}</strong>
+            </button>
+          </nav>
+
+          <div class="avatar-review-workspace-heading">
+            <div>
+              <h2>{{ activeTab.label }}记录</h2>
+              <p>{{ activeTab.description }}</p>
+            </div>
+            <span class="avatar-review-total">共 {{ activeReviews.length }} 条</span>
+          </div>
+
+          <div v-if="activeReviews.length" class="avatar-review-grid">
+            <article
+              v-for="item in activeReviews"
+              :key="item.id"
+              class="avatar-review-item"
+              :class="`item-${statusClass(item.status)}`"
+            >
+              <header class="avatar-review-item-heading">
+                <div class="avatar-review-avatar">
+                  <img :src="item.currentAvatarUrl || item.avatarUrl" :alt="`${item.username}的当前头像`" loading="lazy" />
+                </div>
+                <div class="avatar-review-user">
+                  <strong>{{ item.username }}</strong>
+                  <span>@{{ item.useraccount }}</span>
+                </div>
+                <a-tag class="proto-status" :class="statusClass(item.status)">
+                  {{ statusText(item.status) }}
+                </a-tag>
+              </header>
+
+              <section class="avatar-review-visual" :aria-label="`${item.username}的${avatarLabel(item.status)}`">
+                <div class="avatar-review-visual-heading">
+                  <span>{{ avatarLabel(item.status) }}</span>
+                  <span v-if="item.status === 0" class="avatar-review-visual-note">等待审核</span>
+                </div>
+                <div class="avatar-review-large-avatar">
+                  <img :src="item.avatarUrl" :alt="`${item.username}提交的头像`" />
+                </div>
+              </section>
+
+              <dl class="avatar-review-meta">
+                <div>
+                  <dt>提交时间</dt>
+                  <dd>{{ item.submittedAt }}</dd>
+                </div>
+                <div v-if="item.reviewedAt">
+                  <dt>审核时间</dt>
+                  <dd>{{ item.reviewedAt }}</dd>
+                </div>
+              </dl>
+
+              <div v-if="item.status === 2" class="avatar-review-message">
+                <span>审核意见</span>
+                <p>{{ item.checkMessage || '管理员未填写原因' }}</p>
+              </div>
+
+              <div v-if="item.status === 0" class="avatar-review-actions">
+                <a-button
+                  class="proto-button ghost-button danger-button"
+                  :disabled="actionLoading"
+                  @click="openReject(item)"
+                >
+                  拒绝
+                </a-button>
+                <a-button
+                  class="proto-button acid-button"
+                  type="primary"
+                  :loading="actionLoading"
+                  @click="approve(item)"
+                >
+                  通过审核
+                </a-button>
+              </div>
+
+              <div v-else class="avatar-review-result" :class="`result-${statusClass(item.status)}`">
+                <span>{{ item.status === 1 ? '审核结果已生效' : '已保留原头像' }}</span>
+              </div>
+            </article>
+          </div>
+
+          <a-empty v-else class="avatar-review-empty" :description="activeTab.emptyText">
+            <template #image>
+              <div class="avatar-review-empty-mark" aria-hidden="true">✓</div>
+            </template>
+          </a-empty>
         </section>
       </template>
     </template>
@@ -177,15 +198,18 @@ import { adminCheckAvatar, getCurrentUser, queryAvatarReviews } from '../../../a
 import { useLoginUserStore } from '../../../stores/useLoginUserStore'
 import type { AvatarReviewItem, AvatarReviewStatus } from './avatarReviewModel'
 
-const lanes: Array<{
+/** 只转换页面文案，后端仍然沿用 0/1/2 三个状态值。 */
+const statusTabs: Array<{
   status: AvatarReviewStatus
   label: string
   description: string
+  emptyText: string
+  icon: string
   tone: 'pending' | 'pass' | 'refuse'
 }> = [
-  { status: 0, label: '待审核', description: '需要管理员处理', tone: 'pending' },
-  { status: 1, label: '审核通过', description: '已允许使用新头像', tone: 'pass' },
-  { status: 2, label: '审核失败', description: '保留用户原头像', tone: 'refuse' },
+  { status: 0, label: '待审核', description: '需要处理', emptyText: '暂无待审核头像', icon: '!', tone: 'pending' },
+  { status: 1, label: '已通过', description: '头像已生效', emptyText: '暂无已通过记录', icon: '✓', tone: 'pass' },
+  { status: 2, label: '已拒绝', description: '保留原头像', emptyText: '暂无拒绝记录', icon: '—', tone: 'refuse' },
 ]
 
 const route = useRoute()
@@ -199,11 +223,14 @@ const loading = ref(false)
 const loadError = ref('')
 const actionLoading = ref(false)
 const reviews = ref<AvatarReviewItem[]>([])
+const activeStatus = ref<AvatarReviewStatus>(0)
 const rejectOpen = ref(false)
 const rejectTarget = ref<AvatarReviewItem | null>(null)
 const rejectReason = ref('')
 
-const pendingCount = computed(() => itemsByStatus(0).length)
+// KPI、Tabs 和当前列表共用同一份真实接口数据，避免三个区域的数量出现偏差。
+const activeReviews = computed(() => itemsByStatus(activeStatus.value))
+const activeTab = computed(() => statusTabs.find((tab) => tab.status === activeStatus.value) || statusTabs[0])
 
 function itemsByStatus(status: AvatarReviewStatus) {
   return reviews.value.filter((item) => item.status === status)
@@ -228,6 +255,7 @@ function normalizeAvatarReview(item: API.AvatarReviewVO): AvatarReviewItem {
     username: item.username || '未知用户',
     useraccount: item.useraccount || userId,
     avatarUrl: item.avatarUrl || '',
+    ...(item.currentAvatarUrl ? { currentAvatarUrl: item.currentAvatarUrl } : {}),
     status: item.status === 1 ? 1 : item.status === 2 ? 2 : 0,
     submittedAt,
     ...(item.reviewedAt ? { reviewedAt: formatDate(item.reviewedAt) } : {}),
@@ -236,11 +264,15 @@ function normalizeAvatarReview(item: API.AvatarReviewVO): AvatarReviewItem {
 }
 
 function statusText(status: AvatarReviewStatus) {
-  return status === 0 ? '待审核' : status === 1 ? '审核通过' : '审核失败'
+  return statusTabs.find((tab) => tab.status === status)?.label || '待审核'
 }
 
 function statusClass(status: AvatarReviewStatus) {
   return status === 0 ? 'wait' : status === 1 ? 'pass' : 'refuse'
+}
+
+function avatarLabel(status: AvatarReviewStatus) {
+  return status === 1 ? '审核头像' : '申请头像'
 }
 
 /** 管理页面仍然以后端 Session 做管理员校验，列表和审核操作均走真实接口。 */
@@ -362,256 +394,91 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.avatar-review-prototype {
-  color: var(--proto-ink);
-  font-family: 'Geist', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-}
-
-.avatar-review-heading {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  padding-top: clamp(14px, 2vw, 22px);
-  padding-bottom: 17px;
-  border-bottom: 1px solid var(--proto-line);
-}
-
+.avatar-review-prototype { color: var(--proto-ink); font-family: 'Manrope', 'Geist', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+.avatar-review-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-top: clamp(16px, 2vw, 24px); padding-bottom: 18px; border-bottom: 1px solid var(--proto-line); }
 .avatar-review-heading-copy { min-width: 0; }
-.avatar-review-title {
-  margin: 0 0 9px;
-  color: var(--proto-ink);
-  font-size: clamp(30px, 3.6vw, 44px);
-  font-weight: 800;
-  letter-spacing: -.06em;
-  line-height: 1;
-  text-wrap: balance;
-}
+.avatar-review-title { margin: 0 0 8px; color: var(--proto-ink); font-size: clamp(26px, 3vw, 34px); font-weight: 800; letter-spacing: -.055em; line-height: 1.08; }
+.avatar-review-description { max-width: 58ch; color: var(--proto-muted); font-size: 13px; line-height: 1.6; }
+.avatar-review-refresh { min-width: 72px; }
+.avatar-review-auth-loading { display: block; min-height: 180px; padding-top: 70px; text-align: center; }
 
-.avatar-review-description {
-  max-width: 58ch;
-  color: var(--proto-muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
+.avatar-review-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 18px 0; }
+.avatar-review-kpi { display: flex; align-items: flex-start; gap: 14px; min-width: 0; min-height: 126px; padding: 18px; background: rgba(255, 255, 255, .72); box-shadow: 0 8px 26px rgba(18, 23, 23, .06); }
+.avatar-review-kpi-icon { display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; border-radius: 11px; font-family: 'DM Mono', monospace; font-size: 21px; font-weight: 700; }
+.kpi-pending .avatar-review-kpi-icon { background: rgba(255, 137, 106, .15); color: #b55435; }
+.kpi-pass .avatar-review-kpi-icon { background: rgba(186, 255, 61, .2); color: #5f8d0b; }
+.kpi-refuse .avatar-review-kpi-icon { background: rgba(17, 20, 22, .07); color: var(--proto-muted); }
+.avatar-review-kpi strong { display: block; font-family: 'DM Mono', monospace; font-size: 30px; line-height: 1; letter-spacing: -.07em; }
+.avatar-review-kpi h2 { margin: 8px 0 3px; font-size: 14px; font-weight: 800; letter-spacing: -.03em; }
+.avatar-review-kpi p { color: var(--proto-muted); font-size: 11px; line-height: 1.5; }
 
-.avatar-review-heading-actions {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  flex-shrink: 0;
-}
+.avatar-review-workspace { overflow: hidden; background: rgba(255, 255, 255, .68); box-shadow: var(--proto-shadow); }
+.avatar-review-tabs { display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid var(--proto-line); background: rgba(241, 242, 237, .62); }
+.avatar-review-tab { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 14px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--proto-muted); cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
+.avatar-review-tab:hover { color: var(--proto-ink); background: rgba(255, 255, 255, .7); }
+.avatar-review-tab.active { border-color: rgba(95, 141, 11, .18); background: rgba(186, 255, 61, .22); color: var(--proto-ink); }
+.avatar-review-tab strong { color: currentColor; font-family: 'DM Mono', monospace; font-size: 12px; }
+.avatar-review-workspace-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 20px 20px 14px; }
+.avatar-review-workspace-heading h2 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.05em; }
+.avatar-review-workspace-heading p { margin-top: 5px; color: var(--proto-muted); font-size: 12px; }
+.avatar-review-total { color: var(--proto-muted); font-family: 'DM Mono', monospace; font-size: 11px; }
 
-.avatar-review-counter {
-  min-width: 142px;
-  padding: 12px 14px;
-  background: var(--proto-ink);
-  color: var(--proto-paper);
-}
-
-.avatar-review-counter span,
-.avatar-review-counter strong { display: block; }
-.avatar-review-counter span { color: var(--proto-orange); font-size: 11px; font-weight: 700; }
-.avatar-review-counter strong {
-  margin-top: 7px;
-  color: var(--proto-acid);
-  font-size: 34px;
-  line-height: 1;
-  letter-spacing: -.06em;
-}
-.avatar-review-auth-loading {
-  display: block;
-  min-height: 180px;
-  padding-top: 70px;
-  text-align: center;
-}
-
-.avatar-review-board {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  align-items: start;
-  padding-top: 17px;
-  padding-bottom: 24px;
-}
-
-.avatar-review-lane {
-  min-width: 0;
-  /* 三个状态框保持同高，避免某一列因数据更多而把页面拉长。 */
-  height: 610px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-top: 2px solid var(--proto-ink);
-  box-shadow: none;
-}
-
-.avatar-review-lane.lane-pending { border-top-color: var(--proto-orange); }
-.avatar-review-lane.lane-pass { border-top-color: #8dbb22; }
-.avatar-review-lane.lane-refuse { border-top-color: #697171; }
-
-.avatar-review-lane-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 15px 13px;
-  border-bottom: 1px solid var(--proto-line);
-}
-
-/* 用低饱和状态底色强化三栏语义，同时保留文字和圆点，避免只依赖颜色识别。 */
-.lane-pending .avatar-review-lane-header { background: rgba(255,137,106,.13); }
-.lane-pass .avatar-review-lane-header { background: rgba(186,255,61,.18); }
-.lane-refuse .avatar-review-lane-header { background: rgba(17,20,22,.08); }
-
-.avatar-review-lane-title { display: flex; align-items: flex-start; gap: 9px; min-width: 0; }
-.avatar-review-lane-marker {
-  width: 8px;
-  height: 8px;
-  margin-top: 5px;
-  flex: 0 0 8px;
-  border-radius: 50%;
-  background: var(--proto-orange);
-  box-shadow: 0 0 0 4px rgba(255,137,106,.12);
-}
-.lane-pass .avatar-review-lane-marker { background: #8dbb22; box-shadow: 0 0 0 4px rgba(141,187,34,.14); }
-.lane-refuse .avatar-review-lane-marker { background: #697171; box-shadow: 0 0 0 4px rgba(105,113,113,.13); }
-
-.avatar-review-lane-header h2 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.05em; }
-.avatar-review-lane-header p { margin-top: 5px; color: var(--proto-muted); font-size: 11px; }
-.avatar-review-lane-count { color: var(--proto-orange); font-family: 'DM Mono', monospace; font-size: 22px; line-height: 1; }
-.lane-pass .avatar-review-lane-count { color: #668e11; }
-.lane-refuse .avatar-review-lane-count { color: #697171; }
-
-.avatar-review-list {
-  display: grid;
-  gap: 10px;
-  align-content: start;
-  align-items: start;
-  /* 列表区域填满固定状态框，约可看到两张半卡片，超出后只在本列内滚动。 */
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 10px;
-  scrollbar-gutter: stable;
-}
-.avatar-review-item {
-  padding: 12px;
-  /* 让不同状态的卡片保持统一行高，避免短卡片挤出第五条记录。 */
-  min-height: 200px;
-  border: 1px solid var(--proto-line);
-  background: rgba(255,255,255,.42);
-  transition: background-color .2s ease, border-color .2s ease;
-}
-.avatar-review-item:hover { border-color: rgba(17,20,22,.34); background: rgba(186,255,61,.08); }
-
-.avatar-review-item-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.avatar-review-avatar {
-  width: 54px;
-  height: 54px;
-  flex: 0 0 54px;
-  overflow: hidden;
-  border: 2px solid var(--proto-paper);
-  border-radius: 50%;
-  background: var(--proto-paper-deep);
-  box-shadow: 0 0 0 1px var(--proto-line);
-}
+.avatar-review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 0 20px 20px; }
+.avatar-review-item { min-width: 0; padding: 16px; border: 1px solid var(--proto-line); border-top: 2px solid var(--proto-ink); border-radius: 10px; background: rgba(255, 255, 255, .78); transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+.avatar-review-item.item-wait { border-top-color: var(--proto-orange); }
+.avatar-review-item.item-pass { border-top-color: #8dbb22; }
+.avatar-review-item.item-refuse { border-top-color: #8b9494; }
+.avatar-review-item:hover { border-color: rgba(17, 20, 22, .28); box-shadow: 0 10px 26px rgba(18, 23, 23, .07); transform: translateY(-1px); }
+.avatar-review-item-heading { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.avatar-review-avatar { width: 46px; height: 46px; flex: 0 0 46px; overflow: hidden; border: 1px solid var(--proto-line); border-radius: 50%; background: var(--proto-paper-deep); }
 .avatar-review-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .avatar-review-user { min-width: 0; flex: 1; }
-.avatar-review-user strong,
-.avatar-review-user span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avatar-review-user strong, .avatar-review-user span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .avatar-review-user strong { color: var(--proto-ink); font-size: 14px; font-weight: 800; }
-.avatar-review-user span { margin-top: 5px; color: var(--proto-muted); font-size: 11px; }
+.avatar-review-user span { margin-top: 4px; color: var(--proto-muted); font-size: 11px; }
+.avatar-review-item-heading :deep(.proto-status) { flex: 0 0 auto; }
 
-.avatar-review-new-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--proto-line);
-  color: var(--proto-muted);
-  font-size: 10px;
-}
-
-.avatar-review-meta {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin: 12px 0 0;
-}
+.avatar-review-visual { margin-top: 16px; padding: 12px; border: 1px solid var(--proto-line); border-radius: 8px; background: var(--proto-paper); }
+.avatar-review-visual-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--proto-ink); font-size: 11px; font-weight: 800; }
+.avatar-review-visual-note { color: var(--proto-muted); font-size: 10px; font-weight: 500; }
+.avatar-review-large-avatar { width: 112px; height: 112px; margin: 12px auto 2px; overflow: hidden; border: 2px solid rgba(255, 255, 255, .9); border-radius: 50%; background: var(--proto-paper-deep); box-shadow: 0 6px 16px rgba(18, 23, 23, .12); }
+.avatar-review-large-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.avatar-review-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 14px 0 0; }
 .avatar-review-meta div { min-width: 0; }
 .avatar-review-meta dt { color: var(--proto-muted); font-size: 10px; }
 .avatar-review-meta dd { margin: 4px 0 0; color: var(--proto-ink); font-size: 11px; font-weight: 700; overflow-wrap: anywhere; }
-
-.avatar-review-message {
-  margin-top: 12px;
-  padding: 8px 10px;
-  border: 1px solid rgba(255,137,106,.35);
-  background: rgba(255,137,106,.12);
-  color: var(--proto-muted);
-  font-size: 11px;
-  line-height: 1.5;
-}
-.avatar-review-message span { margin-right: 5px; color: #973816; font-weight: 700; }
-
-.avatar-review-actions { display: flex; gap: 8px; margin-top: 14px; }
+.avatar-review-message { margin-top: 14px; padding: 10px 11px; border: 1px solid rgba(255, 137, 106, .28); border-radius: 7px; background: rgba(255, 137, 106, .09); }
+.avatar-review-message span { display: block; color: #973816; font-size: 11px; font-weight: 800; }
+.avatar-review-message p { margin-top: 5px; color: var(--proto-muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.avatar-review-actions { display: flex; gap: 9px; margin-top: 16px; }
 .avatar-review-actions .proto-button { flex: 1; }
-.danger-button:not(:disabled) { color: #973816; border-color: #973816; }
+.danger-button:not(:disabled) { color: #973816; border-color: rgba(151, 56, 22, .45); }
 .danger-button:not(:disabled):hover { color: #973816 !important; border-color: var(--proto-orange) !important; }
-
-.avatar-review-result {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 13px;
-  padding-top: 10px;
-  border-top: 1px solid var(--proto-line);
-  color: var(--proto-muted);
-  font-size: 10px;
-}
-
-.avatar-review-empty {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 20px 12px;
-}
-.avatar-review-empty-mark {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  place-items: center;
-  border: 1px solid var(--proto-line);
-  color: var(--proto-orange);
-  font-size: 18px;
-  font-weight: 700;
-}
-
+.avatar-review-result { display: flex; align-items: center; gap: 8px; margin-top: 15px; padding-top: 11px; border-top: 1px solid var(--proto-line); color: var(--proto-muted); font-size: 11px; font-weight: 700; }
+.result-pass { color: #5f8d0b; }
+.result-refuse { color: #697171; }
+.avatar-review-empty { margin: 0; padding: 32px 16px 38px; }
+.avatar-review-empty-mark { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid var(--proto-line); border-radius: 50%; color: #5f8d0b; font-size: 18px; font-weight: 700; }
 .avatar-review-modal-user { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .avatar-review-modal-user img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
-.avatar-review-modal-user strong,
-.avatar-review-modal-user span { display: block; }
+.avatar-review-modal-user strong, .avatar-review-modal-user span { display: block; }
 .avatar-review-modal-user strong { font-size: 15px; }
 .avatar-review-modal-user span { margin-top: 5px; color: var(--proto-muted); font-size: 11px; }
 
-@media (max-width: 920px) {
-  .avatar-review-board { grid-template-columns: 1fr; }
+@media (max-width: 820px) {
+  .avatar-review-kpis, .avatar-review-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 620px) {
   .avatar-review-heading { align-items: flex-start; flex-direction: column; }
-  .avatar-review-heading-actions { width: 100%; align-items: stretch; justify-content: space-between; }
-  .avatar-review-counter { flex: 1; }
+  .avatar-review-refresh { align-self: flex-end; }
+  .avatar-review-tabs { overflow-x: auto; }
+  .avatar-review-tab { flex: 0 0 auto; }
+  .avatar-review-workspace-heading { align-items: flex-start; flex-direction: column; }
+  .avatar-review-grid { padding-inline: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .avatar-review-item { transition: none; }
+  .avatar-review-tab, .avatar-review-item { transition: none; }
 }
 </style>
